@@ -1,13 +1,8 @@
-# Kubernetes ingress controller
+# Kubernetes ingress controllers
 
-Ingress controller for serving traffic from an external source to kubernetes services.
+This repository contains controllers for managing external ingress
+with AWS.
 
-# Building
-
-Build with:
-
-    go install
-    
-Run with:
-
-    feed
+- [feed](feed) controls the nginx instance
+- [dns](dns) controls dns configuration
+- [elb](elb) controls elb configuration
