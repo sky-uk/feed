@@ -4,16 +4,33 @@ import (
 	"github.com/golang/glog"
 )
 
-// Controller for nginx load balancer used for ingress.
-type Controller struct {
+// Controller for Kubernetes ingress.
+type Controller interface {
+	Run()
+}
+
+// LoadBalancer that the controller will modify.
+type LoadBalancer interface {
+}
+
+// KubernetesClient for observing changes to the Kubernetes cluster.
+type KubernetesClient interface {
+}
+
+type impl struct {
+	lb     LoadBalancer
+	client KubernetesClient
 }
 
 // NewController creates a Controller.
-func NewController() *Controller {
-	return &Controller{}
+func NewController(loadBalancer LoadBalancer, kubernetesClient KubernetesClient) Controller {
+	return &impl{
+		lb:     loadBalancer,
+		client: kubernetesClient,
+	}
 }
 
 // Run controller.
-func (c *Controller) Run() {
-	glog.Info("hello")
+func (c *impl) Run() {
+	glog.Infof("hello %v and %v", c.lb, c.client)
 }
