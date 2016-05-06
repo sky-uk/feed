@@ -1,9 +1,9 @@
-package feed
+package ingress
 
 import (
 	"testing"
 
-	"github.com/sky-uk/umc-ingress/feed/k8s"
+	"github.com/sky-uk/feed/k8s"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
