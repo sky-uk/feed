@@ -8,9 +8,7 @@ import (
 )
 
 func main() {
-	lb := struct{}{}
-	client := struct{}{}
-	controller := feed.NewController(lb, client)
+	controller := feed.NewController(nil, nil)
 
 	if err := controller.Run(); err != nil {
 		glog.Fatalf("failed to start controller: %v", err)
