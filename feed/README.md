@@ -6,7 +6,7 @@ Ingress controller for serving traffic from an external source to kubernetes ser
 
 Build with:
 
-    go install
+    make
     
 Run with:
 
