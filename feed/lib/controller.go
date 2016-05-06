@@ -1,12 +1,10 @@
 package feed
 
-import (
-	"github.com/golang/glog"
-)
+import "github.com/golang/glog"
 
 // Controller for Kubernetes ingress.
 type Controller interface {
-	Run()
+	Run() error
 }
 
 // LoadBalancer that the controller will modify.
@@ -31,6 +29,7 @@ func NewController(loadBalancer LoadBalancer, kubernetesClient KubernetesClient)
 }
 
 // Run controller.
-func (c *impl) Run() {
+func (c *impl) Run() error {
 	glog.Infof("hello %v and %v", c.lb, c.client)
+	return nil
 }
