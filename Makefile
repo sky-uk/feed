@@ -12,7 +12,7 @@ test :
 
 build :
 	@echo "== building"
-	go install -v
+	go install -v ./cmd/...
 
 vet :
 	@echo "== vetting code"

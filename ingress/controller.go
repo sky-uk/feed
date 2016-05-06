@@ -1,8 +1,8 @@
-package feed
+package ingress
 
 import (
 	"github.com/golang/glog"
-	"github.com/sky-uk/umc-ingress/feed/k8s"
+	"github.com/sky-uk/feed/k8s"
 )
 
 // Controller for Kubernetes ingress.

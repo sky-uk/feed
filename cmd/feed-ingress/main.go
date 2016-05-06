@@ -4,11 +4,11 @@ import (
 	"os"
 
 	"github.com/golang/glog"
-	feed "github.com/sky-uk/umc-ingress/feed/lib"
+	"github.com/sky-uk/feed/ingress"
 )
 
 func main() {
-	controller := feed.NewController(nil, nil)
+	controller := ingress.NewController(nil, nil)
 
 	if err := controller.Run(); err != nil {
 		glog.Fatalf("failed to start controller: %v", err)
