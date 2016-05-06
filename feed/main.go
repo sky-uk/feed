@@ -1,10 +1,12 @@
 package main
 
 import (
-	feed "github.com/sky-uk/umc-infra/feed/lib"
+	feed "github.com/sky-uk/umc-ingress/feed/lib"
 )
 
 func main() {
-	controller := feed.NewController()
+	lb := struct {}{}
+	client := struct {}{}
+	controller := feed.NewController(lb, client)
 	controller.Run()
 }
