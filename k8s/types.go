@@ -23,8 +23,10 @@ type IntOrString struct {
 type Type int
 
 const (
-	Int    Type = iota // The IntOrString holds an int.
-	String             // The IntOrString holds a string.
+	// Int in IntOrString
+	Int Type = iota
+	// String in IntOrString
+	String
 )
 
 // FromInt creates an IntOrString object with an int32 value. It is
