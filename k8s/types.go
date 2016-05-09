@@ -42,14 +42,22 @@ func FromString(val string) IntOrString {
 	return IntOrString{Type: String, StrVal: val}
 }
 
+// String returns the string value, or the Itoa of the int value.
+func (intstr *IntOrString) String() string {
+	if intstr.Type == String {
+		return intstr.StrVal
+	}
+	return strconv.Itoa(intstr.IntValue())
+}
+
 // IntValue returns the IntVal if type Int, or if
 // it is a String, will attempt a conversion to int.
-func (intstr *IntOrString) IntValue() int32 {
+func (intstr *IntOrString) IntValue() int {
 	if intstr.Type == String {
 		i, _ := strconv.Atoi(intstr.StrVal)
-		return int32(i)
+		return i
 	}
-	return intstr.IntVal
+	return int(intstr.IntVal)
 }
 
 // TypeMeta describes an individual object in an API response or request

@@ -5,24 +5,24 @@ all : format vet lint test build
 
 format :
 	@echo "== formatting"
-	goimports -w $(files)
+	@goimports -w $(files)
 
 test :
 	@echo "== running tests"
-	go test $(pkgs)
+	@go test $(pkgs)
 
 build :
 	@echo "== building"
-	go install -v ./cmd/...
+	@go install -v ./cmd/...
 
 vet :
-	@echo "== vetting code"
-	go vet $(pkgs)
+	@echo "== vetting"
+	@go vet $(pkgs)
 
 lint :
-	@echo "== linting code"
+	@echo "== linting"
 	@for pkg in $(pkgs); do \
-		golint -set_exit_status $$pkg; \
+		golint -set_exit_status $$pkg || exit 1; \
 	done;
 
 .PHONY: all format test build vet lint
