@@ -22,6 +22,11 @@ It's intended to be replicated to scale.
 Build and test with:
 
     make
+    
+It requires these tools:
+
+    go get -u github.com/golang/lint/golint
+    go get -u golang.org/x/tools/cmd/goimports
 
 # Dependencies
 
