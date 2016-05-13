@@ -21,11 +21,15 @@ type noopLoadBalancer struct {
 }
 
 func (lb *noopLoadBalancer) Update(entries []LoadBalancerEntry) error {
-	log.Infof("Updating loadbalancer {}", entries)
+	log.Debugf("Updating loadbalancer for %v", entries)
 	return nil
 }
 
 // NewLB creates a new LoadBalancer
 func NewLB() LoadBalancer {
 	return &noopLoadBalancer{}
+}
+
+func (lb *noopLoadBalancer) String() string {
+	return "[fake lb]"
 }
