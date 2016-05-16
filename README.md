@@ -27,6 +27,12 @@ It requires these tools:
 
     go get -u github.com/golang/lint/golint
     go get -u golang.org/x/tools/cmd/goimports
+    
+# Releasing
+
+Travis is configured to build the Docker image and push it to Dockerhub for each PR.
+
+For a proper release create a tag and push and Travis will push the image to Dockerhub.
 
 # Dependencies
 

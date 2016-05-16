@@ -19,9 +19,21 @@ type fakeLb struct {
 	mock.Mock
 }
 
-func (lb *fakeLb) Update(entries []LoadBalancerEntry) error {
-	r := lb.Called(entries)
-	return r.Error(0)
+func (lb *fakeLb) Update(update LoadBalancerUpdate) (bool, error) {
+	r := lb.Called(update)
+	return false, r.Error(0)
+}
+
+func (lb *fakeLb) Start() error {
+	return nil
+}
+
+func (lb *fakeLb) Stop() error {
+	return nil
+}
+
+func (lb *fakeLb) WaitFor() error {
+	return nil
 }
 
 func (lb *fakeLb) String() string {
@@ -113,7 +125,7 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 
 	//then
 	entries := createLbEntriesFixture()
-	lb.AssertCalled(t, "Update", []LoadBalancerEntry{})
+	lb.AssertCalled(t, "Update", LoadBalancerUpdate{[]LoadBalancerEntry{}})
 	lb.AssertCalled(t, "Update", entries)
 
 	//cleanup
@@ -158,13 +170,13 @@ func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
 	return nil
 }
 
-func createLbEntriesFixture() []LoadBalancerEntry {
-	return []LoadBalancerEntry{LoadBalancerEntry{
+func createLbEntriesFixture() LoadBalancerUpdate {
+	return LoadBalancerUpdate{[]LoadBalancerEntry{LoadBalancerEntry{
 		Host:        ingressHost,
 		Path:        ingressPath,
 		ServiceName: ingressSvcName,
 		ServicePort: ingressSvcPort,
-	}}
+	}}}
 }
 
 const (

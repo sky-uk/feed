@@ -14,22 +14,31 @@ import (
 )
 
 var (
-	apiServer  string
-	caCertFile string
-	tokenFile  string
-	debug      bool
+	nginxConfDir         string
+	ingressPort          int
+	nginxWorkerProcesses int
+	apiServer            string
+	caCertFile           string
+	tokenFile            string
+	debug                bool
 )
 
 func init() {
 	const (
-		defaultAPIServer  = "https://kubernetes:443"
-		defaultCaCertFile = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-		defaultTokenFile  = "/run/secrets/kubernetes.io/serviceaccount/token"
+		defaultAPIServer    = "https://kubernetes:443"
+		defaultCaCertFile   = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+		defaultTokenFile    = "/run/secrets/kubernetes.io/serviceaccount/token"
+		defaultNginxConfDir = "."
+		defaultIngressPort  = 80
+		defaultNginxWorkers = 1
 	)
 
 	flag.StringVar(&apiServer, "apiserver", defaultAPIServer, "Kubernetes API server URL")
 	flag.StringVar(&caCertFile, "cacertfile", defaultCaCertFile, "file containing kubernetes ca certificate")
 	flag.StringVar(&tokenFile, "tokenfile", defaultTokenFile, "file containing kubernetes client authentication token")
+	flag.StringVar(&nginxConfDir, "nginx-conf-dir", defaultNginxConfDir, "directory to store nginx conf")
+	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort, "port to server ingress traffic")
+	flag.IntVar(&nginxWorkerProcesses, "nginx-workers", defaultNginxWorkers, "nginx worker processes")
 	flag.BoolVar(&debug, "debug", false, "enable debug logging")
 }
 
@@ -41,7 +50,18 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
-	lb := ingress.NewLB()
+	lb := ingress.NewNginxLB(&ingress.NginxConf{
+		BinaryLocation:  "/usr/sbin/nginx",
+		ConfigDir:       nginxConfDir,
+		WorkerProcesses: nginxWorkerProcesses,
+		Port:            ingressPort,
+	}, &ingress.DefaultSignaller{})
+	err := lb.Start()
+	if err != nil {
+		log.Error("Unable to start nginx", err)
+		os.Exit(-1)
+	}
+
 	client := createK8sClient()
 
 	controller := ingress.New(lb, client)
