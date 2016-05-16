@@ -7,8 +7,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	"time"
+
+	"strconv"
+
 	"github.com/stretchr/testify/assert"
+
+	"sync"
+
+	log "github.com/Sirupsen/logrus"
 )
+
+const smallWaitTime = time.Millisecond * 50
 
 func TestInvalidUrlReturnsError(t *testing.T) {
 	_, err := New("%gh&%ij", []byte{}, "")
@@ -18,17 +28,18 @@ func TestInvalidUrlReturnsError(t *testing.T) {
 func TestRetrievesIngressesFromKubernetes(t *testing.T) {
 	assert := assert.New(t)
 
-	ingressFixture := CreateIngressesFixture()
-	ts := httptest.NewTLSServer(handleGetIngresses(t, authToken, ingressFixture))
+	ingressFixture := createIngressesFixture()
+	handler, _ := handleGetIngresses(ingressFixture)
+	ts := httptest.NewTLSServer(handler)
 	defer ts.Close()
 
-	client, err := New(ts.URL, caCert, authToken)
+	client, err := New(ts.URL, caCert, testAuthToken)
 	assert.NoError(err)
 
 	ingresses, err := client.GetIngresses()
 	assert.NoError(err)
 
-	assertEqualIngresses(t, ingressFixture, ingresses)
+	assertEqualIngresses(t, ingressFixture.Items, ingresses)
 }
 
 func TestErrorIfNon200StatusCode(t *testing.T) {
@@ -37,7 +48,7 @@ func TestErrorIfNon200StatusCode(t *testing.T) {
 	ts := httptest.NewTLSServer(http.NotFoundHandler())
 	defer ts.Close()
 
-	client, err := New(ts.URL, caCert, authToken)
+	client, err := New(ts.URL, caCert, testAuthToken)
 	assert.NoError(err)
 
 	_, err = client.GetIngresses()
@@ -53,11 +64,123 @@ func TestErrorIfInvalidJson(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := New(ts.URL, caCert, authToken)
+	client, err := New(ts.URL, caCert, testAuthToken)
 	assert.NoError(err)
 
 	_, err = client.GetIngresses()
 	assert.Error(err)
+}
+
+func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
+	assert := assert.New(t)
+
+	// given: initial ingresses and a client
+	ingresses := createIngressesFixture()
+	ingresses.ResourceVersion = "99"
+
+	handler, eventChan := handleGetIngresses(ingresses)
+	ts := httptest.NewTLSServer(handler)
+	defer ts.Close()
+	defer close(eventChan)
+
+	// when: watch ingresses
+	client, err := New(ts.URL, caCert, testAuthToken)
+	assert.NoError(err)
+
+	watcher := NewWatcher()
+	defer close(watcher.Done())
+	err = client.WatchIngresses(watcher)
+	assert.NoError(err)
+
+	// consume watcher updates into buffer so the watcher isn't blocked
+	updates := bufferChan(watcher.Updates(), watcher.Done())
+
+	// then
+	// single update to notify of existing ingresses
+	okEvent := dummyEvent{Name: "OK"}
+	eventChan <- okEvent
+	assert.Equal(1, countUpdates(updates), "received update for initial ingresses")
+
+	// send an old resource to test resourceVersion is used
+	oldEvent := dummyEvent{Name: "old-ingress", ResourceVersion: 80}
+	eventChan <- oldEvent
+	assert.Equal(0, countUpdates(updates), "ignore old-ingress")
+
+	// send a disconnect event to terminate long poll and ensure that watcher reconnects
+	disconnectEvent := dummyEvent{Name: "DISCONNECT"}
+	eventChan <- disconnectEvent
+	eventChan <- okEvent
+	assert.Equal(1, countUpdates(updates), "received update for reconnect")
+
+	// send a modified ingress
+	modifiedIngressEvent := dummyEvent{Name: "modified-ingress", ResourceVersion: 100}
+	eventChan <- modifiedIngressEvent
+	assert.Equal(1, countUpdates(updates), "got modified-ingress")
+
+	// send 500 bad request to check retry logic
+	// first reset the resource version
+	handlerMutex.Lock()
+	ingresses.ResourceVersion = "110"
+	handlerMutex.Unlock()
+
+	// then send 500s followed by 410 gone from a k8s restart
+	eventChan <- disconnectEvent
+	badEvent := dummyEvent{Name: "BAD"}
+	goneEvent := dummyEvent{Name: "GONE"}
+	eventChan <- badEvent
+	eventChan <- badEvent
+	eventChan <- goneEvent
+	time.Sleep(smallWaitTime * 10)
+	assert.Equal(1, countUpdates(updates), "received update for reconnect")
+
+	// send modified ingress again, should be ignored
+	eventChan <- modifiedIngressEvent
+	assert.Equal(0, countUpdates(updates), "should have ignored modified ingress after reconnect")
+
+	// send new modified ingress, should cause an update
+	modified2IngressEvent := dummyEvent{Name: "modified-2-ingress", ResourceVersion: 127}
+	eventChan <- modified2IngressEvent
+	assert.Equal(1, countUpdates(updates), "got modified-2-ingress")
+}
+
+func bufferChan(ch <-chan interface{}, done <-chan struct{}) <-chan interface{} {
+	buffer := make(chan interface{}, 100)
+	go func() {
+		defer close(buffer)
+		for {
+			select {
+			case <-done:
+				return
+			case update := <-ch:
+				buffer <- update
+			}
+		}
+	}()
+	return buffer
+}
+
+func countUpdates(updates <-chan interface{}) int {
+	timeout := make(chan struct{})
+	go func() {
+		time.Sleep(smallWaitTime)
+		close(timeout)
+	}()
+
+	var count int
+	for {
+		var finish bool
+		select {
+		case <-timeout:
+			finish = true
+		case <-updates:
+			count++
+		}
+		if finish {
+			break
+		}
+	}
+
+	return count
 }
 
 func assertEqualIngresses(t *testing.T, expected []Ingress, actual []Ingress) {
@@ -73,58 +196,131 @@ func assertEqualIngresses(t *testing.T, expected []Ingress, actual []Ingress) {
 	}
 }
 
-func handleGetIngresses(t *testing.T, token string, ingresses []Ingress) http.Handler {
-	assert := assert.New(t)
-	ingressList := &IngressList{Items: ingresses}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal("/apis/extensions/v1beta1/ingresses", r.URL.Path)
-		assertAuthToken(t, r)
-		bytes, err := json.Marshal(ingressList)
-		assert.NoError(err)
-		_, err = w.Write(bytes)
-		assert.NoError(err)
-	})
+type dummyEvent struct {
+	Name            string
+	ResourceVersion int
 }
 
-func assertAuthToken(t *testing.T, r *http.Request) {
+var handlerMutex = &sync.Mutex{}
+
+func handleGetIngresses(ingressList *IngressList) (http.Handler, chan<- dummyEvent) {
+	eventChan := make(chan dummyEvent, 100)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Debug("test: Handling ingress request")
+		defer log.Debug("test: Finished handling ingress request")
+
+		if r.URL.Path != "/apis/extensions/v1beta1/ingresses" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if !validAuthToken(r) {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
+		if r.FormValue("watch") == "true" {
+			handleLongPollWatch(eventChan, w, r)
+		} else {
+			handlerMutex.Lock()
+			defer handlerMutex.Unlock()
+			writeAsJSON(ingressList, w)
+		}
+
+	}), eventChan
+}
+
+func validAuthToken(r *http.Request) bool {
 	auths := r.Header["Authorization"]
 	if len(auths) != 1 {
-		assert.Fail(t, "Expected one authorization header, but got none")
-	} else {
-		assert.Equal(t, "Bearer "+authToken, r.Header["Authorization"][0],
-			"Should authenticate with correct token to apiserver")
+		return false
+	}
+
+	return "Bearer "+testAuthToken == r.Header["Authorization"][0]
+}
+
+func handleLongPollWatch(eventChan <-chan dummyEvent, w http.ResponseWriter, r *http.Request) {
+	resourceVersion, _ := strconv.Atoi(r.FormValue("resourceVersion"))
+
+	for {
+		select {
+		case event := <-eventChan:
+			log.Debug("test: handling %v", event)
+			if event.Name == "" {
+				return
+			}
+			if event.Name == "OK" {
+				w.WriteHeader(http.StatusOK)
+				flush(w)
+			}
+			if event.Name == "DISCONNECT" {
+				return
+			}
+			if event.Name == "BAD" {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if event.Name == "GONE" {
+				w.WriteHeader(http.StatusGone)
+				flush(w)
+			}
+			if event.ResourceVersion > resourceVersion {
+				writeAsJSON(event, w)
+			}
+		}
+	}
+}
+
+func writeAsJSON(val interface{}, w http.ResponseWriter) {
+	bytes, err := json.Marshal(val)
+	if err != nil {
+		panic(err)
+	}
+	bytes = append(bytes, '\n')
+	_, err = w.Write(bytes)
+	if err != nil {
+		panic(err)
+	}
+
+	flush(w)
+}
+
+func flush(w http.ResponseWriter) {
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
 	}
 }
 
 const (
-	ingressHost    = "foo.sky.com"
-	ingressPath    = "/foo"
-	ingressSvcName = "foo-svc"
-	ingressSvcPort = 80
-	authToken      = "validtoken"
+	testIngressHost = "foo.sky.com"
+	testIngressPath = "/foo"
+	testSvcName     = "foo-svc"
+	testSvcPort     = 80
+	testAuthToken   = "validtoken"
 )
 
-func CreateIngressesFixture() []Ingress {
+func createIngressesFixture() *IngressList {
 	paths := []HTTPIngressPath{HTTPIngressPath{
-		Path: ingressPath,
+		Path: testIngressPath,
 		Backend: IngressBackend{
-			ServiceName: ingressSvcName,
-			ServicePort: FromInt(ingressSvcPort),
+			ServiceName: testSvcName,
+			ServicePort: FromInt(testSvcPort),
 		},
 	}}
-	return []Ingress{
+	return &IngressList{Items: []Ingress{
 		Ingress{
 			ObjectMeta: ObjectMeta{Name: "foo-ingress"},
 			Spec: IngressSpec{
 				Rules: []IngressRule{IngressRule{
-					Host: ingressHost,
+					Host: testIngressHost,
 					IngressRuleValue: IngressRuleValue{HTTP: &HTTPIngressRuleValue{
 						Paths: paths,
 					}},
 				}},
 			},
 		},
-	}
+	}}
 }
 
 // From testcert.go, used by httptest for TLS

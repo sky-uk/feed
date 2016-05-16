@@ -11,7 +11,7 @@ format :
 
 test :
 	@echo "== running tests"
-	@go test $(pkgs)
+	@go test -race $(pkgs)
 
 build :
 	@echo "== building"

@@ -41,15 +41,6 @@ func (c *controller) Run() {
 		log.Fatalf("Unable to watch ingresses: %v", err)
 		c.Stop()
 	}
-
-	// initialize with current state of ingress
-	err = c.updateLoadBalancer()
-	if err != nil {
-		log.Fatalf("Unable to update load balancer: %v", err)
-		c.Stop()
-	}
-
-	// consume updates after the initial select to avoid stale updates
 	go c.watchForUpdates(watcher)
 
 	<-c.stop
@@ -61,13 +52,11 @@ func (c *controller) watchForUpdates(watcher k8s.Watcher) {
 		select {
 		case <-c.stop:
 			return
-		case update := <-watcher.Updates():
-			if val, ok := update.(k8s.Ingress); ok {
-				log.Infof("Received ingress update for %s", val.Name)
-				err := c.updateLoadBalancer()
-				if err != nil {
-					log.Errorf("Unable to update load balancer: %v", err)
-				}
+		case <-watcher.Updates():
+			log.Info("Received update on watcher")
+			err := c.updateLoadBalancer()
+			if err != nil {
+				log.Errorf("Unable to update load balancer: %v", err)
 			}
 		}
 	}

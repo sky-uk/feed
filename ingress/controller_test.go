@@ -7,7 +7,6 @@ import (
 
 	"fmt"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -59,7 +58,6 @@ func (c *fakeClient) String() string {
 }
 
 func TestControllerCanBeStopped(t *testing.T) {
-	// given
 	lb := new(fakeLb)
 	client := new(fakeClient)
 	controller := New(lb, client)
@@ -67,35 +65,13 @@ func TestControllerCanBeStopped(t *testing.T) {
 	client.On("WatchIngresses", mock.Anything).Return(nil)
 	lb.On("Update", mock.Anything).Return(nil)
 
-	// when
 	go waitThenStop(controller)
 	controller.Run()
-}
-
-func TestLoadBalancerUpdatesWithInitialIngress(t *testing.T) {
-	// given
-	lb := new(fakeLb)
-	client := new(fakeClient)
-	ingresses := createIngressesFixture()
-	controller := New(lb, client)
-
-	client.On("GetIngresses").Return(ingresses, nil)
-	client.On("WatchIngresses", mock.Anything).Return(nil)
-	lb.On("Update", mock.Anything).Return(nil)
-
-	// when
-	go controller.Run()
-	waitThenStop(controller)
-
-	// then
-	entries := createLbEntriesFixture()
-	lb.AssertCalled(t, "Update", entries)
 }
 
 func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 	//setup
 	assert := assert.New(t)
-	log.SetLevel(log.DebugLevel)
 
 	//given
 	lb := new(fakeLb)
@@ -104,7 +80,7 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 	controller := New(lb, client)
 	watcherChan := make(chan k8s.Watcher, 1)
 
-	client.On("GetIngresses").Return([]k8s.Ingress{}, nil).Once()
+	client.On("GetIngresses").Return(ingresses, nil).Once()
 	client.On("WatchIngresses", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		watcherChan <- args.Get(0).(k8s.Watcher)
 	})
@@ -113,11 +89,10 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 	//when
 	go controller.Run()
 
-	// wait a bit for initial ingress selection
+	// wait a bit for it to start up
 	time.Sleep(smallWaitTime)
 
 	// return new set of ingresses, which should be used on update
-	client.On("GetIngresses").Return(ingresses, nil)
 	watcher, err := getWatcher(watcherChan, smallWaitTime)
 	assert.Nil(err)
 	err = sendUpdate(watcher, ingresses[0], smallWaitTime)
@@ -125,12 +100,10 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 
 	//then
 	entries := createLbEntriesFixture()
-	lb.AssertCalled(t, "Update", LoadBalancerUpdate{[]LoadBalancerEntry{}})
 	lb.AssertCalled(t, "Update", entries)
 
 	//cleanup
 	controller.Stop()
-	log.SetLevel(log.InfoLevel)
 }
 
 func waitThenStop(controller Controller) {
