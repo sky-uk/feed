@@ -40,8 +40,6 @@ func (c *controller) Run() {
 	if err != nil {
 		log.Fatalf("Unable to watch ingresses: %v", err)
 		c.Stop()
-	} else {
-		go c.watchForUpdates(watcher)
 	}
 
 	// initialize with current state of ingress
@@ -50,6 +48,9 @@ func (c *controller) Run() {
 		log.Fatalf("Unable to update load balancer: %v", err)
 		c.Stop()
 	}
+
+	// consume updates after the initial select to avoid stale updates
+	go c.watchForUpdates(watcher)
 
 	<-c.stop
 	log.Infof("Controller has stopped")
