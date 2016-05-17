@@ -22,7 +22,7 @@ var (
 
 func init() {
 	const (
-		defaultAPIServer  = "https://10.254.0.1:443"
+		defaultAPIServer  = "https://kubernetes:443"
 		defaultCaCertFile = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 		defaultTokenFile  = "/run/secrets/kubernetes.io/serviceaccount/token"
 	)
