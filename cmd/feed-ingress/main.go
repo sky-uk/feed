@@ -78,7 +78,7 @@ func createK8sClient() k8s.Client {
 func readFile(path string) []byte {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Errorf("Unable to read %s: %v", caCertFile, err)
+		log.Errorf("Unable to read %s: %v", path, err)
 		os.Exit(-1)
 	}
 	return data
