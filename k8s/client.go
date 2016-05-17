@@ -25,11 +25,11 @@ type Client interface {
 	WatchIngresses(Watcher) error
 }
 
-type clientImpl struct {
+type client struct {
 	baseURL string
 	caCert  []byte
 	token   string
-	client  *http.Client
+	http    *http.Client
 }
 
 // New creates a client for the kubernetes apiserver.
@@ -48,20 +48,20 @@ func New(apiServerURL string, caCert []byte, token string) (Client, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{RootCAs: pool},
 	}
-	client := &http.Client{Transport: tr}
+	httpClient := &http.Client{Transport: tr}
 
 	log.Debugf("Constructing client with url: %s, token: %s, caCert: %v",
 		baseURL, token, string(caCert))
 
-	return &clientImpl{
+	return &client{
 			baseURL: baseURL,
 			caCert:  caCert,
 			token:   token,
-			client:  client},
+			http:    httpClient},
 		nil
 }
 
-func (c *clientImpl) GetIngresses() ([]Ingress, error) {
+func (c *client) GetIngresses() ([]Ingress, error) {
 	endpoint := c.baseURL + "/apis/extensions/v1beta1/ingresses"
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
@@ -71,7 +71,7 @@ func (c *clientImpl) GetIngresses() ([]Ingress, error) {
 
 	log.Debugf("k8s<-: %v", *req)
 
-	resp, err := c.client.Do(req)
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +99,11 @@ func (c *clientImpl) GetIngresses() ([]Ingress, error) {
 	return ingressList.Items, nil
 }
 
-func (c *clientImpl) WatchIngresses(w Watcher) error {
+func (c *client) WatchIngresses(w Watcher) error {
 	log.Info("Watching ingresses")
 	return nil
 }
 
-func (c *clientImpl) String() string {
+func (c *client) String() string {
 	return fmt.Sprintf("[k8s @ %s]", c.baseURL)
 }
