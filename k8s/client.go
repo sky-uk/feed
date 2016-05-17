@@ -25,7 +25,7 @@ type Client interface {
 	WatchIngresses(Watcher) error
 }
 
-type client struct {
+type clientImpl struct {
 	baseURL string
 	caCert  []byte
 	token   string
@@ -53,7 +53,7 @@ func New(apiServerURL string, caCert []byte, token string) (Client, error) {
 	log.Debugf("Constructing client with url: %s, token: %s, caCert: %v",
 		baseURL, token, string(caCert))
 
-	return &client{
+	return &clientImpl{
 			baseURL: baseURL,
 			caCert:  caCert,
 			token:   token,
@@ -61,13 +61,13 @@ func New(apiServerURL string, caCert []byte, token string) (Client, error) {
 		nil
 }
 
-func (c *client) GetIngresses() ([]Ingress, error) {
+func (c *clientImpl) GetIngresses() ([]Ingress, error) {
 	endpoint := c.baseURL + "/apis/extensions/v1beta1/ingresses"
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("Authorization", "Bearer "+ c.token)
+	req.Header.Add("Authorization", "Bearer "+c.token)
 
 	log.Debugf("k8s<-: %v", *req)
 
@@ -99,11 +99,11 @@ func (c *client) GetIngresses() ([]Ingress, error) {
 	return ingressList.Items, nil
 }
 
-func (c *client) WatchIngresses(w Watcher) error {
+func (c *clientImpl) WatchIngresses(w Watcher) error {
 	log.Info("Watching ingresses")
 	return nil
 }
 
-func (c *client) String() string {
+func (c *clientImpl) String() string {
 	return fmt.Sprintf("[k8s @ %s]", c.baseURL)
 }
