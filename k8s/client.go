@@ -41,7 +41,10 @@ func New(apiServerURL string, caCert []byte, token string) (Client, error) {
 	baseURL := strings.TrimSuffix(parsedURL.String(), "/")
 
 	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(caCert)
+	if ok := pool.AppendCertsFromPEM(caCert); !ok {
+		return nil, fmt.Errorf("unable to parse ca certificate")
+	}
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{RootCAs: pool},
 	}
