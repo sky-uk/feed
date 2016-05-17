@@ -64,6 +64,9 @@ func New(apiServerURL string, caCert []byte, token string) (Client, error) {
 func (c *client) GetIngresses() ([]Ingress, error) {
 	endpoint := c.baseURL + "/apis/extensions/v1beta1/ingresses"
 	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Add("Authorization", "Bearer "+ c.token)
 
 	log.Debugf("k8s<-: %v", *req)
