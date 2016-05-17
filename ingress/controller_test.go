@@ -50,7 +50,7 @@ func TestControllerCanBeStopped(t *testing.T) {
 	// given
 	lb := new(fakeLb)
 	client := new(fakeClient)
-	controller := NewController(lb, client)
+	controller := New(lb, client)
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
 	client.On("WatchIngresses", mock.Anything).Return(nil)
 	lb.On("Update", mock.Anything).Return(nil)
@@ -65,7 +65,7 @@ func TestLoadBalancerUpdatesWithInitialIngress(t *testing.T) {
 	lb := new(fakeLb)
 	client := new(fakeClient)
 	ingresses := createIngressesFixture()
-	controller := NewController(lb, client)
+	controller := New(lb, client)
 
 	client.On("GetIngresses").Return(ingresses, nil)
 	client.On("WatchIngresses", mock.Anything).Return(nil)
@@ -89,7 +89,7 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 	lb := new(fakeLb)
 	client := new(fakeClient)
 	ingresses := createIngressesFixture()
-	controller := NewController(lb, client)
+	controller := New(lb, client)
 	watcherChan := make(chan k8s.Watcher, 1)
 
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil).Once()
@@ -158,13 +158,6 @@ func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
 	return nil
 }
 
-const (
-	ingressHost    = "foo.sky.com"
-	ingressPath    = "/foo"
-	ingressSvcName = "foo-svc"
-	ingressSvcPort = 80
-)
-
 func createLbEntriesFixture() []LoadBalancerEntry {
 	return []LoadBalancerEntry{LoadBalancerEntry{
 		Host:        ingressHost,
@@ -173,6 +166,13 @@ func createLbEntriesFixture() []LoadBalancerEntry {
 		ServicePort: ingressSvcPort,
 	}}
 }
+
+const (
+	ingressHost    = "foo.sky.com"
+	ingressPath    = "/foo"
+	ingressSvcName = "foo-svc"
+	ingressSvcPort = 80
+)
 
 func createIngressesFixture() []k8s.Ingress {
 	paths := []k8s.HTTPIngressPath{k8s.HTTPIngressPath{

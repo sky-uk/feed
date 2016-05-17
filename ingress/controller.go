@@ -21,8 +21,8 @@ type controller struct {
 	stop   chan struct{}
 }
 
-// NewController creates a Controller.
-func NewController(loadBalancer LoadBalancer, kubernetesClient k8s.Client) Controller {
+// New creates an ingress controller.
+func New(loadBalancer LoadBalancer, kubernetesClient k8s.Client) Controller {
 	return &controller{
 		lb:     loadBalancer,
 		client: kubernetesClient,
@@ -40,12 +40,17 @@ func (c *controller) Run() {
 	if err != nil {
 		log.Fatalf("Unable to watch ingresses: %v", err)
 		c.Stop()
-	} else {
-		go c.watchForUpdates(watcher)
 	}
 
 	// initialize with current state of ingress
-	c.updateLoadBalancer()
+	err = c.updateLoadBalancer()
+	if err != nil {
+		log.Fatalf("Unable to update load balancer: %v", err)
+		c.Stop()
+	}
+
+	// consume updates after the initial select to avoid stale updates
+	go c.watchForUpdates(watcher)
 
 	<-c.stop
 	log.Infof("Controller has stopped")
@@ -59,7 +64,10 @@ func (c *controller) watchForUpdates(watcher k8s.Watcher) {
 		case update := <-watcher.Updates():
 			if val, ok := update.(k8s.Ingress); ok {
 				log.Infof("Received ingress update for %s", val.Name)
-				c.updateLoadBalancer()
+				err := c.updateLoadBalancer()
+				if err != nil {
+					log.Errorf("Unable to update load balancer: %v", err)
+				}
 			}
 		}
 	}
@@ -67,7 +75,7 @@ func (c *controller) watchForUpdates(watcher k8s.Watcher) {
 
 func (c *controller) updateLoadBalancer() error {
 	ingresses, err := c.client.GetIngresses()
-	log.Debugf("Found %d ingress(es)", len(ingresses))
+	log.Infof("Found %d ingress(es)", len(ingresses))
 	if err != nil {
 		return err
 	}

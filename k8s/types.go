@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -58,6 +60,28 @@ func (intstr *IntOrString) IntValue() int {
 		return i
 	}
 	return int(intstr.IntVal)
+}
+
+// UnmarshalJSON implements the json.Unmarshaller interface.
+func (intstr *IntOrString) UnmarshalJSON(value []byte) error {
+	if value[0] == '"' {
+		intstr.Type = String
+		return json.Unmarshal(value, &intstr.StrVal)
+	}
+	intstr.Type = Int
+	return json.Unmarshal(value, &intstr.IntVal)
+}
+
+// MarshalJSON implements the json.Marshaller interface.
+func (intstr IntOrString) MarshalJSON() ([]byte, error) {
+	switch intstr.Type {
+	case Int:
+		return json.Marshal(intstr.IntVal)
+	case String:
+		return json.Marshal(intstr.StrVal)
+	default:
+		return []byte{}, fmt.Errorf("impossible IntOrString.Type")
+	}
 }
 
 // TypeMeta describes an individual object in an API response or request
