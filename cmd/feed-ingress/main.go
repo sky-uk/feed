@@ -6,6 +6,12 @@ import (
 	"os/signal"
 
 	"io/ioutil"
+	"net/http"
+	_ "net/http/pprof"
+
+	"strconv"
+
+	"io"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/ingress"
@@ -20,6 +26,7 @@ var (
 	caCertFile           string
 	tokenFile            string
 	debug                bool
+	healthPort           int
 )
 
 func init() {
@@ -30,6 +37,7 @@ func init() {
 		defaultNginxConfDir = "."
 		defaultIngressPort  = 80
 		defaultNginxWorkers = 1
+		defaultHealthPort   = 12001
 	)
 
 	flag.StringVar(&apiServer, "apiserver", defaultAPIServer, "Kubernetes API server URL")
@@ -39,46 +47,42 @@ func init() {
 	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort, "port to server ingress traffic")
 	flag.IntVar(&nginxWorkerProcesses, "nginx-workers", defaultNginxWorkers, "nginx worker processes")
 	flag.BoolVar(&debug, "debug", false, "enable debug logging")
+	flag.IntVar(&healthPort, "health-port", defaultHealthPort, "port for checking the health of the ingress controller")
 }
 
 func main() {
 	flag.Parse()
-
 	configureLogging()
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
+	lb := createLB()
+	client := createK8sClient()
+	controller := ingress.New(lb, client)
 
-	lb := ingress.NewNginxLB(&ingress.NginxConf{
-		BinaryLocation:  "/usr/sbin/nginx",
-		ConfigDir:       nginxConfDir,
-		WorkerProcesses: nginxWorkerProcesses,
-		Port:            ingressPort,
-	}, &ingress.DefaultSignaller{})
-	err := lb.Start()
+	configureHealthPort(controller)
+	addSignalHandler(controller)
+
+	err := controller.Start()
 	if err != nil {
-		log.Error("Unable to start nginx", err)
+		log.Error("Error while starting controller: ", err)
 		os.Exit(-1)
 	}
 
-	client := createK8sClient()
-
-	controller := ingress.New(lb, client)
-
-	go func() {
-		for sig := range c {
-			log.Infof("Signalled %v, shutting down.", sig)
-			controller.Stop()
-		}
-	}()
-
-	controller.Run()
+	os.Exit(0)
 }
 
 func configureLogging() {
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
+}
+
+func createLB() ingress.LoadBalancer {
+	return ingress.NewNginxLB(ingress.NginxConf{
+		BinaryLocation:  "/usr/sbin/nginx",
+		ConfigDir:       nginxConfDir,
+		WorkerProcesses: nginxWorkerProcesses,
+		Port:            ingressPort,
+	})
 }
 
 func createK8sClient() k8s.Client {
@@ -101,4 +105,43 @@ func readFile(path string) []byte {
 		os.Exit(-1)
 	}
 	return data
+}
+
+func configureHealthPort(controller ingress.Controller) {
+	http.HandleFunc("/health", checkHealth(controller))
+
+	go func() {
+		log.Error(http.ListenAndServe("localhost:"+strconv.Itoa(healthPort), nil))
+		log.Info(controller.Stop())
+		os.Exit(-1)
+	}()
+}
+
+func checkHealth(controller ingress.Controller) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !controller.Healthy() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			io.WriteString(w, "fail\n")
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, "ok\n")
+	}
+}
+
+func addSignalHandler(controller ingress.Controller) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	go func() {
+		for sig := range c {
+			log.Infof("Signalled %v, shutting down.", sig)
+			err := controller.Stop()
+			if err != nil {
+				log.Error("Error while stopping controller: ", err)
+				os.Exit(-1)
+			}
+		}
+	}()
 }

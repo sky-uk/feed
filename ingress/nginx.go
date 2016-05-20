@@ -22,14 +22,14 @@ type NginxConf struct {
 
 // Nginx implementation
 type nginxLoadBalancer struct {
-	conf      *NginxConf
+	conf      NginxConf
 	cmd       *exec.Cmd
 	signaller Signaller
 }
 
 // Used for generating nginx cofnig
 type loadBalancerTemplate struct {
-	Config  *NginxConf
+	Config  NginxConf
 	Entries []LoadBalancerEntry
 }
 
@@ -38,10 +38,10 @@ func (lb *nginxLoadBalancer) configLocation() string {
 }
 
 // NewNginxLB creates a new LoadBalancer
-func NewNginxLB(nginxConf *NginxConf, signaller Signaller) LoadBalancer {
+func NewNginxLB(nginxConf NginxConf) LoadBalancer {
 	return &nginxLoadBalancer{
 		conf:      nginxConf,
-		signaller: signaller}
+		signaller: &DefaultSignaller{}}
 }
 
 func (lb *nginxLoadBalancer) Start() error {

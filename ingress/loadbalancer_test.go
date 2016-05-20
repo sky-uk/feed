@@ -32,12 +32,14 @@ func (m *mockSignaller) Sighup(p *os.Process) error {
 }
 
 func newLb(tmpDir string, mockSignaller Signaller) LoadBalancer {
-	return NewNginxLB(&NginxConf{
+	lb := NewNginxLB(NginxConf{
 		BinaryLocation:  "./fake_nginx.sh",
 		ConfigDir:       tmpDir,
 		Port:            port,
 		WorkerProcesses: 1,
-	}, mockSignaller)
+	})
+	lb.(*nginxLoadBalancer).signaller = mockSignaller
+	return lb
 }
 
 func TestGracefulShutdown(t *testing.T) {
