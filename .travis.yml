@@ -6,3 +6,18 @@ go:
 install:
   - go get github.com/golang/lint/golint
   - go get golang.org/x/tools/cmd/goimports
+
+services:
+  - docker
+
+after_success:
+  - docker login -e $DOCKER_EMAIL -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+  - export REPO=skycirrus/feed-ingress
+  - export TAG=`if [ "$TRAVIS_BRANCH" == "master" ]; then echo "latest"; else echo $TRAVIS_BRANCH ; fi`
+  - cd docker && docker build -f Dockerfile -t $REPO:$COMMIT .
+  - docker tag $REPO:$COMMIT $REPO:$TAG
+  - docker push $REPO
+
+env:
+  global:
+    - COMMIT=${TRAVIS_COMMIT::8}

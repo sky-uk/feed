@@ -1,0 +1,47 @@
+worker_processes  1;
+daemon off;
+
+error_log  /dev/stdout warn;
+pid        {{ .Config.ConfigDir }}/nginx.pid;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    default_type text/html;
+
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+    '$status $body_bytes_sent "$http_referer" '
+    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+    sendfile        on;
+    keepalive_timeout  65;
+
+    {{ $port := .Config.Port }}
+    {{ range $entry := .Entries }}
+    # Start entry
+    server {
+        listen {{ $port }};
+        server_name {{ $entry.Host }};
+        location {{ $entry.Path }} {
+            proxy_pass http://{{ $entry.ServiceName }}:{{ $entry.ServicePort }};
+        }
+    }
+    # End entry
+    {{ end }}
+
+    # default server for health checks
+    server {
+        listen {{ .Config.Port }} default_server;
+            location /health {
+             access_log off;
+             return 200;
+        }
+
+        location / {
+            return 404;
+        }
+    }
+}

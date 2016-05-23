@@ -97,10 +97,13 @@ func (c *controller) updateLoadBalancer() error {
 	}
 
 	log.Infof("Updating load balancer with %d entry(s)", len(entries))
-	return c.lb.Update(entries)
+	updated, err := c.lb.Update(LoadBalancerUpdate{entries})
+	log.Infof("Load balancer updated? %s", updated)
+	return err
 }
 
 func (c *controller) Stop() {
 	log.Info("Stopping controller")
+	c.lb.Stop()
 	close(c.stop)
 }

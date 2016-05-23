@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: extensions/v1beta1
+  kind: Ingress
+  metadata:
+    name: verification-app
+    namespace: verification-app-showcase
+  spec:
+    rules:
+    - host: verification-app.com
+      http:
+        paths:
+        - backend:
+            serviceName: verification-app
+            servicePort: 8080
+          path: /
+  status:
+    loadBalancer: {}

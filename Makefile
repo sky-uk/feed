@@ -1,7 +1,9 @@
 pkgs = $(shell go list ./... | grep -v /vendor/)
 files = $(shell find . -path ./vendor -prune -o -name '*.go' -print)
+ingress_binary = $(GOPATH)/bin/feed-ingress
+template = ./ingress/nginx.tmpl
 
-all : format vet lint test build
+all : format vet lint test build copy
 
 format :
 	@echo "== formatting"
@@ -25,4 +27,9 @@ lint :
 		golint -set_exit_status $$pkg || exit 1; \
 	done;
 
-.PHONY: all format test build vet lint
+copy :
+	@echo "== coping files to docker"
+	cp $(ingress_binary) ./docker/
+	cp $(template) ./docker/
+
+.PHONY: all format test build vet lint copy
