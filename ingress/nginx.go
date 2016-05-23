@@ -57,7 +57,7 @@ func (lb *nginxLoadBalancer) Start() error {
 	lb.cmd = cmd
 	err := cmd.Start()
 	if err != nil {
-		return fmt.Errorf("Inable to start nginx %v", err)
+		return fmt.Errorf("Unable to start nginx %v", err)
 	}
 
 	go func() {
@@ -69,7 +69,7 @@ func (lb *nginxLoadBalancer) Start() error {
 }
 
 func (lb *nginxLoadBalancer) Stop() error {
-	log.Info("Shutting down process %d", lb.cmd.Process.Pid)
+	log.Infof("Shutting down process %d", lb.cmd.Process.Pid)
 	err := lb.signaller.Sigquit(lb.cmd.Process)
 	if err != nil {
 		return fmt.Errorf("Error shutting down nginx %v", err)

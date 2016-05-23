@@ -22,8 +22,6 @@ import (
 
 	"net"
 
-	"math/rand"
-
 	"io"
 
 	log "github.com/Sirupsen/logrus"
@@ -102,27 +100,33 @@ func (c *client) GetIngresses() ([]Ingress, error) {
 func (c *client) WatchIngresses(w Watcher) error {
 	log.Debug("Adding watcher for ingresses")
 
+	ingressRequest := c.createIngressWatchRequest(w.Done())
+
 	go func() {
-		ingressRequest := func() (*http.Response, error) {
-			resourceVersion, err := c.getIngressResourceVersion()
-			if err != nil {
-				return nil, err
-			}
-			log.Debugf("Found ingress resource version '%s'", resourceVersion)
-			return c.request(ingressPath + "?watch=true&resourceVersion=" + resourceVersion)
-		}
-
-		retryRequest := func() (*http.Response, error) {
-			return retryRequest(w, ingressRequest)
-		}
-
-		for watch(w, retryRequest) {
+		for watch(w, ingressRequest) {
 		}
 
 		log.Debug("Watch has stopped")
 	}()
 
 	return nil
+}
+
+func (c *client) createIngressWatchRequest(doneCh <-chan struct{}) func() (*http.Response, error) {
+	ingressRequest := func() (*http.Response, error) {
+		resourceVersion, err := c.getIngressResourceVersion()
+		if err != nil {
+			return nil, err
+		}
+		log.Debugf("Found ingress resource version '%s'", resourceVersion)
+		return c.request(ingressPath + "?watch=true&resourceVersion=" + resourceVersion)
+	}
+
+	retryRequest := func() (*http.Response, error) {
+		return retryRequest(doneCh, ingressRequest)
+	}
+
+	return retryRequest
 }
 
 type genericList struct {
@@ -186,24 +190,22 @@ func handleLongPoll(r io.Reader, updateCh chan<- interface{}) {
 	}
 }
 
-func retryRequest(w Watcher, request func() (*http.Response, error)) (*http.Response, error) {
+func retryRequest(doneCh <-chan struct{}, request func() (*http.Response, error)) (*http.Response, error) {
 	respCh := make(chan *http.Response)
 	delay := initialRetryDelay
 	go func() {
 		defer close(respCh)
-		var jitter = rand.New(rand.NewSource(time.Now().UnixNano()))
 		t := time.NewTimer(0)
 
 		for {
 			select {
-			case <-w.Done():
-				log.Debug("Watcher is closed, stopping retry")
+			case <-doneCh:
+				log.Debug("Done, stopping retry")
 				return
 			case <-t.C:
 				resp, err := request()
 
 				if err != nil {
-					delay += time.Millisecond * time.Duration(jitter.Intn(50))
 					log.Warnf("Failed to request watch, will retry in %v: %v", delay, err)
 					t.Reset(delay)
 					if delay < maxRetryDelay {
@@ -221,7 +223,7 @@ func retryRequest(w Watcher, request func() (*http.Response, error)) (*http.Resp
 
 	resp := <-respCh
 	if resp == nil {
-		return nil, fmt.Errorf("request shutdown")
+		return nil, fmt.Errorf("request retry cancelled")
 	}
 	return resp, nil
 }
