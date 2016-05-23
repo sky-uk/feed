@@ -9,6 +9,8 @@ import (
 
 	"fmt"
 
+	"os/exec"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -31,41 +33,65 @@ func (m *mockSignaller) Sighup(p *os.Process) error {
 	return nil
 }
 
-func newLb(tmpDir string, mockSignaller Signaller) LoadBalancer {
+func newLb(tmpDir string) (LoadBalancer, *mockSignaller) {
+	return newLbWithBinary(tmpDir, "./fake_nginx.sh")
+}
+
+func newLbWithBinary(tmpDir string, binary string) (LoadBalancer, *mockSignaller) {
 	lb := NewNginxLB(NginxConf{
-		BinaryLocation:  "./fake_nginx.sh",
-		ConfigDir:       tmpDir,
+		BinaryLocation:  binary,
+		WorkingDir:      tmpDir,
 		Port:            port,
 		WorkerProcesses: 1,
 	})
-	lb.(*nginxLoadBalancer).signaller = mockSignaller
-	return lb
+	signaller := &mockSignaller{}
+	signaller.On("Sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
+	lb.(*nginxLoadBalancer).signaller = signaller
+	return lb, signaller
 }
 
 func TestGracefulShutdown(t *testing.T) {
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "ingress_lb_test")
-	assert.Nil(t, err)
+	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	mockSignaller := &mockSignaller{}
-	mockSignaller.On("Sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
 
-	lb := newLb(tmpDir, mockSignaller)
+	lb, mockSignaller := newLb(tmpDir)
 
-	assert.Nil(t, lb.Start())
-	assert.Nil(t, lb.Stop())
+	assert.NoError(t, lb.Start())
+	assert.NoError(t, lb.Stop())
 	mockSignaller.AssertExpectations(t)
 }
 
-func TestReloadOfConfig(t *testing.T) {
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "ingress_lb_test")
-	assert.Nil(t, err)
+func TestHealthyWhileRunning(t *testing.T) {
+	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	mockSignaller := &mockSignaller{}
-	mockSignaller.On("Sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
+
+	lb, _ := newLb(tmpDir)
+
+	assert.False(t, lb.Healthy(), "should be unhealthy")
+	lb.Start()
+	assert.True(t, lb.Healthy(), "should be healthy")
+	lb.Stop()
+	assert.True(t, lb.Healthy(), "should be unhealthy")
+}
+
+func TestFailsIfNginxDiesEarly(t *testing.T) {
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	lb, _ := newLbWithBinary(tmpDir, "./fake_failing_nginx.sh")
+
+	assert.Error(t, lb.Start())
+	assert.False(t, lb.Healthy())
+}
+
+func TestReloadOfConfig(t *testing.T) {
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	lb, mockSignaller := newLb(tmpDir)
 	mockSignaller.On("Sighup", mock.AnythingOfType("*os.Process")).Return(nil)
 
-	lb := newLb(tmpDir, mockSignaller)
-	assert.Nil(t, lb.Start())
+	assert.NoError(t, lb.Start())
 
 	entries := []LoadBalancerEntry{
 		LoadBalancerEntry{
@@ -76,9 +102,11 @@ func TestReloadOfConfig(t *testing.T) {
 		},
 	}
 	updated, err := lb.Update(LoadBalancerUpdate{entries})
+	assert.NoError(t, err)
 	assert.True(t, updated)
 
 	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+	assert.NoError(t, err)
 	configContents := string(config)
 
 	r, err := regexp.Compile("(?s)# Start entry\\n (.*?)# End entry")
@@ -93,12 +121,11 @@ func TestReloadOfConfig(t *testing.T) {
 }
 
 func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
-	tmpDir, _ := ioutil.TempDir(os.TempDir(), "ingress_lb_test")
+	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	mockSignaller := &mockSignaller{}
-	mockSignaller.On("Sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
+	lb, mockSignaller := newLb(tmpDir)
 	mockSignaller.On("Sighup", mock.AnythingOfType("*os.Process")).Return(nil)
-	lb := newLb(tmpDir, mockSignaller)
+
 	lb.Start()
 
 	entries := []LoadBalancerEntry{
@@ -109,20 +136,21 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 			ServicePort: 9090,
 		},
 	}
-	updated, _ := lb.Update(LoadBalancerUpdate{entries})
+	updated, err := lb.Update(LoadBalancerUpdate{entries})
+	assert.NoError(t, err)
 	assert.True(t, updated)
 
-	updated, _ = lb.Update(LoadBalancerUpdate{entries})
+	updated, err = lb.Update(LoadBalancerUpdate{entries})
+	assert.NoError(t, err)
 	assert.False(t, updated)
 }
 
 func TestInvalidLoadBalancerEntryIsIgnored(t *testing.T) {
-	tmpDir, _ := ioutil.TempDir(os.TempDir(), "ingress_lb_test")
+	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	mockSignaller := &mockSignaller{}
-	mockSignaller.On("Sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
+	lb, mockSignaller := newLb(tmpDir)
 	mockSignaller.On("Sighup", mock.AnythingOfType("*os.Process")).Return(nil)
-	lb := newLb(tmpDir, mockSignaller)
+
 	lb.Start()
 	entries := []LoadBalancerEntry{
 		LoadBalancerEntry{
@@ -153,4 +181,15 @@ func TestInvalidLoadBalancerEntryIsIgnored(t *testing.T) {
 	updated, err = lb.Update(LoadBalancerUpdate{entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
+}
+
+func setupWorkDir(t *testing.T) string {
+	tmpDir, err := ioutil.TempDir(os.TempDir(), "ingress_lb_test")
+	assert.NoError(t, err)
+	copyNginxTemplate(t, tmpDir)
+	return tmpDir
+}
+
+func copyNginxTemplate(t *testing.T, tmpDir string) {
+	assert.NoError(t, exec.Command("cp", "nginx.tmpl", tmpDir+"/").Run())
 }

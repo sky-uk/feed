@@ -1,8 +1,8 @@
 worker_processes  1;
 daemon off;
 
-error_log  /dev/stdout warn;
-pid        {{ .Config.ConfigDir }}/nginx.pid;
+error_log  stderr warn;
+pid        {{ .Config.WorkingDir }}/nginx.pid;
 
 events {
     worker_connections  1024;
@@ -15,10 +15,18 @@ http {
     '$status $body_bytes_sent "$http_referer" '
     '"$http_user_agent" "$http_x_forwarded_for"';
 
-    access_log  /var/log/nginx/access.log  main;
-    sendfile        on;
+    sendfile           on;
     keepalive_timeout  65;
 
+    # Put all data into the working directory
+    access_log             {{ .Config.WorkingDir }}/access.log main gzip;
+    client_body_temp_path  {{ .Config.WorkingDir }}/tmp_client_body 1 2;
+    proxy_temp_path        {{ .Config.WorkingDir }}/tmp_proxy 1 2;
+    fastcgi_temp_path      {{ .Config.WorkingDir }}/tmp_fastcgi 1 2;
+    uwsgi_temp_path        {{ .Config.WorkingDir }}/tmp_uwsgi 1 2;
+    scgi_temp_path         {{ .Config.WorkingDir }}/tmp_scgi 1 2;
+
+    # Configure ingresses
     {{ $port := .Config.Port }}
     {{ range $entry := .Entries }}
     # Start entry
@@ -32,7 +40,7 @@ http {
     # End entry
     {{ end }}
 
-    # default server for health checks
+    # Default server for health checks
     server {
         listen {{ .Config.Port }} default_server;
             location /health {

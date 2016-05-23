@@ -33,6 +33,11 @@ func (lb *fakeLb) Stop() error {
 	return r.Error(0)
 }
 
+func (lb *fakeLb) Healthy() bool {
+	r := lb.Called()
+	return r.Bool(0)
+}
+
 func (lb *fakeLb) String() string {
 	return "FakeLoadBalancer"
 }
@@ -64,6 +69,7 @@ func createDefaultStubs() (*fakeLb, *fakeClient) {
 	lb.On("Start").Return(nil)
 	lb.On("Stop").Return(nil)
 	lb.On("Update", mock.Anything).Return(nil)
+	lb.On("Healthy").Return(true)
 
 	return lb, client
 }
@@ -119,6 +125,27 @@ func TestControllerIsUnhealthyUntilStarted(t *testing.T) {
 	controller.Stop()
 	time.Sleep(smallWaitTime)
 	assert.False(controller.Healthy(), "should be unhealthy after stopped")
+}
+
+func TestControllerIsUnhealthyIfLBIsUnhealthy(t *testing.T) {
+	assert := assert.New(t)
+	_, client := createDefaultStubs()
+	lb := new(fakeLb)
+	controller := New(lb, client)
+
+	lb.On("Start").Return(nil)
+	lb.On("Stop").Return(nil)
+	lb.On("Update", mock.Anything).Return(nil)
+	// first return healthy, then unhealthy for lb
+	lb.On("Healthy").Return(true).Once()
+	lb.On("Healthy").Return(false).Once()
+
+	go func() {
+		assert.NoError(controller.Start())
+	}()
+	time.Sleep(smallWaitTime)
+	assert.True(controller.Healthy())
+	assert.False(controller.Healthy())
 }
 
 func TestLoadBalancerReturnsErrorIfWatcherFails(t *testing.T) {

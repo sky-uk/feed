@@ -173,5 +173,5 @@ func (c *controller) stopIt() error {
 func (c *controller) Healthy() bool {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
-	return c.started
+	return c.started && c.lb.Healthy()
 }
