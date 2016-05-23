@@ -1,10 +1,9 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"os/signal"
-	//
-	"flag"
 
 	"io/ioutil"
 
