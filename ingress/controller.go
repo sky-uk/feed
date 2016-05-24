@@ -125,14 +125,17 @@ func (c *controller) updateLoadBalancer() error {
 
 	log.Infof("Updating load balancer with %d entry(s)", len(entries))
 	updated, err := c.lb.Update(LoadBalancerUpdate{entries})
-	if err == nil {
-		if updated {
-			log.Info("Load balancer updated")
-		} else {
-			log.Info("No changes")
-		}
+	if err != nil {
+		return err
 	}
-	return err
+
+	if updated {
+		log.Info("Load balancer updated")
+	} else {
+		log.Info("No changes")
+	}
+
+	return nil
 }
 
 func (c *controller) Stop() error {
