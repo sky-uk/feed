@@ -28,7 +28,7 @@ type controller struct {
 	client        k8s.Client
 	stopCh        chan struct{}
 	doneCh        chan struct{}
-	started       safeBool
+	started       bool
 	startStopLock sync.Mutex
 }
 
@@ -58,7 +58,7 @@ func (c *controller) startIt(watcher k8s.Watcher) error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
 
-	if c.started.get() {
+	if c.started {
 		return fmt.Errorf("controller is already started")
 	}
 
@@ -81,7 +81,7 @@ func (c *controller) startIt(watcher k8s.Watcher) error {
 
 	go c.watchForUpdates(watcher)
 
-	c.started.set(true)
+	c.started = true
 	return nil
 }
 
@@ -153,7 +153,7 @@ func (c *controller) stopIt() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
 
-	if !c.started.get() {
+	if !c.started {
 		return fmt.Errorf("cannot stop, not started")
 	}
 
@@ -165,28 +165,13 @@ func (c *controller) stopIt() error {
 	}
 
 	close(c.stopCh)
-	c.started.set(false)
+	c.started = false
 
 	return nil
 }
 
 func (c *controller) Healthy() bool {
-	return c.started.get()
-}
-
-type safeBool struct {
-	lock sync.Mutex
-	val  bool
-}
-
-func (b *safeBool) get() bool {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-	return b.val
-}
-
-func (b *safeBool) set(newVal bool) {
-	b.lock.Lock()
-	b.val = newVal
-	b.lock.Unlock()
+	c.startStopLock.Lock()
+	defer c.startStopLock.Unlock()
+	return c.started
 }
