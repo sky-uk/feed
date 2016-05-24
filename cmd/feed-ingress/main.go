@@ -37,7 +37,7 @@ func init() {
 		defaultNginxConfDir = "."
 		defaultIngressPort  = 80
 		defaultNginxWorkers = 1
-		defaultHealthPort   = 12001
+		defaultHealthPort   = 12082
 	)
 
 	flag.StringVar(&apiServer, "apiserver", defaultAPIServer, "Kubernetes API server URL")
@@ -111,7 +111,7 @@ func configureHealthPort(controller ingress.Controller) {
 	http.HandleFunc("/health", checkHealth(controller))
 
 	go func() {
-		log.Error(http.ListenAndServe("localhost:"+strconv.Itoa(healthPort), nil))
+		log.Error(http.ListenAndServe(":"+strconv.Itoa(healthPort), nil))
 		log.Info(controller.Stop())
 		os.Exit(-1)
 	}()
