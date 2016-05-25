@@ -16,7 +16,11 @@ RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC64107
 						gettext-base \
 	&& rm -rf /var/lib/apt/lists/*
 
+WORKDIR /
 COPY feed-ingress /
-COPY nginx.tmpl /
+RUN mkdir /nginx
+COPY nginx.tmpl /nginx/
 
-ENTRYPOINT ["/feed-ingress"]
+USER nginx
+
+ENTRYPOINT ["/feed-ingress", "-nginx-workdir", "/nginx"]
