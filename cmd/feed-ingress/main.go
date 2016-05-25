@@ -34,7 +34,7 @@ func init() {
 		defaultAPIServer       = "https://kubernetes:443"
 		defaultCaCertFile      = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 		defaultTokenFile       = "/run/secrets/kubernetes.io/serviceaccount/token"
-		defaultNginxWorkingDir = "/"
+		defaultNginxWorkingDir = "/nginx"
 		defaultIngressPort     = 80
 		defaultNginxWorkers    = 1
 		defaultHealthPort      = 12082
