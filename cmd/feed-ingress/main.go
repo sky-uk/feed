@@ -31,23 +31,23 @@ var (
 
 func init() {
 	const (
-		defaultAPIServer    = "https://kubernetes:443"
-		defaultCaCertFile   = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-		defaultTokenFile    = "/run/secrets/kubernetes.io/serviceaccount/token"
-		defaultNginxConfDir = "."
-		defaultIngressPort  = 80
-		defaultNginxWorkers = 1
-		defaultHealthPort   = 12082
+		defaultAPIServer       = "https://kubernetes:443"
+		defaultCaCertFile      = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+		defaultTokenFile       = "/run/secrets/kubernetes.io/serviceaccount/token"
+		defaultNginxWorkingDir = "/"
+		defaultIngressPort     = 80
+		defaultNginxWorkers    = 1
+		defaultHealthPort      = 12082
 	)
 
-	flag.StringVar(&apiServer, "apiserver", defaultAPIServer, "Kubernetes API server URL")
-	flag.StringVar(&caCertFile, "cacertfile", defaultCaCertFile, "file containing kubernetes ca certificate")
-	flag.StringVar(&tokenFile, "tokenfile", defaultTokenFile, "file containing kubernetes client authentication token")
-	flag.StringVar(&nginxConfDir, "nginx-conf-dir", defaultNginxConfDir, "directory to store nginx conf")
-	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort, "port to server ingress traffic")
-	flag.IntVar(&nginxWorkerProcesses, "nginx-workers", defaultNginxWorkers, "nginx worker processes")
-	flag.BoolVar(&debug, "debug", false, "enable debug logging")
-	flag.IntVar(&healthPort, "health-port", defaultHealthPort, "port for checking the health of the ingress controller")
+	flag.StringVar(&apiServer, "apiserver", defaultAPIServer, "Kubernetes API server URL.")
+	flag.StringVar(&caCertFile, "cacertfile", defaultCaCertFile, "File containing kubernetes ca certificate.")
+	flag.StringVar(&tokenFile, "tokenfile", defaultTokenFile, "File containing kubernetes client authentication token.")
+	flag.StringVar(&nginxConfDir, "nginx-workdir", defaultNginxWorkingDir, "Directory to store nginx files. Also the location of the nginx.tmpl file.")
+	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort, "Port to server ingress traffic.")
+	flag.IntVar(&nginxWorkerProcesses, "nginx-workers", defaultNginxWorkers, "Number of nginx worker processes.")
+	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
+	flag.IntVar(&healthPort, "health-port", defaultHealthPort, "Port for checking the health of the ingress controller.")
 }
 
 func main() {
@@ -79,7 +79,7 @@ func configureLogging() {
 func createLB() ingress.LoadBalancer {
 	return ingress.NewNginxLB(ingress.NginxConf{
 		BinaryLocation:  "/usr/sbin/nginx",
-		ConfigDir:       nginxConfDir,
+		WorkingDir:      nginxConfDir,
 		WorkerProcesses: nginxWorkerProcesses,
 		Port:            ingressPort,
 	})

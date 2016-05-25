@@ -14,6 +14,7 @@ type LoadBalancer interface {
 	// Update the loadbalancer configuration. Returns if the LB was required to reload
 	// its configuration
 	Update(LoadBalancerUpdate) (bool, error)
+	Healthy() bool
 }
 
 // Signaller interface around signalling the loadbalancer process
