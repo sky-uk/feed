@@ -7,7 +7,7 @@ git_rev = $(shell git rev-parse --short HEAD)
 docker_tag = "$(docker_repo):$(git_rev)"
 docker_latest = "$(docker_repo):latest"
 
-all : format vet lint test build copy
+all : format vet lint test build
 
 format :
 	@echo "== formatting"
