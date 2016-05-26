@@ -19,14 +19,14 @@ It's intended to be replicated to scale.
 
 # Building
 
-Build and test with:
-
-    make
-    
-It requires these tools:
+Requires these tools:
 
     go get -u github.com/golang/lint/golint
     go get -u golang.org/x/tools/cmd/goimports
+    
+Build and test with:
+
+    make
     
 # Releasing
 
