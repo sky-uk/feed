@@ -73,6 +73,8 @@ func main() {
 }
 
 func configureLogging() {
+	// logging is the main output, so write it all to stdout
+	log.SetOutput(os.Stdout)
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
