@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
-echo "$@"
+echo $0 $@
 echo "Exiting immediately - failed!"
 exit -1

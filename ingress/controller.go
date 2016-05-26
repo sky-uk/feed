@@ -15,9 +15,9 @@ import (
 
 // Controller for Kubernetes ingress.
 type Controller interface {
-	// Run the controller, blocking until it stops. Returns an error if it failed to start.
+	// Run the controller, returning immediately after it starts or an error occurs.
 	Start() error
-	// Stop the controller, blocking until it stops. Returns an error if unable to stop.
+	// Stop the controller, blocking until it stops or an error occurs.
 	Stop() error
 	// Healthy returns true for a healthy controller, false for unhealthy.
 	Healthy() bool
@@ -26,8 +26,7 @@ type Controller interface {
 type controller struct {
 	lb            LoadBalancer
 	client        k8s.Client
-	stopCh        chan struct{}
-	doneCh        chan struct{}
+	watcher       k8s.Watcher
 	started       bool
 	startStopLock sync.Mutex
 }
@@ -41,20 +40,14 @@ func New(loadBalancer LoadBalancer, kubernetesClient k8s.Client) Controller {
 }
 
 func (c *controller) Start() error {
-	watcher := k8s.NewWatcher()
-	defer close(watcher.Done())
-
-	err := c.startIt(watcher)
-	if err != nil {
+	if err := c.startIt(); err != nil {
 		return err
 	}
 
-	<-c.stopCh
-	close(c.doneCh)
 	return nil
 }
 
-func (c *controller) startIt(watcher k8s.Watcher) error {
+func (c *controller) startIt() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
 
@@ -62,7 +55,7 @@ func (c *controller) startIt(watcher k8s.Watcher) error {
 		return fmt.Errorf("controller is already started")
 	}
 
-	if c.stopCh != nil || c.doneCh != nil {
+	if c.watcher != nil {
 		return fmt.Errorf("can't restart controller")
 	}
 
@@ -71,26 +64,24 @@ func (c *controller) startIt(watcher k8s.Watcher) error {
 		return fmt.Errorf("unable to start load balancer: %v", err)
 	}
 
-	err = c.client.WatchIngresses(watcher)
+	c.watcher = k8s.NewWatcher()
+	err = c.client.WatchIngresses(c.watcher)
 	if err != nil {
 		return fmt.Errorf("unable to watch ingresses: %v", err)
 	}
 
-	c.stopCh = make(chan struct{})
-	c.doneCh = make(chan struct{})
-
-	go c.watchForUpdates(watcher)
+	go c.watchForUpdates()
 
 	c.started = true
 	return nil
 }
 
-func (c *controller) watchForUpdates(watcher k8s.Watcher) {
+func (c *controller) watchForUpdates() {
 	for {
 		select {
-		case <-c.stopCh:
+		case <-c.watcher.Done():
 			return
-		case <-watcher.Updates():
+		case <-c.watcher.Updates():
 			log.Info("Received update on watcher")
 			err := c.updateLoadBalancer()
 			if err != nil {
@@ -144,8 +135,7 @@ func (c *controller) Stop() error {
 		return err
 	}
 
-	<-c.doneCh
-	log.Infof("Controller has stopped")
+	log.Info("Controller has stopped")
 	return nil
 }
 
@@ -159,14 +149,13 @@ func (c *controller) stopIt() error {
 
 	log.Info("Stopping controller")
 
-	err := c.lb.Stop()
-	if err != nil {
+	close(c.watcher.Done())
+
+	if err := c.lb.Stop(); err != nil {
 		log.Warn("Error while stopping load balancer: ", err)
 	}
 
-	close(c.stopCh)
 	c.started = false
-
 	return nil
 }
 

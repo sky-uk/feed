@@ -13,6 +13,8 @@ import (
 
 	"io"
 
+	"syscall"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/ingress"
 	"github.com/sky-uk/feed/k8s"
@@ -67,7 +69,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	os.Exit(0)
+	select {}
 }
 
 func configureLogging() {
@@ -132,16 +134,18 @@ func checkHealth(controller ingress.Controller) func(w http.ResponseWriter, r *h
 
 func addSignalHandler(controller ingress.Controller) {
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
+	// SIGTERM is used by Kubernetes to gracefully stop pods.
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		for sig := range c {
-			log.Infof("Signalled %v, shutting down.", sig)
+			log.Infof("Signalled %v, shutting down gracefully", sig)
 			err := controller.Stop()
 			if err != nil {
 				log.Error("Error while stopping controller: ", err)
 				os.Exit(-1)
 			}
+			os.Exit(0)
 		}
 	}()
 }

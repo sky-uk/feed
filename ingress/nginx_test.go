@@ -23,12 +23,12 @@ type mockSignaller struct {
 	mock.Mock
 }
 
-func (m *mockSignaller) Sigquit(p *os.Process) error {
+func (m *mockSignaller) sigquit(p *os.Process) error {
 	m.Called(p)
 	return nil
 }
 
-func (m *mockSignaller) Sighup(p *os.Process) error {
+func (m *mockSignaller) sighup(p *os.Process) error {
 	m.Called(p)
 	return nil
 }
@@ -45,12 +45,12 @@ func newLbWithBinary(tmpDir string, binary string) (LoadBalancer, *mockSignaller
 		WorkerProcesses: 1,
 	})
 	signaller := &mockSignaller{}
-	signaller.On("Sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
+	signaller.On("sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
 	lb.(*nginxLoadBalancer).signaller = signaller
 	return lb, signaller
 }
 
-func TestGracefulShutdown(t *testing.T) {
+func TestCanStartThenStop(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
@@ -61,6 +61,18 @@ func TestGracefulShutdown(t *testing.T) {
 	mockSignaller.AssertExpectations(t)
 }
 
+func TestStopWaitsForGracefulShutdownOfNginx(t *testing.T) {
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	lb, _ := newLbWithBinary(tmpDir, "./fake_graceful_nginx.py")
+	lb.(*nginxLoadBalancer).signaller = &osSignaller{}
+
+	assert.NoError(t, lb.Start())
+	assert.NoError(t, lb.Stop())
+	assert.False(t, lb.Healthy(), "should have waited for nginx to gracefully stop")
+}
+
 func TestHealthyWhileRunning(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
@@ -68,10 +80,10 @@ func TestHealthyWhileRunning(t *testing.T) {
 	lb, _ := newLb(tmpDir)
 
 	assert.False(t, lb.Healthy(), "should be unhealthy")
-	lb.Start()
+	assert.NoError(t, lb.Start())
 	assert.True(t, lb.Healthy(), "should be healthy")
-	lb.Stop()
-	assert.True(t, lb.Healthy(), "should be unhealthy")
+	assert.NoError(t, lb.Stop())
+	assert.False(t, lb.Healthy(), "should be unhealthy")
 }
 
 func TestFailsIfNginxDiesEarly(t *testing.T) {
@@ -89,7 +101,7 @@ func TestReloadOfConfig(t *testing.T) {
 	defer os.Remove(tmpDir)
 
 	lb, mockSignaller := newLb(tmpDir)
-	mockSignaller.On("Sighup", mock.AnythingOfType("*os.Process")).Return(nil)
+	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
 
 	assert.NoError(t, lb.Start())
 
@@ -124,7 +136,7 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 	lb, mockSignaller := newLb(tmpDir)
-	mockSignaller.On("Sighup", mock.AnythingOfType("*os.Process")).Return(nil)
+	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
 
 	lb.Start()
 
@@ -149,7 +161,7 @@ func TestInvalidLoadBalancerEntryIsIgnored(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 	lb, mockSignaller := newLb(tmpDir)
-	mockSignaller.On("Sighup", mock.AnythingOfType("*os.Process")).Return(nil)
+	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
 
 	lb.Start()
 	entries := []LoadBalancerEntry{
