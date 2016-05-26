@@ -145,7 +145,7 @@ func (c *controller) Stop() error {
 	}
 
 	<-c.doneCh
-	log.Infof("Controller has stopped")
+	log.Info("Controller has stopped")
 	return nil
 }
 

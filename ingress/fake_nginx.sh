@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
 
-echo "$@"
-
+echo $0 $@
 sleep 0.5
