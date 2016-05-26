@@ -43,7 +43,7 @@ docker : copy
 
 release : docker
 	@echo "== releasing docker image"
-	docker login -e $(DOCKER_EMAIL) -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
+	@docker login -e $(DOCKER_EMAIL) -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 	docker tag $(docker_tag) $(docker_latest)
 	docker push $(docker_tag)
 	docker push $(docker_latest)
