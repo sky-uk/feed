@@ -1,7 +1,7 @@
 pkgs := $(shell go list ./... | grep -v /vendor/)
 files := $(shell find . -path ./vendor -prune -o -name '*.go' -print)
 
-.PHONY: all format test build vet lint copy docker release checkformat check
+.PHONY: all format test build vet lint copy docker release checkformat check clean
 
 all : format check build
 check : vet lint test
@@ -40,7 +40,7 @@ test :
 	@echo "== run tests"
 	@go test -race $(pkgs)
 
-# Docker configuration and targets
+# Docker build 
 
 ingress_binary := $(GOPATH)/bin/feed-ingress
 template := ./ingress/nginx.tmpl
@@ -49,14 +49,20 @@ git_rev := $(shell git rev-parse --short HEAD)
 docker_tag := "$(docker_repo):$(git_rev)"
 docker_latest := "$(docker_repo):latest"
 
+clean:
+	@echo "== cleaning"
+	rm -rf build
+
 copy : build
-	@echo "== copy binaries to docker/"
-	cp $(ingress_binary) ./docker/
-	cp $(template) ./docker/
+	@echo "== copy docker files to build/"
+	@mkdir -p build
+	cp Dockerfile build/
+	cp $(ingress_binary) build/
+	cp $(template) build/
 
 docker : copy
 	@echo "== build docker image"
-	docker build -t $(docker_tag) docker/.
+	docker build -t $(docker_tag) build/.
 	@echo "Built $(docker_tag)"
 
 release : docker
