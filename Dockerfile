@@ -19,8 +19,9 @@ RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC64107
 WORKDIR /
 COPY feed-ingress /
 RUN mkdir /nginx
-COPY nginx.tmpl /nginx/
+RUN chown nginx:nginx /nginx
 
 USER nginx
+COPY nginx.tmpl /nginx/
 
 ENTRYPOINT ["/feed-ingress", "-nginx-workdir", "/nginx"]
