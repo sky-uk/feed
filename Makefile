@@ -1,51 +1,67 @@
-pkgs = $(shell go list ./... | grep -v /vendor/)
-files = $(shell find . -path ./vendor -prune -o -name '*.go' -print)
-ingress_binary = $(GOPATH)/bin/feed-ingress
-template = ./ingress/nginx.tmpl
-docker_repo = skycirrus/feed-ingress
-git_rev = $(shell git rev-parse --short HEAD)
-docker_tag = "$(docker_repo):$(git_rev)"
-docker_latest = "$(docker_repo):latest"
+pkgs := $(shell go list ./... | grep -v /vendor/)
+files := $(shell find . -path ./vendor -prune -o -name '*.go' -print)
 
-all : format vet lint test build
+.PHONY: all format test build vet lint copy docker release checkformat check
+
+all : format check build
+check : vet lint test
+travis : checkformat check docker
 
 format :
-	@echo "== formatting"
+	@echo "== format"
 	@goimports -w $(files)
-
-test :
-	@echo "== running tests"
-	@go test -race $(pkgs)
+	@sync
 
 build :
-	@echo "== building"
+	@echo "== build"
 	@go install -v ./cmd/...
 
+unformatted = $(shell goimports -l $(files))
+
+checkformat :
+	@echo "== check formatting"
+ifneq "$(unformatted)" ""
+	@echo "needs formatting: $(unformatted)"
+	@echo "run make format"
+	@exit 1
+endif
+
 vet :
-	@echo "== vetting"
+	@echo "== vet"
 	@go vet $(pkgs)
 
 lint :
-	@echo "== linting"
+	@echo "== lint"
 	@for pkg in $(pkgs); do \
 		golint -set_exit_status $$pkg || exit 1; \
 	done;
 
+test :
+	@echo "== run tests"
+	@go test -race $(pkgs)
+
+# Docker configuration and targets
+
+ingress_binary := $(GOPATH)/bin/feed-ingress
+template := ./ingress/nginx.tmpl
+docker_repo := skycirrus/feed-ingress
+git_rev := $(shell git rev-parse --short HEAD)
+docker_tag := "$(docker_repo):$(git_rev)"
+docker_latest := "$(docker_repo):latest"
+
 copy : build
-	@echo "== copying binaries to docker/"
+	@echo "== copy binaries to docker/"
 	cp $(ingress_binary) ./docker/
 	cp $(template) ./docker/
 
 docker : copy
-	@echo "== building docker image"
+	@echo "== build docker image"
 	docker build -t $(docker_tag) docker/.
 	@echo "Built $(docker_tag)"
 
 release : docker
-	@echo "== releasing docker image"
+	@echo "== release docker image"
 	@docker login -e $(DOCKER_EMAIL) -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 	docker tag $(docker_tag) $(docker_latest)
 	docker push $(docker_tag)
 	docker push $(docker_latest)
-
-.PHONY: all format test build vet lint copy docker release
