@@ -10,6 +10,11 @@ def signal_handler(signal, frame):
     sys.exit(0)
 
 print('Running {}'.format(str(sys.argv)))
+
+if sys.argv[1] == '-v':
+    print('Asked for version')
+    sys.exit(0)
+
 # The parent golang process blocks SIGQUIT in subprocesses, for some reason.
 # So we unblock it manually - same as what nginx does.
 signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGQUIT})

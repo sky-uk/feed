@@ -79,6 +79,10 @@ func NewNginxLB(nginxConf NginxConf) LoadBalancer {
 }
 
 func (lb *nginxLoadBalancer) Start() error {
+	if err := lb.logNginxVersion(); err != nil {
+		return err
+	}
+
 	if err := lb.initialiseNginxConf(); err != nil {
 		return fmt.Errorf("unable to initialise nginx config: %v", err)
 	}
@@ -104,6 +108,13 @@ func (lb *nginxLoadBalancer) Start() error {
 
 	log.Debugf("Nginx pid %d", lb.cmd.Process.Pid)
 	return nil
+}
+
+func (lb *nginxLoadBalancer) logNginxVersion() error {
+	cmd := exec.Command(lb.BinaryLocation, "-v")
+	cmd.Stdout = log.StandardLogger().Writer()
+	cmd.Stderr = log.StandardLogger().Writer()
+	return cmd.Run()
 }
 
 func (lb *nginxLoadBalancer) initialiseNginxConf() error {

@@ -40,14 +40,6 @@ func New(loadBalancer LoadBalancer, kubernetesClient k8s.Client) Controller {
 }
 
 func (c *controller) Start() error {
-	if err := c.startIt(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *controller) startIt() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
 
@@ -130,16 +122,6 @@ func (c *controller) updateLoadBalancer() error {
 }
 
 func (c *controller) Stop() error {
-	err := c.stopIt()
-	if err != nil {
-		return err
-	}
-
-	log.Info("Controller has stopped")
-	return nil
-}
-
-func (c *controller) stopIt() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
 
@@ -156,6 +138,7 @@ func (c *controller) stopIt() error {
 	}
 
 	c.started = false
+	log.Info("Controller has stopped")
 	return nil
 }
 
