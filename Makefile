@@ -26,7 +26,7 @@ ifneq "$(unformatted)" ""
 	@exit 1
 endif
 
-vet :
+vet : build
 	@echo "== vet"
 	@go vet $(pkgs)
 
