@@ -1,4 +1,4 @@
-package ingress
+package api
 
 import (
 	"testing"
@@ -79,7 +79,7 @@ func TestFilterInvalidEntries(t *testing.T) {
 		invalid,
 	}
 
-	filtered := filterInvalidEntries(entries)
+	filtered := FilterInvalidEntries(entries)
 
 	assert.Equal(t, []LoadBalancerEntry{valid}, filtered)
 }

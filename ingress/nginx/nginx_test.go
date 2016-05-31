@@ -1,4 +1,4 @@
-package ingress
+package nginx
 
 import (
 	"testing"
@@ -11,6 +11,7 @@ import (
 
 	"os/exec"
 
+	"github.com/sky-uk/feed/ingress/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -33,12 +34,12 @@ func (m *mockSignaller) sighup(p *os.Process) error {
 	return nil
 }
 
-func newLb(tmpDir string) (LoadBalancer, *mockSignaller) {
+func newLb(tmpDir string) (api.LoadBalancer, *mockSignaller) {
 	return newLbWithBinary(tmpDir, "./fake_nginx.sh")
 }
 
-func newLbWithBinary(tmpDir string, binary string) (LoadBalancer, *mockSignaller) {
-	lb := NewNginxLB(NginxConf{
+func newLbWithBinary(tmpDir string, binary string) (api.LoadBalancer, *mockSignaller) {
+	lb := NewNginxLB(Conf{
 		BinaryLocation:  binary,
 		WorkingDir:      tmpDir,
 		Port:            port,
@@ -105,15 +106,15 @@ func TestReloadOfConfig(t *testing.T) {
 
 	assert.NoError(t, lb.Start())
 
-	entries := []LoadBalancerEntry{
-		LoadBalancerEntry{
+	entries := []api.LoadBalancerEntry{
+		api.LoadBalancerEntry{
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(LoadBalancerUpdate{entries})
+	updated, err := lb.Update(api.LoadBalancerUpdate{entries})
 	assert.NoError(t, err)
 	assert.True(t, updated)
 
@@ -140,19 +141,19 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 
 	lb.Start()
 
-	entries := []LoadBalancerEntry{
-		LoadBalancerEntry{
+	entries := []api.LoadBalancerEntry{
+		api.LoadBalancerEntry{
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(LoadBalancerUpdate{entries})
+	updated, err := lb.Update(api.LoadBalancerUpdate{entries})
 	assert.NoError(t, err)
 	assert.True(t, updated)
 
-	updated, err = lb.Update(LoadBalancerUpdate{entries})
+	updated, err = lb.Update(api.LoadBalancerUpdate{entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
 }
@@ -164,33 +165,33 @@ func TestInvalidLoadBalancerEntryIsIgnored(t *testing.T) {
 	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
 
 	lb.Start()
-	entries := []LoadBalancerEntry{
-		LoadBalancerEntry{
+	entries := []api.LoadBalancerEntry{
+		api.LoadBalancerEntry{
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(LoadBalancerUpdate{entries})
+	updated, err := lb.Update(api.LoadBalancerUpdate{entries})
 	assert.NoError(t, err)
 
 	// Add an invalid entry
-	entries = []LoadBalancerEntry{
-		LoadBalancerEntry{ // Invalid due to blank host
+	entries = []api.LoadBalancerEntry{
+		api.LoadBalancerEntry{ // Invalid due to blank host
 			Host:        "",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
-		LoadBalancerEntry{ // Same as the one before
+		api.LoadBalancerEntry{ // Same as the one before
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err = lb.Update(LoadBalancerUpdate{entries})
+	updated, err = lb.Update(api.LoadBalancerUpdate{entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
 }

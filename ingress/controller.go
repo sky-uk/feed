@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/k8s"
 )
 
@@ -24,7 +25,7 @@ type Controller interface {
 }
 
 type controller struct {
-	lb            LoadBalancer
+	lb            api.LoadBalancer
 	client        k8s.Client
 	watcher       k8s.Watcher
 	started       bool
@@ -32,7 +33,7 @@ type controller struct {
 }
 
 // New creates an ingress controller.
-func New(loadBalancer LoadBalancer, kubernetesClient k8s.Client) Controller {
+func New(loadBalancer api.LoadBalancer, kubernetesClient k8s.Client) Controller {
 	return &controller{
 		lb:     loadBalancer,
 		client: kubernetesClient,
@@ -90,11 +91,11 @@ func (c *controller) updateLoadBalancer() error {
 		return err
 	}
 
-	entries := []LoadBalancerEntry{}
+	entries := []api.LoadBalancerEntry{}
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {
-				entry := LoadBalancerEntry{
+				entry := api.LoadBalancerEntry{
 					Host:        rule.Host,
 					Path:        path.Path,
 					ServiceName: path.Backend.ServiceName,
@@ -107,7 +108,7 @@ func (c *controller) updateLoadBalancer() error {
 	}
 
 	log.Infof("Updating load balancer with %d entry(s)", len(entries))
-	updated, err := c.lb.Update(LoadBalancerUpdate{entries})
+	updated, err := c.lb.Update(api.LoadBalancerUpdate{entries})
 	if err != nil {
 		return err
 	}

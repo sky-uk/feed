@@ -17,6 +17,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/ingress"
+	"github.com/sky-uk/feed/ingress/api"
+	"github.com/sky-uk/feed/ingress/nginx"
 	"github.com/sky-uk/feed/k8s"
 )
 
@@ -80,8 +82,8 @@ func configureLogging() {
 	}
 }
 
-func createLB() ingress.LoadBalancer {
-	return ingress.NewNginxLB(ingress.NginxConf{
+func createLB() api.LoadBalancer {
+	return nginx.NewNginxLB(nginx.Conf{
 		BinaryLocation:  "/usr/sbin/nginx",
 		WorkingDir:      nginxConfDir,
 		WorkerProcesses: nginxWorkerProcesses,
