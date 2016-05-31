@@ -238,7 +238,7 @@ func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
 }
 
 func createLbEntriesFixture() api.LoadBalancerUpdate {
-	return api.LoadBalancerUpdate{[]api.LoadBalancerEntry{api.LoadBalancerEntry{
+	return api.LoadBalancerUpdate{Entries: []api.LoadBalancerEntry{api.LoadBalancerEntry{
 		Host:        ingressHost,
 		Path:        ingressPath,
 		ServiceName: ingressSvcName,
