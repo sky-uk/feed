@@ -100,6 +100,7 @@ func (c *client) GetIngresses() ([]Ingress, error) {
 func (c *client) WatchIngresses(w Watcher) error {
 	log.Debug("Adding watcher for ingresses")
 
+	notWatching(w)
 	ingressRequest := c.createIngressWatchRequest(w.Done())
 
 	go func() {
@@ -150,6 +151,9 @@ func watch(w Watcher, request func() (*http.Response, error)) bool {
 		return false
 	}
 	defer resp.Body.Close()
+
+	watching(w)
+	defer notWatching(w)
 	log.Infof("Watching %v", resp.Request.URL)
 
 	// send an update for a successful watch start
@@ -285,6 +289,14 @@ func (c *client) request(path string) (*http.Response, error) {
 	}
 
 	return resp, nil
+}
+
+func watching(w Watcher) {
+	w.SetHealth(nil)
+}
+
+func notWatching(w Watcher) {
+	w.SetHealth(fmt.Errorf("not watching"))
 }
 
 func (c *client) String() string {

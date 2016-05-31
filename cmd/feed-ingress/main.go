@@ -15,6 +15,8 @@ import (
 
 	"syscall"
 
+	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/ingress"
 	"github.com/sky-uk/feed/ingress/api"
@@ -156,9 +158,9 @@ func configureHealthPort(controller ingress.Controller) {
 
 func checkHealth(controller ingress.Controller) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !controller.Healthy() {
+		if err := controller.Health(); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			io.WriteString(w, "fail\n")
+			io.WriteString(w, fmt.Sprintf("%v\n", err))
 			return
 		}
 

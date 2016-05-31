@@ -83,6 +83,12 @@ func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 	defer ts.Close()
 	defer close(eventChan)
 
+	// and: various events for sending to client
+	okEvent := dummyEvent{Name: "OK"}
+	disconnectEvent := dummyEvent{Name: "DISCONNECT"}
+	badEvent := dummyEvent{Name: "BAD"}
+	goneEvent := dummyEvent{Name: "GONE"}
+
 	// when: watch ingresses
 	client, err := New(ts.URL, caCert, testAuthToken)
 	assert.NoError(err)
@@ -97,9 +103,9 @@ func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 
 	// then
 	// single update to notify of existing ingresses
-	okEvent := dummyEvent{Name: "OK"}
 	eventChan <- okEvent
 	assert.Equal(1, countUpdates(updates), "received update for initial ingresses")
+	assert.NoError(watcher.Health())
 
 	// send an old resource to test resourceVersion is used
 	oldEvent := dummyEvent{Name: "old-ingress", ResourceVersion: 80}
@@ -107,10 +113,11 @@ func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 	assert.Equal(0, countUpdates(updates), "ignore old-ingress")
 
 	// send a disconnect event to terminate long poll and ensure that watcher reconnects
-	disconnectEvent := dummyEvent{Name: "DISCONNECT"}
 	eventChan <- disconnectEvent
+	assertNotHealthy(t, watcher)
 	eventChan <- okEvent
 	assert.Equal(1, countUpdates(updates), "received update for reconnect")
+	assert.NoError(watcher.Health())
 
 	// send a modified ingress
 	modifiedIngressEvent := dummyEvent{Name: "modified-ingress", ResourceVersion: 100}
@@ -125,13 +132,13 @@ func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 
 	// then send 500s followed by 410 gone from a k8s restart
 	eventChan <- disconnectEvent
-	badEvent := dummyEvent{Name: "BAD"}
-	goneEvent := dummyEvent{Name: "GONE"}
 	eventChan <- badEvent
 	eventChan <- badEvent
+	assertNotHealthy(t, watcher)
 	eventChan <- goneEvent
 	time.Sleep(smallWaitTime * 10)
 	assert.Equal(1, countUpdates(updates), "received update for reconnect")
+	assert.NoError(watcher.Health())
 
 	// send modified ingress again, should be ignored
 	eventChan <- modifiedIngressEvent
@@ -141,6 +148,12 @@ func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 	modified2IngressEvent := dummyEvent{Name: "modified-2-ingress", ResourceVersion: 127}
 	eventChan <- modified2IngressEvent
 	assert.Equal(1, countUpdates(updates), "got modified-2-ingress")
+}
+
+func assertNotHealthy(t *testing.T, w Watcher) {
+	// assumes retry time is > smallWaitTime, letting us query an unhealthy watcher while it waits
+	time.Sleep(smallWaitTime)
+	assert.Error(t, w.Health(), "watcher should not be watching")
 }
 
 func bufferChan(ch <-chan interface{}, done <-chan struct{}) <-chan interface{} {
@@ -160,27 +173,16 @@ func bufferChan(ch <-chan interface{}, done <-chan struct{}) <-chan interface{} 
 }
 
 func countUpdates(updates <-chan interface{}) int {
-	timeout := make(chan struct{})
-	go func() {
-		time.Sleep(smallWaitTime)
-		close(timeout)
-	}()
-
+	t := time.NewTimer(smallWaitTime * 2)
 	var count int
 	for {
-		var finish bool
 		select {
-		case <-timeout:
-			finish = true
+		case <-t.C:
+			return count
 		case <-updates:
 			count++
 		}
-		if finish {
-			break
-		}
 	}
-
-	return count
 }
 
 func assertEqualIngresses(t *testing.T, expected []Ingress, actual []Ingress) {
