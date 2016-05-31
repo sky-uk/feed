@@ -28,6 +28,7 @@ type Conf struct {
 	WorkingDir      string
 	WorkerProcesses int
 	Port            int
+	Resolver        string
 }
 
 // Signaller interface around signalling the loadbalancer process
