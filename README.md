@@ -36,14 +36,14 @@ For a proper release create a tag and push and Travis will push the image to Doc
 
 # Dependencies
 
-Dependencies are managed and vendored with https://github.com/FiloSottile/gvt. This is a thin wrapper
-for golang 1.6 support of a `vendor` directory.
+Dependencies are managed with [govendor](https://github.com/kardianos/govendor). 
+This is a thin wrapper for golang 1.6 support of a `vendor` directory.
 
-    go get -u github.com/FiloSottile/gvt
+    go get -u github.com/kardianos/govendor
 
 To add a dependency:
 
-    gvt fetch github.com/golang/glog
+    govendor fetch github.com/golang/glog
 
 Make sure to commit changes to `vendor`, ideally as a separate commit to any other code change.
 
