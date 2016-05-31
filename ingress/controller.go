@@ -95,10 +95,11 @@ func (c *controller) updateLoadBalancer() error {
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {
+				serviceName := fmt.Sprintf("%s.%s", path.Backend.ServiceName, ingress.Namespace)
 				entry := api.LoadBalancerEntry{
 					Host:        rule.Host,
 					Path:        path.Path,
-					ServiceName: path.Backend.ServiceName,
+					ServiceName: serviceName,
 					ServicePort: int32(path.Backend.ServicePort.IntValue()),
 				}
 
