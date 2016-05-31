@@ -43,7 +43,7 @@ test :
 # Docker build 
 
 ingress_binary := $(GOPATH)/bin/feed-ingress
-template := ./ingress/nginx.tmpl
+template := ./ingress/nginx/nginx.tmpl
 docker_repo := skycirrus/feed-ingress
 git_rev := $(shell git rev-parse --short HEAD)
 docker_tag := "$(docker_repo):$(git_rev)"

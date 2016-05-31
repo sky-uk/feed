@@ -1,4 +1,4 @@
-package ingress
+package api
 
 import (
 	log "github.com/Sirupsen/logrus"
@@ -18,7 +18,7 @@ type LoadBalancerEntry struct {
 }
 
 // FilterInvalidEntries returns a slice of all the valid LoadBalancer entries
-func filterInvalidEntries(entries []LoadBalancerEntry) []LoadBalancerEntry {
+func FilterInvalidEntries(entries []LoadBalancerEntry) []LoadBalancerEntry {
 	var validEntries []LoadBalancerEntry
 
 	for _, entry := range entries {

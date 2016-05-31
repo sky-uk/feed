@@ -1,4 +1,4 @@
-package ingress
+package api
 
 // LoadBalancer that the controller will modify.
 type LoadBalancer interface {

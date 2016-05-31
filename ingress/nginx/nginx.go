@@ -1,4 +1,4 @@
-package ingress
+package nginx
 
 import (
 	"io/ioutil"
@@ -16,12 +16,14 @@ import (
 	"syscall"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/sky-uk/feed/ingress/api"
+	"github.com/sky-uk/feed/util"
 )
 
 const nginxStartDelay = time.Millisecond * 100
 
-// NginxConf configuration for nginx
-type NginxConf struct {
+// Conf configuration for nginx
+type Conf struct {
 	BinaryLocation  string
 	WorkingDir      string
 	WorkerProcesses int
@@ -51,17 +53,17 @@ func (s *osSignaller) sighup(p *os.Process) error {
 
 // Nginx implementation
 type nginxLoadBalancer struct {
-	NginxConf
+	Conf
 	cmd        *exec.Cmd
 	signaller  signaller
-	running    safeBool
+	running    util.SafeBool
 	finishedCh chan error
 }
 
-// Used for generating nginx cofnig
+// Used for generating nginx config
 type loadBalancerTemplate struct {
-	Config  NginxConf
-	Entries []LoadBalancerEntry
+	Config  Conf
+	Entries []api.LoadBalancerEntry
 }
 
 func (lb *nginxLoadBalancer) nginxConfFile() string {
@@ -69,10 +71,10 @@ func (lb *nginxLoadBalancer) nginxConfFile() string {
 }
 
 // NewNginxLB creates a new LoadBalancer
-func NewNginxLB(nginxConf NginxConf) LoadBalancer {
+func NewNginxLB(nginxConf Conf) api.LoadBalancer {
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
 	return &nginxLoadBalancer{
-		NginxConf:  nginxConf,
+		Conf:       nginxConf,
 		signaller:  &osSignaller{},
 		finishedCh: make(chan error),
 	}
@@ -98,11 +100,11 @@ func (lb *nginxLoadBalancer) Start() error {
 		return fmt.Errorf("unable to start nginx: %v", err)
 	}
 
-	lb.running.set(true)
+	lb.running.Set(true)
 	go lb.waitForNginxToFinish()
 
 	time.Sleep(nginxStartDelay)
-	if !lb.running.get() {
+	if !lb.running.Get() {
 		return fmt.Errorf("nginx died shortly after starting")
 	}
 
@@ -122,7 +124,7 @@ func (lb *nginxLoadBalancer) initialiseNginxConf() error {
 	if err != nil {
 		log.Debugf("Can't remove nginx.conf: %v", err)
 	}
-	_, err = lb.update(LoadBalancerUpdate{Entries: []LoadBalancerEntry{}})
+	_, err = lb.update(api.LoadBalancerUpdate{Entries: []api.LoadBalancerEntry{}})
 	return err
 }
 
@@ -133,7 +135,7 @@ func (lb *nginxLoadBalancer) waitForNginxToFinish() {
 	} else {
 		log.Info("Nginx has shutdown successfully")
 	}
-	lb.running.set(false)
+	lb.running.Set(false)
 	lb.finishedCh <- err
 }
 
@@ -147,7 +149,7 @@ func (lb *nginxLoadBalancer) Stop() error {
 	return err
 }
 
-func (lb *nginxLoadBalancer) Update(entries LoadBalancerUpdate) (bool, error) {
+func (lb *nginxLoadBalancer) Update(entries api.LoadBalancerUpdate) (bool, error) {
 	updated, err := lb.update(entries)
 	if err != nil {
 		return false, fmt.Errorf("unable to update nginx: %v", err)
@@ -161,7 +163,7 @@ func (lb *nginxLoadBalancer) Update(entries LoadBalancerUpdate) (bool, error) {
 	return updated, err
 }
 
-func (lb *nginxLoadBalancer) update(entries LoadBalancerUpdate) (bool, error) {
+func (lb *nginxLoadBalancer) update(entries api.LoadBalancerUpdate) (bool, error) {
 	log.Debugf("Updating loadbalancer %s", entries)
 	file, err := lb.createConfig(entries)
 	if err != nil {
@@ -196,15 +198,15 @@ func (lb *nginxLoadBalancer) update(entries LoadBalancerUpdate) (bool, error) {
 	return true, nil
 }
 
-func (lb *nginxLoadBalancer) createConfig(update LoadBalancerUpdate) ([]byte, error) {
+func (lb *nginxLoadBalancer) createConfig(update api.LoadBalancerUpdate) ([]byte, error) {
 	tmpl, err := template.New("nginx.tmpl").ParseFiles(lb.WorkingDir + "/nginx.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
 	var output bytes.Buffer
-	validEntries := filterInvalidEntries(update.Entries)
-	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.NginxConf, Entries: validEntries})
+	validEntries := api.FilterInvalidEntries(update.Entries)
+	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: validEntries})
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("Unable to execute nginx config duration. It will be out of date: %v", err)
@@ -214,7 +216,7 @@ func (lb *nginxLoadBalancer) createConfig(update LoadBalancerUpdate) ([]byte, er
 }
 
 func (lb *nginxLoadBalancer) Healthy() bool {
-	return lb.running.get()
+	return lb.running.Get()
 }
 
 func (lb *nginxLoadBalancer) String() string {

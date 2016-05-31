@@ -7,6 +7,7 @@ import (
 
 	"fmt"
 
+	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -18,7 +19,7 @@ type fakeLb struct {
 	mock.Mock
 }
 
-func (lb *fakeLb) Update(update LoadBalancerUpdate) (bool, error) {
+func (lb *fakeLb) Update(update api.LoadBalancerUpdate) (bool, error) {
 	r := lb.Called(update)
 	return false, r.Error(0)
 }
@@ -236,8 +237,8 @@ func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
 	return nil
 }
 
-func createLbEntriesFixture() LoadBalancerUpdate {
-	return LoadBalancerUpdate{[]LoadBalancerEntry{LoadBalancerEntry{
+func createLbEntriesFixture() api.LoadBalancerUpdate {
+	return api.LoadBalancerUpdate{[]api.LoadBalancerEntry{api.LoadBalancerEntry{
 		Host:        ingressHost,
 		Path:        ingressPath,
 		ServiceName: ingressSvcName,
