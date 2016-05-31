@@ -18,6 +18,10 @@ http {
     sendfile           on;
     keepalive_timeout  65;
 
+    # DNS resolving
+    resolver_timeout 5s;
+    {{ if .Config.Resolver }}resolver {{ .Config.Resolver }};{{ end }}
+
     # Put all data into the working directory
     access_log             {{ .Config.WorkingDir }}/access.log main gzip;
     client_body_temp_path  {{ .Config.WorkingDir }}/tmp_client_body 1 2;

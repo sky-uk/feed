@@ -23,14 +23,15 @@ import (
 )
 
 var (
-	nginxConfDir         string
 	ingressPort          int
-	nginxWorkerProcesses int
 	apiServer            string
 	caCertFile           string
 	tokenFile            string
 	debug                bool
 	healthPort           int
+	nginxWorkDir         string
+	nginxWorkerProcesses int
+	nginxResolver        string
 )
 
 func init() {
@@ -47,11 +48,12 @@ func init() {
 	flag.StringVar(&apiServer, "apiserver", defaultAPIServer, "Kubernetes API server URL.")
 	flag.StringVar(&caCertFile, "cacertfile", defaultCaCertFile, "File containing kubernetes ca certificate.")
 	flag.StringVar(&tokenFile, "tokenfile", defaultTokenFile, "File containing kubernetes client authentication token.")
-	flag.StringVar(&nginxConfDir, "nginx-workdir", defaultNginxWorkingDir, "Directory to store nginx files. Also the location of the nginx.tmpl file.")
 	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort, "Port to server ingress traffic.")
-	flag.IntVar(&nginxWorkerProcesses, "nginx-workers", defaultNginxWorkers, "Number of nginx worker processes.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort, "Port for checking the health of the ingress controller.")
+	flag.StringVar(&nginxWorkDir, "nginx-workdir", defaultNginxWorkingDir, "Directory to store nginx files. Also the location of the nginx.tmpl file.")
+	flag.IntVar(&nginxWorkerProcesses, "nginx-workers", defaultNginxWorkers, "Number of nginx worker processes.")
+	flag.StringVar(&nginxResolver, "nginx-resolver", "", "Address to resolve DNS entries for backends. Leave blank to use host DNS resolving.")
 }
 
 func main() {
@@ -85,9 +87,10 @@ func configureLogging() {
 func createLB() api.LoadBalancer {
 	return nginx.NewNginxLB(nginx.Conf{
 		BinaryLocation:  "/usr/sbin/nginx",
-		WorkingDir:      nginxConfDir,
+		WorkingDir:      nginxWorkDir,
 		WorkerProcesses: nginxWorkerProcesses,
 		Port:            ingressPort,
+		Resolver:        nginxResolver,
 	})
 }
 

@@ -133,6 +133,50 @@ func TestReloadOfConfig(t *testing.T) {
 	mockSignaller.AssertExpectations(t)
 }
 
+func TestResolverIsSpecifiedIfNotEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	resolver := "10.254.0.10:53"
+	lb := NewNginxLB(Conf{
+		BinaryLocation:  "./fake_nginx.sh",
+		WorkingDir:      tmpDir,
+		Port:            port,
+		WorkerProcesses: 1,
+		Resolver:        resolver,
+	})
+	signaller := &mockSignaller{}
+	signaller.On("sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
+	lb.(*nginxLoadBalancer).signaller = signaller
+
+	assert.NoError(lb.Start())
+
+	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+	assert.NoError(err)
+	configContents := string(config)
+
+	assert.Contains(configContents, "resolver "+resolver+";")
+}
+
+func TestResolverIsNotSpecifiedIfEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	lb, _ := newLb(tmpDir)
+	assert.NoError(lb.Start())
+
+	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+	assert.NoError(err)
+	configContents := string(config)
+
+	assert.NotContains(configContents, "resolver ")
+
+}
+
 func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
