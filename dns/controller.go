@@ -76,7 +76,7 @@ func (c *controller) Stop() error {
 func (c *controller) Healthy() bool {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
-	return true
+	return c.started
 }
 
 func (c *controller) watchForUpdates() {
