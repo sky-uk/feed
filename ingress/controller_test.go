@@ -241,16 +241,17 @@ func createLbEntriesFixture() api.LoadBalancerUpdate {
 	return api.LoadBalancerUpdate{Entries: []api.LoadBalancerEntry{api.LoadBalancerEntry{
 		Host:        ingressHost,
 		Path:        ingressPath,
-		ServiceName: ingressSvcName,
+		ServiceName: ingressSvcName + "." + ingressNamespace,
 		ServicePort: ingressSvcPort,
 	}}}
 }
 
 const (
-	ingressHost    = "foo.sky.com"
-	ingressPath    = "/foo"
-	ingressSvcName = "foo-svc"
-	ingressSvcPort = 80
+	ingressHost      = "foo.sky.com"
+	ingressPath      = "/foo"
+	ingressSvcName   = "foo-svc"
+	ingressSvcPort   = 80
+	ingressNamespace = "happysky"
 )
 
 func createIngressesFixture() []k8s.Ingress {
@@ -263,7 +264,7 @@ func createIngressesFixture() []k8s.Ingress {
 	}}
 	return []k8s.Ingress{
 		k8s.Ingress{
-			ObjectMeta: k8s.ObjectMeta{Name: "foo-ingress"},
+			ObjectMeta: k8s.ObjectMeta{Name: "foo-ingress", Namespace: ingressNamespace},
 			Spec: k8s.IngressSpec{
 				Rules: []k8s.IngressRule{k8s.IngressRule{
 					Host: ingressHost,
