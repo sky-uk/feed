@@ -114,7 +114,7 @@ func TestReloadOfConfig(t *testing.T) {
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(api.LoadBalancerUpdate{entries})
+	updated, err := lb.Update(api.LoadBalancerUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.True(t, updated)
 
@@ -149,11 +149,11 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(api.LoadBalancerUpdate{entries})
+	updated, err := lb.Update(api.LoadBalancerUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.True(t, updated)
 
-	updated, err = lb.Update(api.LoadBalancerUpdate{entries})
+	updated, err = lb.Update(api.LoadBalancerUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
 }
@@ -173,7 +173,7 @@ func TestInvalidLoadBalancerEntryIsIgnored(t *testing.T) {
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(api.LoadBalancerUpdate{entries})
+	updated, err := lb.Update(api.LoadBalancerUpdate{Entries: entries})
 	assert.NoError(t, err)
 
 	// Add an invalid entry
@@ -191,7 +191,7 @@ func TestInvalidLoadBalancerEntryIsIgnored(t *testing.T) {
 			ServicePort: 9090,
 		},
 	}
-	updated, err = lb.Update(api.LoadBalancerUpdate{entries})
+	updated, err = lb.Update(api.LoadBalancerUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
 }

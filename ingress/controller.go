@@ -108,7 +108,7 @@ func (c *controller) updateLoadBalancer() error {
 	}
 
 	log.Infof("Updating load balancer with %d entry(s)", len(entries))
-	updated, err := c.lb.Update(api.LoadBalancerUpdate{entries})
+	updated, err := c.lb.Update(api.LoadBalancerUpdate{Entries: entries})
 	if err != nil {
 		return err
 	}
