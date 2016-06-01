@@ -7,8 +7,6 @@ import (
 	"os"
 	"regexp"
 
-	"fmt"
-
 	"os/exec"
 
 	"github.com/sky-uk/feed/ingress/api"
@@ -42,7 +40,7 @@ func newLbWithBinary(tmpDir string, binary string) (api.LoadBalancer, *mockSigna
 	lb := NewNginxLB(Conf{
 		BinaryLocation:  binary,
 		WorkingDir:      tmpDir,
-		Port:            port,
+		IngressPort:     port,
 		WorkerProcesses: 1,
 	})
 	signaller := &mockSignaller{}
@@ -127,7 +125,9 @@ func TestReloadOfConfig(t *testing.T) {
 	serverEntries := r.FindAllStringSubmatch(configContents, -1)
 
 	assert.Equal(t, 1, len(serverEntries))
-	assert.Equal(t, fmt.Sprintf("   server {\n        listen %d;\n        server_name chris.com;\n        location /path {\n            proxy_pass http://service:9090;\n        }\n    }\n    ", port), serverEntries[0][1])
+	assert.Equal(t,
+		"   server {\n        listen 9090;\n        server_name chris.com;\n\n        # Obtain client IP from ELB's X-Forward-For header\n        set_real_ip_from 0.0.0.0/0;\n        real_ip_header X-Forwarded-For;\n        real_ip_recursive off;\n\n        location /path {\n            proxy_pass http://service:9090;\n        }\n    }\n    ",
+		serverEntries[0][1])
 
 	assert.Nil(t, lb.Stop())
 	mockSignaller.AssertExpectations(t)
@@ -143,7 +143,7 @@ func TestResolverIsSpecifiedIfNotEmpty(t *testing.T) {
 	lb := NewNginxLB(Conf{
 		BinaryLocation:  "./fake_nginx.sh",
 		WorkingDir:      tmpDir,
-		Port:            port,
+		IngressPort:     port,
 		WorkerProcesses: 1,
 		Resolver:        resolver,
 	})

@@ -1,24 +1,39 @@
-worker_processes  1;
+worker_processes  {{ .Config.WorkerProcesses }};
 daemon off;
 
-error_log  stderr warn;
-pid        {{ .Config.WorkingDir }}/nginx.pid;
+error_log stderr warn;
+pid {{ .Config.WorkingDir }}/nginx.pid;
+
+# Set large max limit on number of open connections / files.
+worker_rlimit_nofile 131072;
 
 events {
-    worker_connections  1024;
+    # Accept connections as fast as possible.
+    multi_accept on;
+    # Includes both proxy and client connections.
+    # So e.g. 4096 = 2048 persistent client connections to backends per worker.
+    worker_connections {{ .Config.WorkerConnections }};
+    # Use most optimal non-blocking selector on linux.
+    # Should be selected by default on linux, we just make it explicit here.
+    use epoll;
 }
 
 http {
     default_type text/html;
 
+    # Access log format
     log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
     '$status $body_bytes_sent "$http_referer" '
     '"$http_user_agent" "$http_x_forwarded_for"';
 
-    sendfile           on;
-    keepalive_timeout  65;
+    # Keep alive time for client connections
+    keepalive_timeout {{ .Config.KeepAliveSeconds }}s;
+
+    # Optimize for latency over throughput for persistent connections.
+    tcp_nodelay on;
 
     # DNS resolving
+    # Fail faster if dns is unresponsive. Default is 30s.
     resolver_timeout 5s;
     {{ if .Config.Resolver }}resolver {{ .Config.Resolver }};{{ end }}
 
@@ -31,12 +46,18 @@ http {
     scgi_temp_path         {{ .Config.WorkingDir }}/tmp_scgi 1 2;
 
     # Configure ingresses
-    {{ $port := .Config.Port }}
+    {{ $port := .Config.IngressPort }}
     {{ range $entry := .Entries }}
     # Start entry
     server {
         listen {{ $port }};
         server_name {{ $entry.Host }};
+
+        # Obtain client IP from ELB's X-Forward-For header
+        set_real_ip_from 0.0.0.0/0;
+        real_ip_header X-Forwarded-For;
+        real_ip_recursive off;
+
         location {{ $entry.Path }} {
             proxy_pass http://{{ $entry.ServiceName }}:{{ $entry.ServicePort }};
         }
@@ -44,12 +65,26 @@ http {
     # End entry
     {{ end }}
 
-    # Default server for health checks
+    # Default backend
     server {
-        listen {{ .Config.Port }} default_server;
-            location /health {
-             access_log off;
-             return 200;
+        listen {{ .Config.IngressPort }} default_server;
+        location / {
+            return 404;
+        }
+    }
+
+    # Status pages
+    server {
+        listen {{ .Config.StatusPort }} default_server reuseport;
+
+        location /health {
+            access_log off;
+            return 200;
+        }
+
+        location /status {
+            access_log off;
+            stub_status;
         }
 
         location / {
