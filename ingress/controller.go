@@ -14,6 +14,8 @@ import (
 	"github.com/sky-uk/feed/k8s"
 )
 
+const ingressAllowAnnotation = "sky.uk/allow"
+
 // Controller for Kubernetes ingress.
 type Controller interface {
 	// Run the controller, returning immediately after it starts or an error occurs.
@@ -111,6 +113,7 @@ func (c *controller) updateLoadBalancer() error {
 					Path:        path.Path,
 					ServiceName: serviceName,
 					ServicePort: int32(path.Backend.ServicePort.IntValue()),
+					Allow:       ingress.Annotations[ingressAllowAnnotation],
 				}
 
 				entries = append(entries, entry)

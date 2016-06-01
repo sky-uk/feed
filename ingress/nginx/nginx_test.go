@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	port = 9090
+	port         = 9090
+	defaultAllow = "10.50.0.0/16"
 )
 
 type mockSignaller struct {
@@ -42,6 +43,7 @@ func newLbWithBinary(tmpDir string, binary string) (api.LoadBalancer, *mockSigna
 		WorkingDir:      tmpDir,
 		IngressPort:     port,
 		WorkerProcesses: 1,
+		DefaultAllow:    defaultAllow,
 	})
 	signaller := &mockSignaller{}
 	signaller.On("sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
@@ -108,30 +110,86 @@ func TestReloadOfConfig(t *testing.T) {
 
 	assert.NoError(lb.Start())
 
-	entries := []api.LoadBalancerEntry{
-		api.LoadBalancerEntry{
-			Host:        "chris.com",
-			Path:        "/path",
-			ServiceName: "service",
-			ServicePort: 9090,
+	var tests = []struct {
+		entries       []api.LoadBalancerEntry
+		configEntries []string
+	}{
+		{
+			[]api.LoadBalancerEntry{
+				api.LoadBalancerEntry{
+					Host:        "chris.com",
+					Path:        "/path",
+					ServiceName: "service",
+					ServicePort: 9090,
+					Allow:       "10.82.0.0/16",
+				},
+			},
+			[]string{
+				"   server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        allow 10.82.0.0/16;\n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location /path {\n" +
+					"            proxy_pass http://service:9090;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+			},
+		},
+		{
+			[]api.LoadBalancerEntry{
+				api.LoadBalancerEntry{
+					Host:        "foo.com",
+					Path:        "/bar",
+					ServiceName: "lala",
+					ServicePort: 8080,
+				},
+			},
+			[]string{
+				"   server {\n" +
+					"        listen 9090;\n" +
+					"        server_name foo.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        \n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location /bar {\n" +
+					"            proxy_pass http://lala:8080;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+			},
 		},
 	}
-	updated, err := lb.Update(api.LoadBalancerUpdate{Entries: entries})
-	assert.NoError(err)
-	assert.True(updated)
 
-	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
-	assert.NoError(err)
-	configContents := string(config)
+	for _, test := range tests {
+		entries := test.entries
+		updated, err := lb.Update(api.LoadBalancerUpdate{Entries: entries})
+		assert.NoError(err)
+		assert.True(updated)
 
-	r, err := regexp.Compile("(?s)# Start entry\\n (.*?)# End entry")
-	assert.NoError(err)
-	serverEntries := r.FindAllStringSubmatch(configContents, -1)
+		config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+		assert.NoError(err)
+		configContents := string(config)
 
-	assert.Equal(1, len(serverEntries))
-	assert.Equal(
-		"   server {\n        listen 9090;\n        server_name chris.com;\n\n        # Obtain client IP from ELB's X-Forward-For header\n        set_real_ip_from 0.0.0.0/0;\n        real_ip_header X-Forwarded-For;\n        real_ip_recursive off;\n\n        location /path {\n            proxy_pass http://service:9090;\n        }\n    }\n    ",
-		serverEntries[0][1])
+		r, err := regexp.Compile("(?s)# Start entry\\n (.*?)# End entry")
+		assert.NoError(err)
+		serverEntries := r.FindAllStringSubmatch(configContents, -1)
+
+		assert.Equal(len(test.configEntries), len(serverEntries))
+		for i := range test.configEntries {
+			assert.Equal(test.configEntries[i], serverEntries[i][1])
+		}
+	}
 
 	assert.Nil(lb.Stop())
 	mockSignaller.AssertExpectations(t)

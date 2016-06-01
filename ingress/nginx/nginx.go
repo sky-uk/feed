@@ -32,6 +32,7 @@ type Conf struct {
 	StatusPort        int
 	IngressPort       int
 	Resolver          string
+	DefaultAllow      string
 }
 
 // Signaller interface around signalling the loadbalancer process

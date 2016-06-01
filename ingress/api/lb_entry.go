@@ -11,10 +11,16 @@ type LoadBalancerUpdate struct {
 
 // LoadBalancerEntry describes the ingress for a single host, path, and service.
 type LoadBalancerEntry struct {
-	Host        string
-	Path        string
+	// Host is the fully qualified domain name used for external access.
+	Host string
+	// Path is the url path after the hostname.
+	Path string
+	// ServiceName is the Kubernetes backend service to proxy traffic to.
 	ServiceName string
+	// ServicePort is the port to proxy traffic to.
 	ServicePort int32
+	// SourceRange is the ip or cidr that is allowed to access the service.
+	Allow string
 }
 
 // FilterInvalidEntries returns a slice of all the valid LoadBalancer entries
