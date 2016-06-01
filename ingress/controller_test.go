@@ -7,9 +7,9 @@ import (
 
 	"fmt"
 
+	iApi "github.com/sky-uk/feed/api"
 	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/k8s"
-	"github.com/sky-uk/feed/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -76,7 +76,7 @@ func createDefaultStubs() (*fakeLb, *fakeClient) {
 	return lb, client
 }
 
-func newController(lb api.LoadBalancer, client k8s.Client) util.Controller {
+func newController(lb api.LoadBalancer, client k8s.Client) iApi.Controller {
 	return New(Config{LoadBalancer: lb, KubernetesClient: client, ServiceDomain: serviceDomain})
 }
 

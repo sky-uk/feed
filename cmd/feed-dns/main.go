@@ -7,7 +7,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/dns"
 	"github.com/sky-uk/feed/k8s"
-	"github.com/sky-uk/feed/util"
+	"github.com/sky-uk/feed/util/cmd"
 )
 
 var (
@@ -35,13 +35,13 @@ func init() {
 
 func main() {
 	flag.Parse()
-	util.ConfigureLogging(debug)
+	cmd.ConfigureLogging(debug)
 
 	client := k8s.New(caCertFile, tokenFile, apiServer)
 	controller := dns.New(client)
 
-	util.ConfigureHealthPort(controller, healthPort)
-	util.AddSignalHandler(controller)
+	cmd.ConfigureHealthPort(controller, healthPort)
+	cmd.AddSignalHandler(controller)
 
 	err := controller.Start()
 	if err != nil {

@@ -10,15 +10,15 @@ import (
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/sky-uk/feed/ingress/api"
+	"github.com/sky-uk/feed/api"
+	iApi "github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/k8s"
-	"github.com/sky-uk/feed/util"
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
 
 type controller struct {
-	lb            api.LoadBalancer
+	lb            iApi.LoadBalancer
 	client        k8s.Client
 	serviceDomain string
 	watcher       k8s.Watcher
@@ -28,13 +28,13 @@ type controller struct {
 
 // Config for creating a new ingress controller.
 type Config struct {
-	LoadBalancer     api.LoadBalancer
+	LoadBalancer     iApi.LoadBalancer
 	KubernetesClient k8s.Client
 	ServiceDomain    string
 }
 
 // New creates an ingress controller.
-func New(conf Config) util.Controller {
+func New(conf Config) api.Controller {
 	return &controller{
 		lb:            conf.LoadBalancer,
 		client:        conf.KubernetesClient,
@@ -93,13 +93,13 @@ func (c *controller) updateLoadBalancer() error {
 		return err
 	}
 
-	entries := []api.LoadBalancerEntry{}
+	entries := []iApi.LoadBalancerEntry{}
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {
 				serviceName := fmt.Sprintf("%s.%s.%s",
 					path.Backend.ServiceName, ingress.Namespace, c.serviceDomain)
-				entry := api.LoadBalancerEntry{
+				entry := iApi.LoadBalancerEntry{
 					Host:        rule.Host,
 					Path:        path.Path,
 					ServiceName: serviceName,
@@ -113,7 +113,7 @@ func (c *controller) updateLoadBalancer() error {
 	}
 
 	log.Infof("Updating load balancer with %d entry(s)", len(entries))
-	updated, err := c.lb.Update(api.LoadBalancerUpdate{Entries: entries})
+	updated, err := c.lb.Update(iApi.LoadBalancerUpdate{Entries: entries})
 	if err != nil {
 		return err
 	}

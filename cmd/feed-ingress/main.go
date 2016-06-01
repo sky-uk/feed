@@ -11,7 +11,7 @@ import (
 	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/ingress/nginx"
 	"github.com/sky-uk/feed/k8s"
-	"github.com/sky-uk/feed/util"
+	"github.com/sky-uk/feed/util/cmd"
 )
 
 var (
@@ -84,7 +84,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	util.ConfigureLogging(debug)
+	cmd.ConfigureLogging(debug)
 
 	lb := createLB()
 	client := k8s.New(caCertFile, tokenFile, apiServer)
@@ -94,8 +94,8 @@ func main() {
 		ServiceDomain:    serviceDomain,
 	})
 
-	util.ConfigureHealthPort(controller, healthPort)
-	util.AddSignalHandler(controller)
+	cmd.ConfigureHealthPort(controller, healthPort)
+	cmd.AddSignalHandler(controller)
 
 	err := controller.Start()
 	if err != nil {

@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/sky-uk/feed/api"
 	"github.com/sky-uk/feed/k8s"
-	"github.com/sky-uk/feed/util"
 )
 
 type controller struct {
@@ -17,7 +17,7 @@ type controller struct {
 }
 
 // New creates an dns controller.
-func New(kubernetesClient k8s.Client) util.Controller {
+func New(kubernetesClient k8s.Client) api.Controller {
 	return &controller{
 		client: kubernetesClient,
 	}

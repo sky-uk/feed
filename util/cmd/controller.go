@@ -1,4 +1,4 @@
-package util
+package cmd
 
 import (
 	"io"
@@ -11,20 +11,11 @@ import (
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/sky-uk/feed/api"
 )
 
-// Controller interface for all ingress controllers
-type Controller interface {
-	// Run the controller, returning immediately after it starts or an error occurs.
-	Start() error
-	// Stop the controller, blocking until it stops or an error occurs.
-	Stop() error
-	// Healthy returns true for a healthy controller, false for unhealthy.
-	Health() error
-}
-
 // ConfigureHealthPort is used to expose the controllers health over http
-func ConfigureHealthPort(controller Controller, healthPort int) {
+func ConfigureHealthPort(controller api.Controller, healthPort int) {
 	http.HandleFunc("/health", checkHealth(controller))
 
 	go func() {
@@ -34,7 +25,7 @@ func ConfigureHealthPort(controller Controller, healthPort int) {
 	}()
 }
 
-func checkHealth(controller Controller) func(w http.ResponseWriter, r *http.Request) {
+func checkHealth(controller api.Controller) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := controller.Health(); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -48,7 +39,7 @@ func checkHealth(controller Controller) func(w http.ResponseWriter, r *http.Requ
 }
 
 // AddSignalHandler allows the  controller to shutdown gracefully by respecting SIGTERM
-func AddSignalHandler(controller Controller) {
+func AddSignalHandler(controller api.Controller) {
 	c := make(chan os.Signal, 1)
 	// SIGTERM is used by Kubernetes to gracefully stop pods.
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
