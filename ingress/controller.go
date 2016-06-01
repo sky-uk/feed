@@ -12,19 +12,10 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/k8s"
+	"github.com/sky-uk/feed/util"
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
-
-// Controller for Kubernetes ingress.
-type Controller interface {
-	// Run the controller, returning immediately after it starts or an error occurs.
-	Start() error
-	// Stop the controller, blocking until it stops or an error occurs.
-	Stop() error
-	// Health returns nil for a healthy controller, error otherwise.
-	Health() error
-}
 
 type controller struct {
 	lb            api.LoadBalancer
@@ -43,7 +34,7 @@ type Config struct {
 }
 
 // New creates an ingress controller.
-func New(conf Config) Controller {
+func New(conf Config) util.Controller {
 	return &controller{
 		lb:            conf.LoadBalancer,
 		client:        conf.KubernetesClient,

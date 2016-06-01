@@ -32,7 +32,7 @@ func (c *fakeClient) String() string {
 	return "FakeClient"
 }
 
-func createDefaultStubs() (*fakeClient) {
+func createDefaultStubs() *fakeClient {
 	client := new(fakeClient)
 
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
@@ -84,13 +84,13 @@ func TestControllerIsUnhealthyUntilStarted(t *testing.T) {
 	controller := New(client)
 
 	// expect
-	assert.False(controller.Healthy(), "should be unhealthy until started")
+	assert.Error(controller.Health(), "should be unhealthy until started")
 	assert.NoError(controller.Start())
 	time.Sleep(smallWaitTime)
-	assert.True(controller.Healthy(), "should be healthy after started")
+	assert.NoError(controller.Health(), "should be healthy after started")
 	assert.NoError(controller.Stop())
 	time.Sleep(smallWaitTime)
-	assert.False(controller.Healthy(), "should be unhealthy after stopped")
+	assert.Error(controller.Health(), "should be unhealthy after stopped")
 }
 
 func TestControllerReturnsErrorIfWatcherFails(t *testing.T) {

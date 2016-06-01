@@ -6,17 +6,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"
+	"github.com/sky-uk/feed/util"
 )
-
-// Controller for dns controller
-type Controller interface {
-	// Run the controller, returning immediately after it starts or an error occurs.
-	Start() error
-	// Stop the controller, blocking until it stops or an error occurs.
-	Stop() error
-	// Healthy returns true for a healthy controller, false for unhealthy.
-	Healthy() bool
-}
 
 type controller struct {
 	client        k8s.Client
@@ -26,7 +17,7 @@ type controller struct {
 }
 
 // New creates an dns controller.
-func New(kubernetesClient k8s.Client) Controller {
+func New(kubernetesClient k8s.Client) util.Controller {
 	return &controller{
 		client: kubernetesClient,
 	}
@@ -73,10 +64,19 @@ func (c *controller) Stop() error {
 	return nil
 }
 
-func (c *controller) Healthy() bool {
+func (c *controller) Health() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
-	return c.started
+
+	if !c.started {
+		return fmt.Errorf("controller has not started")
+	}
+
+	if err := c.watcher.Health(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *controller) watchForUpdates() {

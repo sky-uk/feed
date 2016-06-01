@@ -9,6 +9,7 @@ import (
 
 	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/k8s"
+	"github.com/sky-uk/feed/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -75,7 +76,7 @@ func createDefaultStubs() (*fakeLb, *fakeClient) {
 	return lb, client
 }
 
-func newController(lb api.LoadBalancer, client k8s.Client) Controller {
+func newController(lb api.LoadBalancer, client k8s.Client) util.Controller {
 	return New(Config{LoadBalancer: lb, KubernetesClient: client, ServiceDomain: serviceDomain})
 }
 
