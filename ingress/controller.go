@@ -27,16 +27,25 @@ type Controller interface {
 type controller struct {
 	lb            api.LoadBalancer
 	client        k8s.Client
+	serviceDomain string
 	watcher       k8s.Watcher
 	started       bool
 	startStopLock sync.Mutex
 }
 
+// Config for creating a new ingress controller.
+type Config struct {
+	LoadBalancer     api.LoadBalancer
+	KubernetesClient k8s.Client
+	ServiceDomain    string
+}
+
 // New creates an ingress controller.
-func New(loadBalancer api.LoadBalancer, kubernetesClient k8s.Client) Controller {
+func New(conf Config) Controller {
 	return &controller{
-		lb:     loadBalancer,
-		client: kubernetesClient,
+		lb:            conf.LoadBalancer,
+		client:        conf.KubernetesClient,
+		serviceDomain: conf.ServiceDomain,
 	}
 }
 
@@ -95,7 +104,8 @@ func (c *controller) updateLoadBalancer() error {
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {
-				serviceName := fmt.Sprintf("%s.%s", path.Backend.ServiceName, ingress.Namespace)
+				serviceName := fmt.Sprintf("%s.%s.%s",
+					path.Backend.ServiceName, ingress.Namespace, c.serviceDomain)
 				entry := api.LoadBalancerEntry{
 					Host:        rule.Host,
 					Path:        path.Path,

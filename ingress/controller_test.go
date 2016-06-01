@@ -75,10 +75,14 @@ func createDefaultStubs() (*fakeLb, *fakeClient) {
 	return lb, client
 }
 
+func newController(lb api.LoadBalancer, client k8s.Client) Controller {
+	return New(Config{LoadBalancer: lb, KubernetesClient: client, ServiceDomain: serviceDomain})
+}
+
 func TestControllerCanBeStopped(t *testing.T) {
 	assert := assert.New(t)
 	lb, client := createDefaultStubs()
-	controller := New(lb, client)
+	controller := newController(lb, client)
 
 	assert.NoError(controller.Start())
 	assert.NoError(controller.Stop())
@@ -89,7 +93,7 @@ func TestControllerCannotBeRestarted(t *testing.T) {
 	// given
 	assert := assert.New(t)
 	lb, client := createDefaultStubs()
-	controller := New(lb, client)
+	controller := newController(lb, client)
 
 	// and
 	assert.NoError(controller.Start())
@@ -104,7 +108,7 @@ func TestControllerStartCannotBeCalledTwice(t *testing.T) {
 	// given
 	assert := assert.New(t)
 	lb, client := createDefaultStubs()
-	controller := New(lb, client)
+	controller := newController(lb, client)
 
 	// expect
 	assert.NoError(controller.Start())
@@ -116,7 +120,7 @@ func TestControllerIsUnhealthyUntilStarted(t *testing.T) {
 	// given
 	assert := assert.New(t)
 	lb, client := createDefaultStubs()
-	controller := New(lb, client)
+	controller := newController(lb, client)
 
 	// expect
 	assert.False(controller.Healthy(), "should be unhealthy until started")
@@ -132,7 +136,7 @@ func TestControllerIsUnhealthyIfLBIsUnhealthy(t *testing.T) {
 	assert := assert.New(t)
 	_, client := createDefaultStubs()
 	lb := new(fakeLb)
-	controller := New(lb, client)
+	controller := newController(lb, client)
 
 	lb.On("Start").Return(nil)
 	lb.On("Stop").Return(nil)
@@ -150,7 +154,7 @@ func TestLoadBalancerReturnsErrorIfWatcherFails(t *testing.T) {
 	// given
 	lb, _ := createDefaultStubs()
 	client := new(fakeClient)
-	controller := New(lb, client)
+	controller := newController(lb, client)
 	client.On("WatchIngresses", mock.Anything).Return(fmt.Errorf("failed to watch ingresses"))
 
 	// when
@@ -161,7 +165,7 @@ func TestLoadBalancerReturnsErrorIfLoadBalancerFails(t *testing.T) {
 	// given
 	_, client := createDefaultStubs()
 	lb := new(fakeLb)
-	controller := New(lb, client)
+	controller := newController(lb, client)
 	lb.On("Start").Return(fmt.Errorf("kaboooom"))
 	lb.On("Stop").Return(nil)
 
@@ -177,7 +181,7 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 	lb, _ := createDefaultStubs()
 	client := new(fakeClient)
 	ingresses := createIngressesFixture()
-	controller := New(lb, client)
+	controller := newController(lb, client)
 	watcherChan := make(chan k8s.Watcher, 1)
 
 	client.On("GetIngresses").Return(ingresses, nil).Once()
@@ -241,7 +245,7 @@ func createLbEntriesFixture() api.LoadBalancerUpdate {
 	return api.LoadBalancerUpdate{Entries: []api.LoadBalancerEntry{api.LoadBalancerEntry{
 		Host:        ingressHost,
 		Path:        ingressPath,
-		ServiceName: ingressSvcName + "." + ingressNamespace,
+		ServiceName: ingressSvcName + "." + ingressNamespace + "." + serviceDomain,
 		ServicePort: ingressSvcPort,
 	}}}
 }
@@ -252,6 +256,7 @@ const (
 	ingressSvcName   = "foo-svc"
 	ingressSvcPort   = 80
 	ingressNamespace = "happysky"
+	serviceDomain    = "svc.skycluster"
 )
 
 func createIngressesFixture() []k8s.Ingress {
