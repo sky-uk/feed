@@ -1,5 +1,8 @@
 FROM debian:jessie
 
+RUN apt-get update && apt-get upgrade -y -o Dpkg::Options::="--force-confnew" \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*  # 2016-06-01
+
 ENV NGINX_VERSION 1.10.0-1~jessie
 
 RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
@@ -9,7 +12,9 @@ RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC64107
 						ca-certificates \
 						nginx=${NGINX_VERSION} \
 						gettext-base \
-	&& rm -rf /var/lib/apt/lists/*
+						curl \
+						dnsutils \
+	&& rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 WORKDIR /
 COPY feed-ingress /
