@@ -10,6 +10,7 @@ import (
 	iApi "github.com/sky-uk/feed/api"
 	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/k8s"
+	"github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -44,27 +45,9 @@ func (lb *fakeLb) String() string {
 	return "FakeLoadBalancer"
 }
 
-type fakeClient struct {
-	mock.Mock
-}
-
-func (c *fakeClient) GetIngresses() ([]k8s.Ingress, error) {
-	r := c.Called()
-	return r.Get(0).([]k8s.Ingress), r.Error(1)
-}
-
-func (c *fakeClient) WatchIngresses(w k8s.Watcher) error {
-	r := c.Called(w)
-	return r.Error(0)
-}
-
-func (c *fakeClient) String() string {
-	return "FakeClient"
-}
-
-func createDefaultStubs() (*fakeLb, *fakeClient) {
+func createDefaultStubs() (*fakeLb, *test.FakeClient) {
 	lb := new(fakeLb)
-	client := new(fakeClient)
+	client := new(test.FakeClient)
 
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
 	client.On("WatchIngresses", mock.Anything).Return(nil)
@@ -155,7 +138,7 @@ func TestControllerIsUnhealthyIfLBIsUnhealthy(t *testing.T) {
 func TestLoadBalancerReturnsErrorIfWatcherFails(t *testing.T) {
 	// given
 	lb, _ := createDefaultStubs()
-	client := new(fakeClient)
+	client := new(test.FakeClient)
 	controller := newController(lb, client)
 	client.On("WatchIngresses", mock.Anything).Return(fmt.Errorf("failed to watch ingresses"))
 
@@ -179,7 +162,7 @@ func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
 	// given
 	assert := assert.New(t)
 	lb, _ := createDefaultStubs()
-	client := new(fakeClient)
+	client := new(test.FakeClient)
 	controller := newController(lb, client)
 
 	watcherChan := make(chan k8s.Watcher, 1)
@@ -205,7 +188,7 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 
 	//given
 	lb, _ := createDefaultStubs()
-	client := new(fakeClient)
+	client := new(test.FakeClient)
 	ingresses := createIngressesFixture()
 	controller := newController(lb, client)
 	watcherChan := make(chan k8s.Watcher, 1)

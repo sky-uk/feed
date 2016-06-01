@@ -16,7 +16,7 @@ type controller struct {
 	startStopLock sync.Mutex
 }
 
-// New creates an dns controller.
+// New creates a dns controller.
 func New(kubernetesClient k8s.Client) api.Controller {
 	return &controller{
 		client: kubernetesClient,

@@ -8,32 +8,15 @@ import (
 	"fmt"
 
 	"github.com/sky-uk/feed/k8s"
+	"github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 const smallWaitTime = time.Millisecond * 50
 
-type fakeClient struct {
-	mock.Mock
-}
-
-func (c *fakeClient) GetIngresses() ([]k8s.Ingress, error) {
-	r := c.Called()
-	return r.Get(0).([]k8s.Ingress), r.Error(1)
-}
-
-func (c *fakeClient) WatchIngresses(w k8s.Watcher) error {
-	r := c.Called(w)
-	return r.Error(0)
-}
-
-func (c *fakeClient) String() string {
-	return "FakeClient"
-}
-
-func createDefaultStubs() *fakeClient {
-	client := new(fakeClient)
+func createDefaultStubs() *test.FakeClient {
+	client := new(test.FakeClient)
 
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
 	client.On("WatchIngresses", mock.Anything).Return(nil)
@@ -95,7 +78,7 @@ func TestControllerIsUnhealthyUntilStarted(t *testing.T) {
 
 func TestControllerReturnsErrorIfWatcherFails(t *testing.T) {
 	// given
-	client := new(fakeClient)
+	client := new(test.FakeClient)
 	controller := New(client)
 	client.On("WatchIngresses", mock.Anything).Return(fmt.Errorf("failed to watch ingresses"))
 
