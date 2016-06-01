@@ -9,6 +9,6 @@ type LoadBalancer interface {
 	// Update the loadbalancer configuration. Returns true if the LB was required to reload
 	// its configuration.
 	Update(LoadBalancerUpdate) (bool, error)
-	// Healthy check of the load balancer.
-	Healthy() bool
+	// Health returns nil if healthy, otherwise an error.
+	Health() error
 }

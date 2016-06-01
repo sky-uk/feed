@@ -219,8 +219,11 @@ func (lb *nginxLoadBalancer) createConfig(update api.LoadBalancerUpdate) ([]byte
 	return output.Bytes(), nil
 }
 
-func (lb *nginxLoadBalancer) Healthy() bool {
-	return lb.running.Get()
+func (lb *nginxLoadBalancer) Health() error {
+	if !lb.running.Get() {
+		return fmt.Errorf("nginx is not running")
+	}
+	return nil
 }
 
 func (lb *nginxLoadBalancer) String() string {

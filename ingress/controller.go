@@ -20,8 +20,8 @@ type Controller interface {
 	Start() error
 	// Stop the controller, blocking until it stops or an error occurs.
 	Stop() error
-	// Healthy returns true for a healthy controller, false for unhealthy.
-	Healthy() bool
+	// Health returns nil for a healthy controller, error otherwise.
+	Health() error
 }
 
 type controller struct {
@@ -154,8 +154,21 @@ func (c *controller) Stop() error {
 	return nil
 }
 
-func (c *controller) Healthy() bool {
+func (c *controller) Health() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
-	return c.started && c.lb.Healthy()
+
+	if !c.started {
+		return fmt.Errorf("controller has not started")
+	}
+
+	if err := c.lb.Health(); err != nil {
+		return err
+	}
+
+	if err := c.watcher.Health(); err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -34,9 +34,9 @@ func (lb *fakeLb) Stop() error {
 	return r.Error(0)
 }
 
-func (lb *fakeLb) Healthy() bool {
+func (lb *fakeLb) Health() error {
 	r := lb.Called()
-	return r.Bool(0)
+	return r.Error(0)
 }
 
 func (lb *fakeLb) String() string {
@@ -70,7 +70,7 @@ func createDefaultStubs() (*fakeLb, *fakeClient) {
 	lb.On("Start").Return(nil)
 	lb.On("Stop").Return(nil)
 	lb.On("Update", mock.Anything).Return(nil)
-	lb.On("Healthy").Return(true)
+	lb.On("Health").Return(nil)
 
 	return lb, client
 }
@@ -123,13 +123,13 @@ func TestControllerIsUnhealthyUntilStarted(t *testing.T) {
 	controller := newController(lb, client)
 
 	// expect
-	assert.False(controller.Healthy(), "should be unhealthy until started")
+	assert.Error(controller.Health(), "should be unhealthy until started")
 	assert.NoError(controller.Start())
 	time.Sleep(smallWaitTime)
-	assert.True(controller.Healthy(), "should be healthy after started")
+	assert.NoError(controller.Health(), "should be healthy after started")
 	assert.NoError(controller.Stop())
 	time.Sleep(smallWaitTime)
-	assert.False(controller.Healthy(), "should be unhealthy after stopped")
+	assert.Error(controller.Health(), "should be unhealthy after stopped")
 }
 
 func TestControllerIsUnhealthyIfLBIsUnhealthy(t *testing.T) {
@@ -142,12 +142,13 @@ func TestControllerIsUnhealthyIfLBIsUnhealthy(t *testing.T) {
 	lb.On("Stop").Return(nil)
 	lb.On("Update", mock.Anything).Return(nil)
 	// first return healthy, then unhealthy for lb
-	lb.On("Healthy").Return(true).Once()
-	lb.On("Healthy").Return(false).Once()
+	lb.On("Health").Return(nil).Once()
+	lbErr := fmt.Errorf("dead")
+	lb.On("Health").Return(fmt.Errorf("dead")).Once()
 
 	assert.NoError(controller.Start())
-	assert.True(controller.Healthy())
-	assert.False(controller.Healthy())
+	assert.NoError(controller.Health())
+	assert.Equal(lbErr, controller.Health())
 }
 
 func TestLoadBalancerReturnsErrorIfWatcherFails(t *testing.T) {
@@ -171,6 +172,30 @@ func TestLoadBalancerReturnsErrorIfLoadBalancerFails(t *testing.T) {
 
 	// when
 	assert.Error(t, controller.Start())
+}
+
+func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
+	// given
+	assert := assert.New(t)
+	lb, _ := createDefaultStubs()
+	client := new(fakeClient)
+	controller := New(lb, client)
+
+	watcherChan := make(chan k8s.Watcher, 1)
+	client.On("WatchIngresses", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		fmt.Println("WatchIngresses called")
+		watcherChan <- args.Get(0).(k8s.Watcher)
+	})
+	assert.NoError(controller.Start())
+
+	// when
+	watcher, err := getWatcher(watcherChan, smallWaitTime)
+	assert.NoError(err)
+	watcherErr := fmt.Errorf("not watching for updates")
+	watcher.SetHealth(watcherErr)
+
+	// then
+	assert.Equal(watcherErr, controller.Health())
 }
 
 func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
@@ -210,31 +235,21 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 }
 
 func getWatcher(watcher <-chan k8s.Watcher, d time.Duration) (k8s.Watcher, error) {
-	timeoutChan := make(chan struct{})
-	go func() {
-		time.Sleep(d)
-		close(timeoutChan)
-	}()
-
+	t := time.NewTimer(d)
 	select {
 	case w := <-watcher:
 		return w, nil
-	case <-timeoutChan:
-		return nil, fmt.Errorf("timed out sending update")
+	case <-t.C:
+		return nil, fmt.Errorf("timed out waiting for watcher")
 	}
 }
 
 func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
-	timeoutChan := make(chan struct{})
-	go func() {
-		time.Sleep(d)
-		close(timeoutChan)
-	}()
-
+	t := time.NewTimer(d)
 	select {
 	case watcher.Updates() <- value:
 		time.Sleep(smallWaitTime) // give it time to be processed
-	case <-timeoutChan:
+	case <-t.C:
 		return fmt.Errorf("timed out sending update")
 	}
 
