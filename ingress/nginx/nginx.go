@@ -24,11 +24,14 @@ const nginxStartDelay = time.Millisecond * 100
 
 // Conf configuration for nginx
 type Conf struct {
-	BinaryLocation  string
-	WorkingDir      string
-	WorkerProcesses int
-	Port            int
-	Resolver        string
+	BinaryLocation    string
+	WorkingDir        string
+	WorkerProcesses   int
+	WorkerConnections int
+	KeepAliveSeconds  int
+	StatusPort        int
+	IngressPort       int
+	Resolver          string
 }
 
 // Signaller interface around signalling the loadbalancer process
