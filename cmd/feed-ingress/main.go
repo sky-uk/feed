@@ -10,7 +10,6 @@ import (
 	"github.com/sky-uk/feed/ingress"
 	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/ingress/nginx"
-	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/cmd"
 )
 
@@ -87,7 +86,7 @@ func main() {
 	cmd.ConfigureLogging(debug)
 
 	lb := createLB()
-	client := k8s.New(caCertFile, tokenFile, apiServer)
+	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer)
 	controller := ingress.New(ingress.Config{
 		LoadBalancer:     lb,
 		KubernetesClient: client,

@@ -6,7 +6,6 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/dns"
-	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/cmd"
 )
 
@@ -37,7 +36,7 @@ func main() {
 	flag.Parse()
 	cmd.ConfigureLogging(debug)
 
-	client := k8s.New(caCertFile, tokenFile, apiServer)
+	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer)
 	controller := dns.New(client)
 
 	cmd.ConfigureHealthPort(controller, healthPort)

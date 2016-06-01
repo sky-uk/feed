@@ -24,8 +24,6 @@ import (
 
 	"io"
 
-	"os"
-
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -55,29 +53,7 @@ type client struct {
 }
 
 // New creates a client for the kubernetes apiserver.
-func New(caCertFile string, tokenFile string, apiServer string) Client {
-	caCert := readFile(caCertFile)
-	token := string(readFile(tokenFile))
-
-	client, err := createK8sClient(apiServer, caCert, token)
-	if err != nil {
-		log.Errorf("Unable to create Kubernetes client: %v", err)
-		os.Exit(-1)
-	}
-
-	return client
-}
-
-func readFile(path string) []byte {
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		log.Errorf("Unable to read %s: %v", path, err)
-		os.Exit(-1)
-	}
-	return data
-}
-
-func createK8sClient(apiServerURL string, caCert []byte, token string) (Client, error) {
+func New(apiServerURL string, caCert []byte, token string) (Client, error) {
 	parsedURL, err := url.Parse(apiServerURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid url %s: %v", apiServerURL, err)

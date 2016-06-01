@@ -21,7 +21,7 @@ import (
 const smallWaitTime = time.Millisecond * 50
 
 func TestInvalidUrlReturnsError(t *testing.T) {
-	_, err := createK8sClient("%gh&%ij", []byte{}, "")
+	_, err := New("%gh&%ij", []byte{}, "")
 	assert.Error(t, err)
 }
 
@@ -33,7 +33,7 @@ func TestRetrievesIngressesFromKubernetes(t *testing.T) {
 	ts := httptest.NewTLSServer(handler)
 	defer ts.Close()
 
-	client, err := createK8sClient(ts.URL, caCert, testAuthToken)
+	client, err := New(ts.URL, caCert, testAuthToken)
 	assert.NoError(err)
 
 	ingresses, err := client.GetIngresses()
@@ -48,7 +48,7 @@ func TestErrorIfNon200StatusCode(t *testing.T) {
 	ts := httptest.NewTLSServer(http.NotFoundHandler())
 	defer ts.Close()
 
-	client, err := createK8sClient(ts.URL, caCert, testAuthToken)
+	client, err := New(ts.URL, caCert, testAuthToken)
 	assert.NoError(err)
 
 	_, err = client.GetIngresses()
@@ -64,7 +64,7 @@ func TestErrorIfInvalidJson(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := createK8sClient(ts.URL, caCert, testAuthToken)
+	client, err := New(ts.URL, caCert, testAuthToken)
 	assert.NoError(err)
 
 	_, err = client.GetIngresses()
@@ -90,7 +90,7 @@ func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 	goneEvent := dummyEvent{Name: "GONE"}
 
 	// when: watch ingresses
-	client, err := createK8sClient(ts.URL, caCert, testAuthToken)
+	client, err := New(ts.URL, caCert, testAuthToken)
 	assert.NoError(err)
 
 	watcher := NewWatcher()
