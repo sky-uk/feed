@@ -11,14 +11,14 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/api"
-	iApi "github.com/sky-uk/feed/ingress/api"
+	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/k8s"
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
 
 type controller struct {
-	lb            iApi.LoadBalancer
+	lb            types.LoadBalancer
 	client        k8s.Client
 	serviceDomain string
 	watcher       k8s.Watcher
@@ -28,7 +28,7 @@ type controller struct {
 
 // Config for creating a new ingress controller.
 type Config struct {
-	LoadBalancer     iApi.LoadBalancer
+	LoadBalancer     types.LoadBalancer
 	KubernetesClient k8s.Client
 	ServiceDomain    string
 }
@@ -93,13 +93,13 @@ func (c *controller) updateLoadBalancer() error {
 		return err
 	}
 
-	entries := []iApi.LoadBalancerEntry{}
+	entries := []types.LoadBalancerEntry{}
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {
 				serviceName := fmt.Sprintf("%s.%s.%s",
 					path.Backend.ServiceName, ingress.Namespace, c.serviceDomain)
-				entry := iApi.LoadBalancerEntry{
+				entry := types.LoadBalancerEntry{
 					Host:        rule.Host,
 					Path:        path.Path,
 					ServiceName: serviceName,
@@ -113,7 +113,7 @@ func (c *controller) updateLoadBalancer() error {
 	}
 
 	log.Infof("Updating load balancer with %d entry(s)", len(entries))
-	updated, err := c.lb.Update(iApi.LoadBalancerUpdate{Entries: entries})
+	updated, err := c.lb.Update(types.LoadBalancerUpdate{Entries: entries})
 	if err != nil {
 		return err
 	}

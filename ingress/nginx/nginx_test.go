@@ -9,7 +9,7 @@ import (
 
 	"os/exec"
 
-	"github.com/sky-uk/feed/ingress/api"
+	"github.com/sky-uk/feed/ingress/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -33,11 +33,11 @@ func (m *mockSignaller) sighup(p *os.Process) error {
 	return nil
 }
 
-func newLb(tmpDir string) (api.LoadBalancer, *mockSignaller) {
+func newLb(tmpDir string) (types.LoadBalancer, *mockSignaller) {
 	return newLbWithBinary(tmpDir, "./fake_nginx.sh")
 }
 
-func newLbWithBinary(tmpDir string, binary string) (api.LoadBalancer, *mockSignaller) {
+func newLbWithBinary(tmpDir string, binary string) (types.LoadBalancer, *mockSignaller) {
 	lb := NewNginxLB(Conf{
 		BinaryLocation:  binary,
 		WorkingDir:      tmpDir,
@@ -111,12 +111,12 @@ func TestReloadOfConfig(t *testing.T) {
 	assert.NoError(lb.Start())
 
 	var tests = []struct {
-		entries       []api.LoadBalancerEntry
+		entries       []types.LoadBalancerEntry
 		configEntries []string
 	}{
 		{
-			[]api.LoadBalancerEntry{
-				api.LoadBalancerEntry{
+			[]types.LoadBalancerEntry{
+				types.LoadBalancerEntry{
 					Host:        "chris.com",
 					Path:        "/path",
 					ServiceName: "service",
@@ -143,8 +143,8 @@ func TestReloadOfConfig(t *testing.T) {
 			},
 		},
 		{
-			[]api.LoadBalancerEntry{
-				api.LoadBalancerEntry{
+			[]types.LoadBalancerEntry{
+				types.LoadBalancerEntry{
 					Host:        "foo.com",
 					Path:        "/bar",
 					ServiceName: "lala",
@@ -173,7 +173,7 @@ func TestReloadOfConfig(t *testing.T) {
 
 	for _, test := range tests {
 		entries := test.entries
-		updated, err := lb.Update(api.LoadBalancerUpdate{Entries: entries})
+		updated, err := lb.Update(types.LoadBalancerUpdate{Entries: entries})
 		assert.NoError(err)
 		assert.True(updated)
 
@@ -247,19 +247,19 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 
 	lb.Start()
 
-	entries := []api.LoadBalancerEntry{
-		api.LoadBalancerEntry{
+	entries := []types.LoadBalancerEntry{
+		types.LoadBalancerEntry{
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(api.LoadBalancerUpdate{Entries: entries})
+	updated, err := lb.Update(types.LoadBalancerUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.True(t, updated)
 
-	updated, err = lb.Update(api.LoadBalancerUpdate{Entries: entries})
+	updated, err = lb.Update(types.LoadBalancerUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
 }
@@ -271,33 +271,33 @@ func TestInvalidLoadBalancerEntryIsIgnored(t *testing.T) {
 	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
 
 	lb.Start()
-	entries := []api.LoadBalancerEntry{
-		api.LoadBalancerEntry{
+	entries := []types.LoadBalancerEntry{
+		types.LoadBalancerEntry{
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(api.LoadBalancerUpdate{Entries: entries})
+	updated, err := lb.Update(types.LoadBalancerUpdate{Entries: entries})
 	assert.NoError(t, err)
 
 	// Add an invalid entry
-	entries = []api.LoadBalancerEntry{
-		api.LoadBalancerEntry{ // Invalid due to blank host
+	entries = []types.LoadBalancerEntry{
+		types.LoadBalancerEntry{ // Invalid due to blank host
 			Host:        "",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
-		api.LoadBalancerEntry{ // Same as the one before
+		types.LoadBalancerEntry{ // Same as the one before
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err = lb.Update(api.LoadBalancerUpdate{Entries: entries})
+	updated, err = lb.Update(types.LoadBalancerUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
 }

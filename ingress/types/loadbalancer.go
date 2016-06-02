@@ -1,4 +1,4 @@
-package api
+package types
 
 // LoadBalancer that the controller will modify.
 type LoadBalancer interface {

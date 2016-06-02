@@ -8,8 +8,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/ingress"
-	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/ingress/nginx"
+	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/util/cmd"
 )
 
@@ -105,7 +105,7 @@ func main() {
 	select {}
 }
 
-func createLB() api.LoadBalancer {
+func createLB() types.LoadBalancer {
 	return nginx.NewNginxLB(nginx.Conf{
 		BinaryLocation:    nginxBinary,
 		IngressPort:       ingressPort,

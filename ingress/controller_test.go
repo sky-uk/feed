@@ -7,8 +7,8 @@ import (
 
 	"fmt"
 
-	iApi "github.com/sky-uk/feed/api"
-	"github.com/sky-uk/feed/ingress/api"
+	"github.com/sky-uk/feed/api"
+	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +21,7 @@ type fakeLb struct {
 	mock.Mock
 }
 
-func (lb *fakeLb) Update(update api.LoadBalancerUpdate) (bool, error) {
+func (lb *fakeLb) Update(update types.LoadBalancerUpdate) (bool, error) {
 	r := lb.Called(update)
 	return false, r.Error(0)
 }
@@ -59,7 +59,7 @@ func createDefaultStubs() (*fakeLb, *test.FakeClient) {
 	return lb, client
 }
 
-func newController(lb api.LoadBalancer, client k8s.Client) iApi.Controller {
+func newController(lb types.LoadBalancer, client k8s.Client) api.Controller {
 	return New(Config{LoadBalancer: lb, KubernetesClient: client, ServiceDomain: serviceDomain})
 }
 
@@ -240,8 +240,8 @@ func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
 	return nil
 }
 
-func createLbEntriesFixture() api.LoadBalancerUpdate {
-	return api.LoadBalancerUpdate{Entries: []api.LoadBalancerEntry{api.LoadBalancerEntry{
+func createLbEntriesFixture() types.LoadBalancerUpdate {
+	return types.LoadBalancerUpdate{Entries: []types.LoadBalancerEntry{types.LoadBalancerEntry{
 		Host:        ingressHost,
 		Path:        ingressPath,
 		ServiceName: ingressSvcName + "." + ingressNamespace + "." + serviceDomain,
