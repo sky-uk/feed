@@ -10,24 +10,15 @@ import (
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/sky-uk/feed/ingress/api"
+	"github.com/sky-uk/feed/api"
+	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/k8s"
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
 
-// Controller for Kubernetes ingress.
-type Controller interface {
-	// Run the controller, returning immediately after it starts or an error occurs.
-	Start() error
-	// Stop the controller, blocking until it stops or an error occurs.
-	Stop() error
-	// Health returns nil for a healthy controller, error otherwise.
-	Health() error
-}
-
 type controller struct {
-	lb            api.LoadBalancer
+	lb            types.LoadBalancer
 	client        k8s.Client
 	serviceDomain string
 	watcher       k8s.Watcher
@@ -37,13 +28,13 @@ type controller struct {
 
 // Config for creating a new ingress controller.
 type Config struct {
-	LoadBalancer     api.LoadBalancer
+	LoadBalancer     types.LoadBalancer
 	KubernetesClient k8s.Client
 	ServiceDomain    string
 }
 
 // New creates an ingress controller.
-func New(conf Config) Controller {
+func New(conf Config) api.Controller {
 	return &controller{
 		lb:            conf.LoadBalancer,
 		client:        conf.KubernetesClient,
@@ -102,13 +93,13 @@ func (c *controller) updateLoadBalancer() error {
 		return err
 	}
 
-	entries := []api.LoadBalancerEntry{}
+	entries := []types.LoadBalancerEntry{}
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {
 				serviceName := fmt.Sprintf("%s.%s.%s",
 					path.Backend.ServiceName, ingress.Namespace, c.serviceDomain)
-				entry := api.LoadBalancerEntry{
+				entry := types.LoadBalancerEntry{
 					Host:        rule.Host,
 					Path:        path.Path,
 					ServiceName: serviceName,
@@ -122,7 +113,7 @@ func (c *controller) updateLoadBalancer() error {
 	}
 
 	log.Infof("Updating load balancer with %d entry(s)", len(entries))
-	updated, err := c.lb.Update(api.LoadBalancerUpdate{Entries: entries})
+	updated, err := c.lb.Update(types.LoadBalancerUpdate{Entries: entries})
 	if err != nil {
 		return err
 	}

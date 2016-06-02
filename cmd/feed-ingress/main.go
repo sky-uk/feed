@@ -3,25 +3,14 @@ package main
 import (
 	"flag"
 	"os"
-	"os/signal"
 
-	"io/ioutil"
-	"net/http"
 	_ "net/http/pprof"
-
-	"strconv"
-
-	"io"
-
-	"syscall"
-
-	"fmt"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/ingress"
-	"github.com/sky-uk/feed/ingress/api"
 	"github.com/sky-uk/feed/ingress/nginx"
-	"github.com/sky-uk/feed/k8s"
+	"github.com/sky-uk/feed/ingress/types"
+	"github.com/sky-uk/feed/util/cmd"
 )
 
 var (
@@ -94,18 +83,18 @@ func init() {
 
 func main() {
 	flag.Parse()
-	configureLogging()
+	cmd.ConfigureLogging(debug)
 
 	lb := createLB()
-	client := createK8sClient()
+	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer)
 	controller := ingress.New(ingress.Config{
 		LoadBalancer:     lb,
 		KubernetesClient: client,
 		ServiceDomain:    serviceDomain,
 	})
 
-	configureHealthPort(controller)
-	addSignalHandler(controller)
+	cmd.ConfigureHealthPort(controller, healthPort)
+	cmd.AddSignalHandler(controller)
 
 	err := controller.Start()
 	if err != nil {
@@ -116,15 +105,7 @@ func main() {
 	select {}
 }
 
-func configureLogging() {
-	// logging is the main output, so write it all to stdout
-	log.SetOutput(os.Stdout)
-	if debug {
-		log.SetLevel(log.DebugLevel)
-	}
-}
-
-func createLB() api.LoadBalancer {
+func createLB() types.LoadBalancer {
 	return nginx.NewNginxLB(nginx.Conf{
 		BinaryLocation:    nginxBinary,
 		IngressPort:       ingressPort,
@@ -136,67 +117,4 @@ func createLB() api.LoadBalancer {
 		Resolver:          nginxResolver,
 		DefaultAllow:      ingressAllow,
 	})
-}
-
-func createK8sClient() k8s.Client {
-	caCert := readFile(caCertFile)
-	token := string(readFile(tokenFile))
-
-	client, err := k8s.New(apiServer, caCert, token)
-	if err != nil {
-		log.Errorf("Unable to create Kubernetes client: %v", err)
-		os.Exit(-1)
-	}
-
-	return client
-}
-
-func readFile(path string) []byte {
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		log.Errorf("Unable to read %s: %v", path, err)
-		os.Exit(-1)
-	}
-	return data
-}
-
-func configureHealthPort(controller ingress.Controller) {
-	http.HandleFunc("/health", checkHealth(controller))
-
-	go func() {
-		log.Error(http.ListenAndServe(":"+strconv.Itoa(healthPort), nil))
-		log.Info(controller.Stop())
-		os.Exit(-1)
-	}()
-}
-
-func checkHealth(controller ingress.Controller) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := controller.Health(); err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			io.WriteString(w, fmt.Sprintf("%v\n", err))
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, "ok\n")
-	}
-}
-
-func addSignalHandler(controller ingress.Controller) {
-	c := make(chan os.Signal, 1)
-	// SIGTERM is used by Kubernetes to gracefully stop pods.
-	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		for sig := range c {
-			log.Infof("Signalled %v, shutting down gracefully", sig)
-			err := controller.Stop()
-			if err != nil {
-				log.Error("Error while stopping controller: ", err)
-				os.Exit(-1)
-			}
-			os.Exit(0)
-		}
-	}()
 }

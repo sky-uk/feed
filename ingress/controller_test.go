@@ -7,8 +7,10 @@ import (
 
 	"fmt"
 
-	"github.com/sky-uk/feed/ingress/api"
+	"github.com/sky-uk/feed/api"
+	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/k8s"
+	"github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -19,7 +21,7 @@ type fakeLb struct {
 	mock.Mock
 }
 
-func (lb *fakeLb) Update(update api.LoadBalancerUpdate) (bool, error) {
+func (lb *fakeLb) Update(update types.LoadBalancerUpdate) (bool, error) {
 	r := lb.Called(update)
 	return false, r.Error(0)
 }
@@ -43,27 +45,9 @@ func (lb *fakeLb) String() string {
 	return "FakeLoadBalancer"
 }
 
-type fakeClient struct {
-	mock.Mock
-}
-
-func (c *fakeClient) GetIngresses() ([]k8s.Ingress, error) {
-	r := c.Called()
-	return r.Get(0).([]k8s.Ingress), r.Error(1)
-}
-
-func (c *fakeClient) WatchIngresses(w k8s.Watcher) error {
-	r := c.Called(w)
-	return r.Error(0)
-}
-
-func (c *fakeClient) String() string {
-	return "FakeClient"
-}
-
-func createDefaultStubs() (*fakeLb, *fakeClient) {
+func createDefaultStubs() (*fakeLb, *test.FakeClient) {
 	lb := new(fakeLb)
-	client := new(fakeClient)
+	client := new(test.FakeClient)
 
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
 	client.On("WatchIngresses", mock.Anything).Return(nil)
@@ -75,7 +59,7 @@ func createDefaultStubs() (*fakeLb, *fakeClient) {
 	return lb, client
 }
 
-func newController(lb api.LoadBalancer, client k8s.Client) Controller {
+func newController(lb types.LoadBalancer, client k8s.Client) api.Controller {
 	return New(Config{LoadBalancer: lb, KubernetesClient: client, ServiceDomain: serviceDomain})
 }
 
@@ -154,7 +138,7 @@ func TestControllerIsUnhealthyIfLBIsUnhealthy(t *testing.T) {
 func TestLoadBalancerReturnsErrorIfWatcherFails(t *testing.T) {
 	// given
 	lb, _ := createDefaultStubs()
-	client := new(fakeClient)
+	client := new(test.FakeClient)
 	controller := newController(lb, client)
 	client.On("WatchIngresses", mock.Anything).Return(fmt.Errorf("failed to watch ingresses"))
 
@@ -178,7 +162,7 @@ func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
 	// given
 	assert := assert.New(t)
 	lb, _ := createDefaultStubs()
-	client := new(fakeClient)
+	client := new(test.FakeClient)
 	controller := newController(lb, client)
 
 	watcherChan := make(chan k8s.Watcher, 1)
@@ -204,7 +188,7 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 
 	//given
 	lb, _ := createDefaultStubs()
-	client := new(fakeClient)
+	client := new(test.FakeClient)
 	ingresses := createIngressesFixture()
 	controller := newController(lb, client)
 	watcherChan := make(chan k8s.Watcher, 1)
@@ -256,8 +240,8 @@ func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
 	return nil
 }
 
-func createLbEntriesFixture() api.LoadBalancerUpdate {
-	return api.LoadBalancerUpdate{Entries: []api.LoadBalancerEntry{api.LoadBalancerEntry{
+func createLbEntriesFixture() types.LoadBalancerUpdate {
+	return types.LoadBalancerUpdate{Entries: []types.LoadBalancerEntry{types.LoadBalancerEntry{
 		Host:        ingressHost,
 		Path:        ingressPath,
 		ServiceName: ingressSvcName + "." + ingressNamespace + "." + serviceDomain,
