@@ -21,6 +21,7 @@ type controller struct {
 	lb            types.LoadBalancer
 	client        k8s.Client
 	serviceDomain string
+	frontend      types.Frontend
 	watcher       k8s.Watcher
 	started       bool
 	startStopLock sync.Mutex
@@ -30,6 +31,7 @@ type controller struct {
 type Config struct {
 	LoadBalancer     types.LoadBalancer
 	KubernetesClient k8s.Client
+	Frontend         types.Frontend
 	ServiceDomain    string
 }
 
@@ -39,6 +41,7 @@ func New(conf Config) api.Controller {
 		lb:            conf.LoadBalancer,
 		client:        conf.KubernetesClient,
 		serviceDomain: conf.ServiceDomain,
+		frontend:      conf.Frontend,
 	}
 }
 
