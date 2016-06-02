@@ -31,6 +31,7 @@ var (
 	tokenFile              string
 	ingressPort            int
 	ingressAllow           string
+	ingressStatusPort      int
 	healthPort             int
 	nginxBinary            string
 	nginxWorkDir           string
@@ -39,7 +40,6 @@ var (
 	nginxWorkerProcesses   int
 	nginxWorkerConnections int
 	nginxKeepAliveSeconds  int
-	nginxStatusPort        int
 )
 
 func init() {
@@ -49,6 +49,7 @@ func init() {
 		defaultTokenFile              = "/run/secrets/kubernetes.io/serviceaccount/token"
 		defaultIngressPort            = 8080
 		defaultIngressAllow           = ""
+		defaultIngressStatusPort      = 8081
 		defaultHealthPort             = 12082
 		defaultServiceDomain          = "svc.cluster"
 		defaultNginxBinary            = "/usr/sbin/nginx"
@@ -56,7 +57,6 @@ func init() {
 		defaultNginxWorkers           = 1
 		defaultNginxWorkerConnections = 1024
 		defaultNginxKeepAliveSeconds  = 65
-		defaultNginxStatusPort        = 8081
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -69,6 +69,8 @@ func init() {
 		"File containing kubernetes client authentication token.")
 	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort,
 		"Port to serve ingress traffic to backend services.")
+	flag.IntVar(&ingressStatusPort, "ingress-status-port", defaultIngressStatusPort,
+		"Port for ingress /health and /status pages. Should be used by frontends to determine if ingress is available.")
 	flag.StringVar(&ingressAllow, "ingress-allow", defaultIngressAllow,
 		"Source IP or CIDR to allow ingress access by default. This is in addition to the sky.uk/allow "+
 			"annotation on ingress resources. Leave empty to deny all access by default.")
@@ -88,8 +90,6 @@ func init() {
 		"Max number of connections per nginx worker. Includes both client and proxy connections.")
 	flag.IntVar(&nginxKeepAliveSeconds, "nginx-keepalive-seconds", defaultNginxKeepAliveSeconds,
 		"Keep alive time for persistent client connections to nginx.")
-	flag.IntVar(&nginxStatusPort, "nginx-status-port", defaultNginxStatusPort,
-		"Port for nginx /health and /status pages. Should be used by frontends to determine if nginx is available.")
 }
 
 func main() {
@@ -132,7 +132,7 @@ func createLB() api.LoadBalancer {
 		WorkerProcesses:   nginxWorkerProcesses,
 		WorkerConnections: nginxWorkerConnections,
 		KeepAliveSeconds:  nginxKeepAliveSeconds,
-		StatusPort:        nginxStatusPort,
+		StatusPort:        ingressStatusPort,
 		Resolver:          nginxResolver,
 		DefaultAllow:      ingressAllow,
 	})
