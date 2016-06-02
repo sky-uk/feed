@@ -155,7 +155,7 @@ func (lb *nginxLoadBalancer) Stop() error {
 }
 
 func (lb *nginxLoadBalancer) Update(entries types.LoadBalancerUpdate) (bool, error) {
-	updated, err := lb.update(entries)
+	updated, err := lb.update(entries.SortedByName())
 	if err != nil {
 		return false, fmt.Errorf("unable to update nginx: %v", err)
 	}

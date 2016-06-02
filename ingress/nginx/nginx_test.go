@@ -114,10 +114,12 @@ func TestReloadOfConfig(t *testing.T) {
 		entries       []types.LoadBalancerEntry
 		configEntries []string
 	}{
+		// Check full ingress entry works.
 		{
 			[]types.LoadBalancerEntry{
 				types.LoadBalancerEntry{
 					Host:        "chris.com",
+					Name:        "chris-ingress",
 					Path:        "/path",
 					ServiceName: "service",
 					ServicePort: 9090,
@@ -125,7 +127,8 @@ func TestReloadOfConfig(t *testing.T) {
 				},
 			},
 			[]string{
-				"   server {\n" +
+				"   # chris-ingress\n" +
+					"    server {\n" +
 					"        listen 9090;\n" +
 					"        server_name chris.com;\n" +
 					"\n" +
@@ -142,17 +145,20 @@ func TestReloadOfConfig(t *testing.T) {
 					"    ",
 			},
 		},
+		// Check empty allow skips the allow for the ingress in the output.
 		{
 			[]types.LoadBalancerEntry{
 				types.LoadBalancerEntry{
 					Host:        "foo.com",
+					Name:        "foo-ingress",
 					Path:        "/bar",
 					ServiceName: "lala",
 					ServicePort: 8080,
 				},
 			},
 			[]string{
-				"   server {\n" +
+				"   # foo-ingress\n" +
+					"    server {\n" +
 					"        listen 9090;\n" +
 					"        server_name foo.com;\n" +
 					"\n" +
@@ -164,6 +170,82 @@ func TestReloadOfConfig(t *testing.T) {
 					"\n" +
 					"        location /bar {\n" +
 					"            proxy_pass http://lala:8080;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+			},
+		},
+		// Check entries ordered by name.
+		{
+			[]types.LoadBalancerEntry{
+				types.LoadBalancerEntry{
+					Name:        "2-last-ingress",
+					Host:        "foo.com",
+					Path:        "/",
+					ServiceName: "foo",
+					ServicePort: 8080,
+				},
+				types.LoadBalancerEntry{
+					Name:        "0-first-ingress",
+					Host:        "foo.com",
+					Path:        "/",
+					ServiceName: "foo",
+					ServicePort: 8080,
+				},
+				types.LoadBalancerEntry{
+					Name:        "1-next-ingress",
+					Host:        "foo.com",
+					Path:        "/",
+					ServiceName: "foo",
+					ServicePort: 8080,
+				},
+			},
+			[]string{
+				"   # 0-first-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name foo.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        \n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location / {\n" +
+					"            proxy_pass http://foo:8080;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+				"   # 1-next-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name foo.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        \n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location / {\n" +
+					"            proxy_pass http://foo:8080;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+				"   # 2-last-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name foo.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        \n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location / {\n" +
+					"            proxy_pass http://foo:8080;\n" +
 					"        }\n" +
 					"    }\n" +
 					"    ",

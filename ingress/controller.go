@@ -100,6 +100,7 @@ func (c *controller) updateLoadBalancer() error {
 				serviceName := fmt.Sprintf("%s.%s.%s",
 					path.Backend.ServiceName, ingress.Namespace, c.serviceDomain)
 				entry := types.LoadBalancerEntry{
+					Name:        ingress.Namespace + "/" + ingress.Name,
 					Host:        rule.Host,
 					Path:        path.Path,
 					ServiceName: serviceName,
