@@ -30,6 +30,7 @@ var (
 	caCertFile             string
 	tokenFile              string
 	ingressPort            int
+	ingressAllow           string
 	healthPort             int
 	nginxBinary            string
 	nginxWorkDir           string
@@ -47,6 +48,7 @@ func init() {
 		defaultCaCertFile             = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 		defaultTokenFile              = "/run/secrets/kubernetes.io/serviceaccount/token"
 		defaultIngressPort            = 8080
+		defaultIngressAllow           = ""
 		defaultHealthPort             = 12082
 		defaultServiceDomain          = "svc.cluster"
 		defaultNginxBinary            = "/usr/sbin/nginx"
@@ -67,6 +69,9 @@ func init() {
 		"File containing kubernetes client authentication token.")
 	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort,
 		"Port to serve ingress traffic to backend services.")
+	flag.StringVar(&ingressAllow, "ingress-allow", defaultIngressAllow,
+		"Source IP or CIDR to allow ingress access by default. This is in addition to the sky.uk/allow "+
+			"annotation on ingress resources. Leave empty to deny all access by default.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller.")
 	flag.StringVar(&serviceDomain, "service-domain", defaultServiceDomain,
@@ -129,6 +134,7 @@ func createLB() api.LoadBalancer {
 		KeepAliveSeconds:  nginxKeepAliveSeconds,
 		StatusPort:        nginxStatusPort,
 		Resolver:          nginxResolver,
+		DefaultAllow:      ingressAllow,
 	})
 }
 

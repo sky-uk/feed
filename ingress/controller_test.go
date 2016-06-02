@@ -179,7 +179,7 @@ func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
 	assert := assert.New(t)
 	lb, _ := createDefaultStubs()
 	client := new(fakeClient)
-	controller := New(lb, client)
+	controller := newController(lb, client)
 
 	watcherChan := make(chan k8s.Watcher, 1)
 	client.On("WatchIngresses", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
@@ -262,6 +262,7 @@ func createLbEntriesFixture() api.LoadBalancerUpdate {
 		Path:        ingressPath,
 		ServiceName: ingressSvcName + "." + ingressNamespace + "." + serviceDomain,
 		ServicePort: ingressSvcPort,
+		Allow:       ingressAllow,
 	}}}
 }
 
@@ -272,6 +273,7 @@ const (
 	ingressSvcPort   = 80
 	ingressNamespace = "happysky"
 	serviceDomain    = "svc.skycluster"
+	ingressAllow     = "10.82.0.0/16"
 )
 
 func createIngressesFixture() []k8s.Ingress {
@@ -284,7 +286,11 @@ func createIngressesFixture() []k8s.Ingress {
 	}}
 	return []k8s.Ingress{
 		k8s.Ingress{
-			ObjectMeta: k8s.ObjectMeta{Name: "foo-ingress", Namespace: ingressNamespace},
+			ObjectMeta: k8s.ObjectMeta{
+				Name:        "foo-ingress",
+				Namespace:   ingressNamespace,
+				Annotations: map[string]string{ingressAllowAnnotation: ingressAllow},
+			},
 			Spec: k8s.IngressSpec{
 				Rules: []k8s.IngressRule{k8s.IngressRule{
 					Host: ingressHost,
