@@ -252,6 +252,7 @@ func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
 
 func createLbEntriesFixture() types.LoadBalancerUpdate {
 	return types.LoadBalancerUpdate{Entries: []types.LoadBalancerEntry{types.LoadBalancerEntry{
+		Name:        ingressNamespace + "/" + ingressName,
 		Host:        ingressHost,
 		Path:        ingressPath,
 		ServiceName: ingressSvcName + "." + ingressNamespace + "." + serviceDomain,
@@ -263,6 +264,7 @@ func createLbEntriesFixture() types.LoadBalancerUpdate {
 const (
 	ingressHost      = "foo.sky.com"
 	ingressPath      = "/foo"
+	ingressName      = "foo-ingress"
 	ingressSvcName   = "foo-svc"
 	ingressSvcPort   = 80
 	ingressNamespace = "happysky"
@@ -281,7 +283,7 @@ func createIngressesFixture() []k8s.Ingress {
 	return []k8s.Ingress{
 		k8s.Ingress{
 			ObjectMeta: k8s.ObjectMeta{
-				Name:        "foo-ingress",
+				Name:        ingressName,
 				Namespace:   ingressNamespace,
 				Annotations: map[string]string{ingressAllowAnnotation: ingressAllow},
 			},

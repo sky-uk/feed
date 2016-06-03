@@ -55,6 +55,7 @@ http {
     {{ $port := .Config.IngressPort }}
     {{ range $entry := .Entries }}
     # Start entry
+    # {{ $entry.Name }}
     server {
         listen {{ $port }};
         server_name {{ $entry.Host }};

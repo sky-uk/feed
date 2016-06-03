@@ -1,6 +1,8 @@
 package types
 
 import (
+	"sort"
+
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -11,6 +13,8 @@ type LoadBalancerUpdate struct {
 
 // LoadBalancerEntry describes the ingress for a single host, path, and service.
 type LoadBalancerEntry struct {
+	// Name of the entry.
+	Name string
 	// Host is the fully qualified domain name used for external access.
 	Host string
 	// Path is the url path after the hostname.
@@ -54,3 +58,17 @@ func (entry LoadBalancerEntry) ValidateEntry() bool {
 	}
 	return true
 }
+
+// SortedByName returns the update with entries ordered by their Name.
+func (u LoadBalancerUpdate) SortedByName() LoadBalancerUpdate {
+	sortedEntries := make([]LoadBalancerEntry, len(u.Entries))
+	copy(sortedEntries, u.Entries)
+	sort.Sort(byName(sortedEntries))
+	return LoadBalancerUpdate{Entries: sortedEntries}
+}
+
+type byName []LoadBalancerEntry
+
+func (a byName) Len() int           { return len(a) }
+func (a byName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byName) Less(i, j int) bool { return a[i].Name < a[j].Name }
