@@ -8,6 +8,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/ingress"
+	"github.com/sky-uk/feed/ingress/elb"
 	"github.com/sky-uk/feed/ingress/nginx"
 	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/util/cmd"
@@ -84,13 +85,14 @@ func init() {
 func main() {
 	flag.Parse()
 	cmd.ConfigureLogging(debug)
-
 	lb := createLB()
+	frontend := elb.New("eu-west-1", "test")
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer)
 	controller := ingress.New(ingress.Config{
 		LoadBalancer:     lb,
 		KubernetesClient: client,
 		ServiceDomain:    serviceDomain,
+		Frontend:         frontend,
 	})
 
 	cmd.ConfigureHealthPort(controller, healthPort)
