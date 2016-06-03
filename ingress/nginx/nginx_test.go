@@ -33,18 +33,27 @@ func (m *mockSignaller) sighup(p *os.Process) error {
 	return nil
 }
 
+func defaultConf(tmpDir string, binary string) Conf {
+	return Conf{
+		WorkingDir:      tmpDir,
+		BinaryLocation:  binary,
+		IngressPort:     port,
+		WorkerProcesses: 1,
+		DefaultAllow:    defaultAllow,
+	}
+}
+
 func newLb(tmpDir string) (types.LoadBalancer, *mockSignaller) {
 	return newLbWithBinary(tmpDir, "./fake_nginx.sh")
 }
 
 func newLbWithBinary(tmpDir string, binary string) (types.LoadBalancer, *mockSignaller) {
-	lb := NewNginxLB(Conf{
-		BinaryLocation:  binary,
-		WorkingDir:      tmpDir,
-		IngressPort:     port,
-		WorkerProcesses: 1,
-		DefaultAllow:    defaultAllow,
-	})
+	conf := defaultConf(tmpDir, binary)
+	return newLbWithConf(conf)
+}
+
+func newLbWithConf(conf Conf) (types.LoadBalancer, *mockSignaller) {
+	lb := NewNginxLB(conf)
 	signaller := &mockSignaller{}
 	signaller.On("sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
 	lb.(*nginxLoadBalancer).signaller = signaller
@@ -98,6 +107,41 @@ func TestFailsIfNginxDiesEarly(t *testing.T) {
 
 	assert.Error(lb.Start())
 	assert.Error(lb.Health())
+}
+
+func TestCanSetLogLevel(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	defaultLogLevel := defaultConf(tmpDir, "./fake_nginx.sh")
+	customLogLevel := defaultConf(tmpDir, "./fake_nginx.sh")
+	customLogLevel.LogLevel = "info"
+
+	var tests = []struct {
+		nginxConf Conf
+		logLine   string
+	}{
+		{
+			defaultLogLevel,
+			"error_log stderr warn;",
+		},
+		{
+			customLogLevel,
+			"error_log stderr info;",
+		},
+	}
+
+	for _, test := range tests {
+		lb, _ := newLbWithConf(test.nginxConf)
+		assert.NoError(lb.Start())
+
+		confBytes, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+		assert.NoError(err)
+		conf := string(confBytes)
+
+		assert.Contains(conf, test.logLine)
+	}
 }
 
 func TestReloadOfConfig(t *testing.T) {

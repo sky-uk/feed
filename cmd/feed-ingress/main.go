@@ -30,6 +30,7 @@ var (
 	nginxWorkerProcesses   int
 	nginxWorkerConnections int
 	nginxKeepAliveSeconds  int
+	nginxLogLevel          string
 )
 
 func init() {
@@ -47,6 +48,7 @@ func init() {
 		defaultNginxWorkers           = 1
 		defaultNginxWorkerConnections = 1024
 		defaultNginxKeepAliveSeconds  = 65
+		defaultNginxLogLevel          = "info"
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -80,6 +82,8 @@ func init() {
 		"Max number of connections per nginx worker. Includes both client and proxy connections.")
 	flag.IntVar(&nginxKeepAliveSeconds, "nginx-keepalive-seconds", defaultNginxKeepAliveSeconds,
 		"Keep alive time for persistent client connections to nginx.")
+	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
+		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 }
 
 func main() {

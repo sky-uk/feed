@@ -1,11 +1,8 @@
 worker_processes  {{ .Config.WorkerProcesses }};
 daemon off;
 
-error_log stderr warn;
+error_log stderr {{ .Config.LogLevel }};
 pid {{ .Config.WorkingDir }}/nginx.pid;
-
-# Set large max limit on number of open connections / files.
-worker_rlimit_nofile 131072;
 
 events {
     # Accept connections as fast as possible.
@@ -72,6 +69,8 @@ http {
     }
     # End entry
     {{ end }}
+
+    # End ingresses
 
     # Default backend
     server {
