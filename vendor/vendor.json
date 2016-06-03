@@ -141,6 +141,12 @@
 			"revisionTime": "2016-02-29T21:34:45Z"
 		},
 		{
+			"checksumSHA1": "9kOnYZCaC0172U/XdTk+KSsRYXQ=",
+			"path": "github.com/aws/aws-sdk-go/service/route53",
+			"revision": "665c623d7f3e0ee276596b006655ba4dbe0565b0",
+			"revisionTime": "2016-05-29T19:36:57Z"
+		},
+		{
 			"checksumSHA1": "5rPfda8jFccr3A6heL+JAmi9K9g=",
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d",
