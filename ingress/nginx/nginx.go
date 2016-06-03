@@ -33,6 +33,7 @@ type Conf struct {
 	IngressPort       int
 	Resolver          string
 	DefaultAllow      string
+	LogLevel          string
 }
 
 // Signaller interface around signalling the loadbalancer process
@@ -78,6 +79,10 @@ func (lb *nginxLoadBalancer) nginxConfFile() string {
 // NewNginxLB creates a new LoadBalancer
 func NewNginxLB(nginxConf Conf) types.LoadBalancer {
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
+	if nginxConf.LogLevel == "" {
+		nginxConf.LogLevel = "warn"
+	}
+
 	return &nginxLoadBalancer{
 		Conf:       nginxConf,
 		signaller:  &osSignaller{},
