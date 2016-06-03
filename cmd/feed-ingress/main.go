@@ -2,11 +2,13 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"os"
 
 	_ "net/http/pprof"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/ingress"
 	"github.com/sky-uk/feed/ingress/elb"
 	"github.com/sky-uk/feed/ingress/nginx"
@@ -91,7 +93,7 @@ func init() {
 	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 	flag.StringVar(&clusterName, "cluster-name", defaultClusterName,
-		"Kubernetes cluster name. Used to find front ends associated with this cluster")
+		"Kubernetes cluster name. ELBs tagged wtih `sky.uk/KubernetesClusterFrontend` will be added as frontends.")
 	flag.StringVar(&region, "aws-region", defaultRegion,
 		"AWS region")
 	flag.IntVar(&expectedFrontends, "expected-frontends", defaultExpectedFrontends,
@@ -112,6 +114,7 @@ func main() {
 	})
 
 	cmd.ConfigureHealthPort(controller, healthPort)
+	configureMetrics()
 	cmd.AddSignalHandler(controller)
 
 	err := controller.Start()
@@ -119,6 +122,7 @@ func main() {
 		log.Error("Error while starting controller: ", err)
 		os.Exit(-1)
 	}
+	log.Info("Controller started")
 
 	select {}
 }
@@ -135,4 +139,8 @@ func createLB() types.LoadBalancer {
 		Resolver:          nginxResolver,
 		DefaultAllow:      ingressAllow,
 	})
+}
+
+func configureMetrics() {
+	http.Handle("/metrics", prometheus.Handler())
 }

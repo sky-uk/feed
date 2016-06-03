@@ -350,5 +350,5 @@ func TestDeRegisterInstanceError(t *testing.T) {
 	err := e.Detach()
 
 	// then
-	assert.EqualError(t, err, "unable to deregister instance cow with elb cluster-frontend: no deregister for you")
+	assert.EqualError(t, err, "at least one ELB failed to detach")
 }

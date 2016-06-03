@@ -10,12 +10,20 @@ import (
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/api"
 	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/k8s"
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
+
+var attachedFrontends = prometheus.NewGauge(prometheus.GaugeOpts{
+	Namespace: "feed",
+	Subsystem: "ingress",
+	Name:      "frontends_attached",
+	Help:      "The total number of frontends attached",
+})
 
 type controller struct {
 	lb            types.LoadBalancer
@@ -49,6 +57,8 @@ func (c *controller) Start() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
 
+	prometheus.Register(attachedFrontends)
+
 	if c.started {
 		return fmt.Errorf("controller is already started")
 	}
@@ -71,12 +81,11 @@ func (c *controller) Start() error {
 	go c.watchForUpdates()
 
 	frontends, err := c.frontend.Attach()
+	attachedFrontends.Set(float64(frontends))
 
 	if err != nil {
 		return fmt.Errorf("unable to attach to front end %v", err)
 	}
-
-	log.Infof("Attached to %d frontend(s)", frontends)
 
 	c.started = true
 	return nil
@@ -149,11 +158,14 @@ func (c *controller) Stop() error {
 
 	log.Info("Stopping controller")
 
-	c.frontend.Detach()
+	err := c.frontend.Detach()
+	if err != nil {
+		log.Warn("Error while detaching front end: ", err)
+	}
 
 	close(c.watcher.Done())
 
-	if err := c.lb.Stop(); err != nil {
+	if err = c.lb.Stop(); err != nil {
 		log.Warn("Error while stopping load balancer: ", err)
 	}
 

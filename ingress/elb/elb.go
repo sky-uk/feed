@@ -3,6 +3,8 @@ package elb
 import (
 	"fmt"
 
+	"errors"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
@@ -15,7 +17,7 @@ const (
 	elbTag = "sky.uk/KubernetesClusterFrontend"
 )
 
-// New  creates a new frontend
+// New  creates a new ELB frontend
 func New(region string, clusterName string, expectedFrontends int) types.Frontend {
 	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, clusterName, expectedFrontends)
 	metadata := ec2metadata.New(session.New())
@@ -75,6 +77,8 @@ func (e *elb) Attach() (int, error) {
 		return 0, err
 	}
 
+	log.Infof("Found %d front ends", len(clusterFrontEnds))
+
 	// Save these now so we can always know what we might have done
 	// up until this point we have only read data
 	e.elbs = clusterFrontEnds
@@ -129,6 +133,7 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 		}
 	}
 
+	log.Infof("Found %d loadbalancers. Checking for %s tag set to %s", len(lbNames), elbTag, e.clusterName)
 	var clusterFrontEnds []string
 	totalLbs := len(lbNames)
 	for i := 0; i < len(lbNames); i += e.maxTagQuery {
@@ -138,8 +143,6 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 		output, err := e.awsElb.DescribeTags(&aws_elb.DescribeTagsInput{
 			LoadBalancerNames: names,
 		})
-
-		log.Info(output, err)
 
 		if err != nil {
 			return nil, fmt.Errorf("unable to describe tags: %v", err)
@@ -159,7 +162,7 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 
 // Detach removes this instance from all the front end ELBs
 func (e *elb) Detach() error {
-	var result error
+	var failed = false
 	for _, elb := range e.elbs {
 		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb)
 		_, err := e.awsElb.DeregisterInstancesFromLoadBalancer(&aws_elb.DeregisterInstancesFromLoadBalancerInput{
@@ -168,11 +171,14 @@ func (e *elb) Detach() error {
 		})
 
 		if err != nil {
-			result = fmt.Errorf("unable to deregister instance %s with elb %s: %v", e.instanceID, elb, err)
+			log.Warnf("unable to deregister instance %s with elb %s: %v", e.instanceID, elb, err)
+			failed = true
 		}
 	}
-	// Return the latest error or nil if no error has happened
-	return result
+	if failed {
+		return errors.New("at least one ELB failed to detach")
+	}
+	return nil
 }
 
 func min(x, y int) int {
