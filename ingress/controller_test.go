@@ -49,12 +49,14 @@ type fakeFrontend struct {
 	mock.Mock
 }
 
-func (f *fakeFrontend) Attach(i types.FrontendInput) (int, error) {
-	return 0, nil
+func (f *fakeFrontend) Attach() (int, error) {
+	args := f.Called()
+	return args.Int(0), args.Error(1)
 }
 
-func (f *fakeFrontend) Detach(i types.FrontendInput) error {
-	return nil
+func (f *fakeFrontend) Detach() error {
+	args := f.Called()
+	return args.Error(0)
 }
 
 func createDefaultStubs() (*fakeLb, *test.FakeClient, *fakeFrontend) {
@@ -68,12 +70,46 @@ func createDefaultStubs() (*fakeLb, *test.FakeClient, *fakeFrontend) {
 	lb.On("Stop").Return(nil)
 	lb.On("Update", mock.Anything).Return(nil)
 	lb.On("Health").Return(nil)
+	frontend.On("Attach").Return(1, nil)
+	frontend.On("Detach").Return(nil)
 
 	return lb, client, frontend
 }
 
 func newController(lb types.LoadBalancer, client k8s.Client, frontend types.Frontend) api.Controller {
 	return New(Config{LoadBalancer: lb, KubernetesClient: client, ServiceDomain: serviceDomain, Frontend: frontend})
+}
+
+func TestAttachesFrontEndOnStart(t *testing.T) {
+	// given
+	lb, client, _ := createDefaultStubs()
+	frontend := new(fakeFrontend)
+	controller := newController(lb, client, frontend)
+	frontend.On("Attach").Return(5, nil)
+
+	// when
+	err := controller.Start()
+
+	// then
+	assert.NoError(t, err)
+	mock.AssertExpectationsForObjects(t, frontend.Mock)
+}
+
+func TestDetatchOnStop(t *testing.T) {
+	// given
+	lb, client, _ := createDefaultStubs()
+	frontend := new(fakeFrontend)
+	controller := newController(lb, client, frontend)
+	frontend.On("Attach").Return(5, nil)
+	frontend.On("Detach").Return(nil)
+	controller.Start()
+
+	// when
+	err := controller.Stop()
+
+	// then
+	assert.NoError(t, err)
+	mock.AssertExpectationsForObjects(t, frontend.Mock)
 }
 
 func TestControllerCanBeStopped(t *testing.T) {
@@ -154,6 +190,20 @@ func TestLoadBalancerReturnsErrorIfWatcherFails(t *testing.T) {
 
 	// when
 	assert.Error(t, controller.Start())
+}
+
+func TestStartStartsLoadBalancer(t *testing.T) {
+	// given
+	_, client, frontend := createDefaultStubs()
+	lb := new(fakeLb)
+	lb.On("Start").Return(nil)
+	controller := newController(lb, client, frontend)
+
+	// when
+	controller.Start()
+
+	// then
+	mock.AssertExpectationsForObjects(t, lb.Mock)
 }
 
 func TestLoadBalancerReturnsErrorIfLoadBalancerFails(t *testing.T) {

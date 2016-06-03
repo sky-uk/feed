@@ -70,6 +70,14 @@ func (c *controller) Start() error {
 
 	go c.watchForUpdates()
 
+	frontends, err := c.frontend.Attach()
+
+	if err != nil {
+		return fmt.Errorf("unable to attach to front end %v", err)
+	}
+
+	log.Infof("Attached to %d frontend(s)", frontends)
+
 	c.started = true
 	return nil
 }
@@ -140,6 +148,8 @@ func (c *controller) Stop() error {
 	}
 
 	log.Info("Stopping controller")
+
+	c.frontend.Detach()
 
 	close(c.watcher.Done())
 
