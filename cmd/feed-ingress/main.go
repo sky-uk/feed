@@ -2,11 +2,13 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"os"
 
 	_ "net/http/pprof"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/ingress"
 	"github.com/sky-uk/feed/ingress/elb"
 	"github.com/sky-uk/feed/ingress/nginx"
@@ -31,6 +33,9 @@ var (
 	nginxWorkerConnections int
 	nginxKeepAliveSeconds  int
 	nginxLogLevel          string
+	clusterName            string
+	region                 string
+	expectedFrontends      int
 )
 
 func init() {
@@ -49,6 +54,9 @@ func init() {
 		defaultNginxWorkerConnections = 1024
 		defaultNginxKeepAliveSeconds  = 65
 		defaultNginxLogLevel          = "info"
+		defaultClusterName            = "cluster"
+		defaultRegion                 = "eu-west-1"
+		defaultExpectedFrontends      = 0
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -84,13 +92,19 @@ func init() {
 		"Keep alive time for persistent client connections to nginx.")
 	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
+	flag.StringVar(&clusterName, "cluster-name", defaultClusterName,
+		"Kubernetes cluster name. ELBs tagged wtih `sky.uk/KubernetesClusterFrontend` will be added as frontends.")
+	flag.StringVar(&region, "aws-region", defaultRegion,
+		"AWS region")
+	flag.IntVar(&expectedFrontends, "expected-frontends", defaultExpectedFrontends,
+		"Expected number of front ends. If 0 the controller will not attempt to attach. A warning is logged if the incorrect number are found.")
 }
 
 func main() {
 	flag.Parse()
 	cmd.ConfigureLogging(debug)
 	lb := createLB()
-	frontend := elb.New("eu-west-1", "test")
+	frontend := elb.New(region, clusterName, expectedFrontends)
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer)
 	controller := ingress.New(ingress.Config{
 		LoadBalancer:     lb,
@@ -100,6 +114,7 @@ func main() {
 	})
 
 	cmd.ConfigureHealthPort(controller, healthPort)
+	configureMetrics()
 	cmd.AddSignalHandler(controller)
 
 	err := controller.Start()
@@ -107,6 +122,7 @@ func main() {
 		log.Error("Error while starting controller: ", err)
 		os.Exit(-1)
 	}
+	log.Info("Controller started")
 
 	select {}
 }
@@ -123,4 +139,8 @@ func createLB() types.LoadBalancer {
 		Resolver:          nginxResolver,
 		DefaultAllow:      ingressAllow,
 	})
+}
+
+func configureMetrics() {
+	http.Handle("/metrics", prometheus.Handler())
 }

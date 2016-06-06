@@ -28,6 +28,7 @@ func ConfigureHealthPort(controller api.Controller, healthPort int) {
 func checkHealth(controller api.Controller) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := controller.Health(); err != nil {
+			log.Warnf("Returning unhealthy %v", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			io.WriteString(w, fmt.Sprintf("%v\n", err))
 			return

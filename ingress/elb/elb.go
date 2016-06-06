@@ -3,6 +3,8 @@ package elb
 import (
 	"fmt"
 
+	"errors"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
@@ -15,22 +17,29 @@ const (
 	elbTag = "sky.uk/KubernetesClusterFrontend"
 )
 
-// New  creates a new frontend
-func New(region string, clusterName string) types.Frontend {
+// New  creates a new ELB frontend
+func New(region string, clusterName string, expectedFrontends int) types.Frontend {
+	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, clusterName, expectedFrontends)
 	metadata := ec2metadata.New(session.New())
 	return &elb{
-		metadata:    metadata,
-		awsElb:      aws_elb.New(session.New(&aws.Config{Region: &region})),
-		clusterName: clusterName,
-		maxTagQuery: 20,
+		metadata:          metadata,
+		awsElb:            aws_elb.New(session.New(&aws.Config{Region: &region})),
+		clusterName:       clusterName,
+		region:            region,
+		expectedFrontends: expectedFrontends,
+		maxTagQuery:       20,
 	}
 }
 
 type elb struct {
-	awsElb      ELB
-	metadata    EC2Metadata
-	clusterName string
-	maxTagQuery int
+	awsElb            ELB
+	metadata          EC2Metadata
+	clusterName       string
+	region            string
+	expectedFrontends int
+	maxTagQuery       int
+	instanceID        string
+	elbs              []string
 }
 
 // ELB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
@@ -49,8 +58,11 @@ type EC2Metadata interface {
 	GetInstanceIdentityDocument() (ec2metadata.EC2InstanceIdentityDocument, error)
 }
 
-func (e *elb) Attach(frontend types.FrontendInput) (int, error) {
-	log.Info("Attaching to loadbalancer with %v", frontend)
+func (e *elb) Attach() (int, error) {
+
+	if e.expectedFrontends == 0 {
+		return 0, nil
+	}
 
 	id, err := e.metadata.GetInstanceIdentityDocument()
 	if err != nil {
@@ -65,9 +77,21 @@ func (e *elb) Attach(frontend types.FrontendInput) (int, error) {
 		return 0, err
 	}
 
+	log.Infof("Found %d front ends", len(clusterFrontEnds))
+
+	// Save these now so we can always know what we might have done
+	// up until this point we have only read data
+	e.elbs = clusterFrontEnds
+	e.instanceID = instance
+	registered := 0
+
+	if len(clusterFrontEnds) != e.expectedFrontends {
+		log.Warnf("Expected to find %d elb frontends, only found %d", e.expectedFrontends, len(clusterFrontEnds))
+	}
+
 	for _, frontend := range clusterFrontEnds {
-		// TODO deal with error
-		e.awsElb.RegisterInstancesWithLoadBalancer(&aws_elb.RegisterInstancesWithLoadBalancerInput{
+		log.Infof("Registering instance %s with elb %", instance, frontend)
+		_, err = e.awsElb.RegisterInstancesWithLoadBalancer(&aws_elb.RegisterInstancesWithLoadBalancerInput{
 			Instances: []*aws_elb.Instance{
 				&aws_elb.Instance{
 					InstanceId: aws.String(instance),
@@ -75,8 +99,13 @@ func (e *elb) Attach(frontend types.FrontendInput) (int, error) {
 			LoadBalancerName: aws.String(frontend),
 		})
 
+		if err != nil {
+			return registered, fmt.Errorf("unable to register instance %s with elb %s: %v", instance, frontend, err)
+		}
+		registered++
+
 	}
-	return len(clusterFrontEnds), nil
+	return registered, nil
 }
 
 func (e *elb) findFrontEndElbs() ([]string, error) {
@@ -104,6 +133,7 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 		}
 	}
 
+	log.Infof("Found %d loadbalancers. Checking for %s tag set to %s", len(lbNames), elbTag, e.clusterName)
 	var clusterFrontEnds []string
 	totalLbs := len(lbNames)
 	for i := 0; i < len(lbNames); i += e.maxTagQuery {
@@ -114,8 +144,6 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 			LoadBalancerNames: names,
 		})
 
-		log.Info(output, err)
-
 		if err != nil {
 			return nil, fmt.Errorf("unable to describe tags: %v", err)
 		}
@@ -123,6 +151,7 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 		for _, description := range output.TagDescriptions {
 			for _, tag := range description.Tags {
 				if *tag.Key == elbTag && *tag.Value == e.clusterName {
+					log.Infof("Found frontend elb %s", *description.LoadBalancerName)
 					clusterFrontEnds = append(clusterFrontEnds, *description.LoadBalancerName)
 				}
 			}
@@ -131,7 +160,24 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 	return clusterFrontEnds, nil
 }
 
-func (e *elb) Detach(frontend types.FrontendInput) error {
+// Detach removes this instance from all the front end ELBs
+func (e *elb) Detach() error {
+	var failed = false
+	for _, elb := range e.elbs {
+		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb)
+		_, err := e.awsElb.DeregisterInstancesFromLoadBalancer(&aws_elb.DeregisterInstancesFromLoadBalancerInput{
+			Instances:        []*aws_elb.Instance{&aws_elb.Instance{InstanceId: aws.String(e.instanceID)}},
+			LoadBalancerName: aws.String(elb),
+		})
+
+		if err != nil {
+			log.Warnf("unable to deregister instance %s with elb %s: %v", e.instanceID, elb, err)
+			failed = true
+		}
+	}
+	if failed {
+		return errors.New("at least one ELB failed to detach")
+	}
 	return nil
 }
 

@@ -15,6 +15,7 @@ import (
 
 const (
 	clusterName = "cluster_name"
+	region      = "eu-west-1"
 	frontendTag = "sky.uk/KubernetesClusterFrontend"
 )
 
@@ -109,12 +110,25 @@ func mockInstanceMetadata(mockMd *fakeMetadata, instanceID string) {
 }
 
 func setup() (types.Frontend, *fakeElb, *fakeMetadata) {
-	e := New("eu-west-1", clusterName)
+	e := New(region, clusterName, 1)
 	mockElb := &fakeElb{}
 	mockMetadata := &fakeMetadata{}
 	e.(*elb).awsElb = mockElb
 	e.(*elb).metadata = mockMetadata
 	return e, mockElb, mockMetadata
+}
+
+func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
+	//given
+	e, mockElb, mockMetadata := setup()
+	e.(*elb).expectedFrontends = 0
+
+	//when
+	e.Attach()
+	e.Detach()
+
+	//then
+	mock.AssertExpectationsForObjects(t, mockElb.Mock, mockMetadata.Mock)
 }
 
 func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
@@ -133,9 +147,7 @@ func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
 	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
 
 	//when
-	number, err := e.Attach(types.FrontendInput{
-		Cluster: "test",
-	})
+	number, err := e.Attach()
 
 	//then
 	assert.Equal(t, 1, number)
@@ -160,9 +172,7 @@ func TestAttachWithMultipleMatchingLoadBalancers(t *testing.T) {
 	mockRegisterInstances(mockElb, clusterFrontEnd2, instanceID)
 
 	//when
-	number, err := e.Attach(types.FrontendInput{
-		Cluster: "test",
-	})
+	number, err := e.Attach()
 
 	//then
 	assert.Equal(t, 2, number)
@@ -175,9 +185,7 @@ func TestErrorGettingMetadata(t *testing.T) {
 	e, _, mockMetadata := setup()
 	mockMetadata.On("GetInstanceIdentityDocument").Return(ec2metadata.EC2InstanceIdentityDocument{}, fmt.Errorf("No metadata for you"))
 
-	_, err := e.Attach(types.FrontendInput{
-		Cluster: "test",
-	})
+	_, err := e.Attach()
 
 	assert.EqualError(t, err, "unable to query ec2 metadata service for InstanceId: No metadata for you")
 }
@@ -188,9 +196,7 @@ func TestErrorDescribingInstances(t *testing.T) {
 	mockInstanceMetadata(mockMetadata, instanceID)
 	mockElb.On("DescribeLoadBalancers", mock.AnythingOfType("*elb.DescribeLoadBalancersInput")).Return(&aws_elb.DescribeLoadBalancersOutput{}, errors.New("oh dear oh dear"))
 
-	_, err := e.Attach(types.FrontendInput{
-		Cluster: "test",
-	})
+	_, err := e.Attach()
 
 	assert.EqualError(t, err, "unable to describe load balancers: oh dear oh dear")
 }
@@ -202,7 +208,7 @@ func TestErrorDescribingTags(t *testing.T) {
 	mockLoadBalancers(mockElb, "one")
 	mockElb.On("DescribeTags", mock.AnythingOfType("*elb.DescribeTagsInput")).Return(&aws_elb.DescribeTagsOutput{}, errors.New("oh dear oh dear"))
 
-	_, err := e.Attach(types.FrontendInput{Cluster: "test"})
+	_, err := e.Attach()
 
 	assert.EqualError(t, err, "unable to describe tags: oh dear oh dear")
 }
@@ -218,7 +224,7 @@ func TestNoMatchingElbs(t *testing.T) {
 	mockClusterTags(mockElb, lbTags{name: loadBalancerName, tags: []*aws_elb.Tag{}})
 
 	// when
-	number, err := e.Attach(types.FrontendInput{Cluster: clusterName})
+	number, err := e.Attach()
 
 	// then
 	assert.NoError(t, err)
@@ -239,7 +245,7 @@ func TestGetLoadBalancerPages(t *testing.T) {
 	mockRegisterInstances(mockElb, loadBalancerName, instanceID)
 
 	// when
-	number, err := e.Attach(types.FrontendInput{Cluster: clusterName})
+	number, err := e.Attach()
 
 	// then
 	assert.Equal(t, 1, number)
@@ -262,10 +268,87 @@ func TestTagCallsPage(t *testing.T) {
 	mockRegisterInstances(mockElb, loadBalancerName2, instanceID)
 
 	// when
-	number, err := e.Attach(types.FrontendInput{Cluster: clusterName})
+	number, err := e.Attach()
 
 	// then
 	assert.NoError(t, err)
 	assert.Equal(t, 2, number)
+}
 
+func TestDeregistersWithAttachedELBs(t *testing.T) {
+	// given
+	e, mockElb, mockMetadata := setup()
+	instanceID := "cow"
+	mockInstanceMetadata(mockMetadata, instanceID)
+	clusterFrontEnd := "cluster-frontend"
+	clusterFrontEnd2 := "cluster-frontend2"
+	mockLoadBalancers(mockElb, clusterFrontEnd, clusterFrontEnd2, "other")
+	mockClusterTags(mockElb,
+		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
+		lbTags{name: clusterFrontEnd2, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
+		lbTags{name: "other elb", tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String("Bannana"), Value: aws.String("Tasty")}}},
+	)
+	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
+	mockRegisterInstances(mockElb, clusterFrontEnd2, instanceID)
+
+	mockElb.On("DeregisterInstancesFromLoadBalancer", &aws_elb.DeregisterInstancesFromLoadBalancerInput{
+		Instances:        []*aws_elb.Instance{&aws_elb.Instance{InstanceId: aws.String(instanceID)}},
+		LoadBalancerName: aws.String(clusterFrontEnd),
+	}).Return(&aws_elb.DeregisterInstancesFromLoadBalancerOutput{
+		Instances: []*aws_elb.Instance{&aws_elb.Instance{InstanceId: aws.String(instanceID)}},
+	}, nil)
+	mockElb.On("DeregisterInstancesFromLoadBalancer", &aws_elb.DeregisterInstancesFromLoadBalancerInput{
+		Instances:        []*aws_elb.Instance{&aws_elb.Instance{InstanceId: aws.String(instanceID)}},
+		LoadBalancerName: aws.String(clusterFrontEnd2),
+	}).Return(&aws_elb.DeregisterInstancesFromLoadBalancerOutput{
+		Instances: []*aws_elb.Instance{&aws_elb.Instance{InstanceId: aws.String(instanceID)}},
+	}, nil)
+
+	//when
+	e.Attach()
+	err := e.Detach()
+
+	//then
+	assert.NoError(t, err)
+	mock.AssertExpectationsForObjects(t, mockElb.Mock)
+}
+
+func TestRegisterInstanceError(t *testing.T) {
+	// given
+	e, mockElb, mockMetadata := setup()
+	instanceID := "cow"
+	mockInstanceMetadata(mockMetadata, instanceID)
+	clusterFrontEnd := "cluster-frontend"
+	mockLoadBalancers(mockElb, clusterFrontEnd)
+	mockClusterTags(mockElb,
+		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
+	)
+	mockElb.On("RegisterInstancesWithLoadBalancer", mock.Anything).Return(&aws_elb.RegisterInstancesWithLoadBalancerOutput{}, errors.New("no register for you"))
+
+	// when
+	_, err := e.Attach()
+
+	// then
+	assert.EqualError(t, err, "unable to register instance cow with elb cluster-frontend: no register for you")
+}
+
+func TestDeRegisterInstanceError(t *testing.T) {
+	// given
+	e, mockElb, mockMetadata := setup()
+	instanceID := "cow"
+	mockInstanceMetadata(mockMetadata, instanceID)
+	clusterFrontEnd := "cluster-frontend"
+	mockLoadBalancers(mockElb, clusterFrontEnd)
+	mockClusterTags(mockElb,
+		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
+	)
+	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
+	mockElb.On("DeregisterInstancesFromLoadBalancer", mock.Anything).Return(&aws_elb.DeregisterInstancesFromLoadBalancerOutput{}, errors.New("no deregister for you"))
+
+	// when
+	e.Attach()
+	err := e.Detach()
+
+	// then
+	assert.EqualError(t, err, "at least one ELB failed to detach")
 }
