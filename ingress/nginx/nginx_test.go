@@ -9,7 +9,8 @@ import (
 
 	"os/exec"
 
-	"github.com/sky-uk/feed/ingress/types"
+	"github.com/sky-uk/feed/controller"
+	"github.com/sky-uk/feed/ingress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -43,17 +44,17 @@ func defaultConf(tmpDir string, binary string) Conf {
 	}
 }
 
-func newLb(tmpDir string) (types.LoadBalancer, *mockSignaller) {
+func newLb(tmpDir string) (ingress.Proxy, *mockSignaller) {
 	return newLbWithBinary(tmpDir, "./fake_nginx.sh")
 }
 
-func newLbWithBinary(tmpDir string, binary string) (types.LoadBalancer, *mockSignaller) {
+func newLbWithBinary(tmpDir string, binary string) (ingress.Proxy, *mockSignaller) {
 	conf := defaultConf(tmpDir, binary)
 	return newLbWithConf(conf)
 }
 
-func newLbWithConf(conf Conf) (types.LoadBalancer, *mockSignaller) {
-	lb := NewNginxLB(conf)
+func newLbWithConf(conf Conf) (ingress.Proxy, *mockSignaller) {
+	lb := New(conf)
 	signaller := &mockSignaller{}
 	signaller.On("sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
 	lb.(*nginxLoadBalancer).signaller = signaller
@@ -155,13 +156,13 @@ func TestReloadOfConfig(t *testing.T) {
 	assert.NoError(lb.Start())
 
 	var tests = []struct {
-		entries       []types.LoadBalancerEntry
+		entries       []controller.IngressEntry
 		configEntries []string
 	}{
 		// Check full ingress entry works.
 		{
-			[]types.LoadBalancerEntry{
-				types.LoadBalancerEntry{
+			[]controller.IngressEntry{
+				controller.IngressEntry{
 					Host:        "chris.com",
 					Name:        "chris-ingress",
 					Path:        "/path",
@@ -191,8 +192,8 @@ func TestReloadOfConfig(t *testing.T) {
 		},
 		// Check empty allow skips the allow for the ingress in the output.
 		{
-			[]types.LoadBalancerEntry{
-				types.LoadBalancerEntry{
+			[]controller.IngressEntry{
+				controller.IngressEntry{
 					Host:        "foo.com",
 					Name:        "foo-ingress",
 					Path:        "/bar",
@@ -221,22 +222,22 @@ func TestReloadOfConfig(t *testing.T) {
 		},
 		// Check entries ordered by name.
 		{
-			[]types.LoadBalancerEntry{
-				types.LoadBalancerEntry{
+			[]controller.IngressEntry{
+				controller.IngressEntry{
 					Name:        "2-last-ingress",
 					Host:        "foo.com",
 					Path:        "/",
 					ServiceName: "foo",
 					ServicePort: 8080,
 				},
-				types.LoadBalancerEntry{
+				controller.IngressEntry{
 					Name:        "0-first-ingress",
 					Host:        "foo.com",
 					Path:        "/",
 					ServiceName: "foo",
 					ServicePort: 8080,
 				},
-				types.LoadBalancerEntry{
+				controller.IngressEntry{
 					Name:        "1-next-ingress",
 					Host:        "foo.com",
 					Path:        "/",
@@ -299,7 +300,7 @@ func TestReloadOfConfig(t *testing.T) {
 
 	for _, test := range tests {
 		entries := test.entries
-		updated, err := lb.Update(types.LoadBalancerUpdate{Entries: entries})
+		updated, err := lb.Update(controller.IngressUpdate{Entries: entries})
 		assert.NoError(err)
 		assert.True(updated)
 
@@ -328,7 +329,7 @@ func TestResolverIsSpecifiedIfNotEmpty(t *testing.T) {
 	defer os.Remove(tmpDir)
 
 	resolver := "10.254.0.10:53"
-	lb := NewNginxLB(Conf{
+	lb := New(Conf{
 		BinaryLocation:  "./fake_nginx.sh",
 		WorkingDir:      tmpDir,
 		IngressPort:     port,
@@ -373,57 +374,57 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 
 	lb.Start()
 
-	entries := []types.LoadBalancerEntry{
-		types.LoadBalancerEntry{
+	entries := []controller.IngressEntry{
+		controller.IngressEntry{
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(types.LoadBalancerUpdate{Entries: entries})
+	updated, err := lb.Update(controller.IngressUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.True(t, updated)
 
-	updated, err = lb.Update(types.LoadBalancerUpdate{Entries: entries})
+	updated, err = lb.Update(controller.IngressUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
 }
 
-func TestInvalidLoadBalancerEntryIsIgnored(t *testing.T) {
+func TestInvalidIngressEntryIsIgnored(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 	lb, mockSignaller := newLb(tmpDir)
 	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
 
 	lb.Start()
-	entries := []types.LoadBalancerEntry{
-		types.LoadBalancerEntry{
+	entries := []controller.IngressEntry{
+		controller.IngressEntry{
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err := lb.Update(types.LoadBalancerUpdate{Entries: entries})
+	updated, err := lb.Update(controller.IngressUpdate{Entries: entries})
 	assert.NoError(t, err)
 
 	// Add an invalid entry
-	entries = []types.LoadBalancerEntry{
-		types.LoadBalancerEntry{ // Invalid due to blank host
+	entries = []controller.IngressEntry{
+		controller.IngressEntry{ // Invalid due to blank host
 			Host:        "",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
-		types.LoadBalancerEntry{ // Same as the one before
+		controller.IngressEntry{ // Same as the one before
 			Host:        "chris.com",
 			Path:        "/path",
 			ServiceName: "service",
 			ServicePort: 9090,
 		},
 	}
-	updated, err = lb.Update(types.LoadBalancerUpdate{Entries: entries})
+	updated, err = lb.Update(controller.IngressUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
 }

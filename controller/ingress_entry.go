@@ -1,4 +1,4 @@
-package types
+package controller
 
 import (
 	"sort"
@@ -6,13 +6,13 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-// LoadBalancerUpdate data required to update loadbalancing configuration
-type LoadBalancerUpdate struct {
-	Entries []LoadBalancerEntry
+// IngressUpdate data
+type IngressUpdate struct {
+	Entries []IngressEntry
 }
 
-// LoadBalancerEntry describes the ingress for a single host, path, and service.
-type LoadBalancerEntry struct {
+// IngressEntry describes the ingress for a single host, path, and service.
+type IngressEntry struct {
 	// Name of the entry.
 	Name string
 	// Host is the fully qualified domain name used for external access.
@@ -28,8 +28,8 @@ type LoadBalancerEntry struct {
 }
 
 // FilterInvalidEntries returns a slice of all the valid LoadBalancer entries
-func FilterInvalidEntries(entries []LoadBalancerEntry) []LoadBalancerEntry {
-	var validEntries []LoadBalancerEntry
+func FilterInvalidEntries(entries []IngressEntry) []IngressEntry {
+	var validEntries []IngressEntry
 
 	for _, entry := range entries {
 		if entry.ValidateEntry() {
@@ -43,7 +43,7 @@ func FilterInvalidEntries(entries []LoadBalancerEntry) []LoadBalancerEntry {
 }
 
 // ValidateEntry returns whether the given entry is valid
-func (entry LoadBalancerEntry) ValidateEntry() bool {
+func (entry IngressEntry) ValidateEntry() bool {
 	if entry.Host == "" {
 		return false
 	}
@@ -60,14 +60,14 @@ func (entry LoadBalancerEntry) ValidateEntry() bool {
 }
 
 // SortedByName returns the update with entries ordered by their Name.
-func (u LoadBalancerUpdate) SortedByName() LoadBalancerUpdate {
-	sortedEntries := make([]LoadBalancerEntry, len(u.Entries))
+func (u IngressUpdate) SortedByName() IngressUpdate {
+	sortedEntries := make([]IngressEntry, len(u.Entries))
 	copy(sortedEntries, u.Entries)
 	sort.Sort(byName(sortedEntries))
-	return LoadBalancerUpdate{Entries: sortedEntries}
+	return IngressUpdate{Entries: sortedEntries}
 }
 
-type byName []LoadBalancerEntry
+type byName []IngressEntry
 
 func (a byName) Len() int           { return len(a) }
 func (a byName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }

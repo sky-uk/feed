@@ -1,8 +1,8 @@
 /*
-Package ingress contains the ingress controller which monitors Kubernetes
-and updates the ingress load balancer. It also runs the load balancer.
+Package controller implements a generic controller for monitoring ingress resources in Kubernetes.
+It delegates update logic to an Updater interface.
 */
-package ingress
+package controller
 
 import (
 	"sync"
@@ -10,54 +10,49 @@ import (
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sky-uk/feed/api"
-	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/k8s"
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
 
-var attachedFrontends = prometheus.NewGauge(prometheus.GaugeOpts{
-	Namespace: "feed",
-	Subsystem: "ingress",
-	Name:      "frontends_attached",
-	Help:      "The total number of frontends attached",
-})
+// Controller operates on ingress resources.
+type Controller interface {
+	// Run the controller, returning immediately after it starts or an error occurs.
+	Start() error
+	// Stop the controller, blocking until it stops or an error occurs.
+	Stop() error
+	// Healthy returns true for a healthy controller, false for unhealthy.
+	Health() error
+}
 
 type controller struct {
-	lb            types.LoadBalancer
+	updater       Updater
 	client        k8s.Client
-	serviceDomain string
-	frontend      types.Frontend
 	watcher       k8s.Watcher
 	started       bool
 	startStopLock sync.Mutex
+	serviceDomain string
 }
 
 // Config for creating a new ingress controller.
 type Config struct {
-	LoadBalancer     types.LoadBalancer
+	Updater          Updater
 	KubernetesClient k8s.Client
-	Frontend         types.Frontend
 	ServiceDomain    string
 }
 
 // New creates an ingress controller.
-func New(conf Config) api.Controller {
+func New(conf Config) Controller {
 	return &controller{
-		lb:            conf.LoadBalancer,
+		updater:       conf.Updater,
 		client:        conf.KubernetesClient,
 		serviceDomain: conf.ServiceDomain,
-		frontend:      conf.Frontend,
 	}
 }
 
 func (c *controller) Start() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
-
-	prometheus.Register(attachedFrontends)
 
 	if c.started {
 		return fmt.Errorf("controller is already started")
@@ -67,7 +62,7 @@ func (c *controller) Start() error {
 		return fmt.Errorf("can't restart controller")
 	}
 
-	err := c.lb.Start()
+	err := c.updater.Start()
 	if err != nil {
 		return fmt.Errorf("unable to start load balancer: %v", err)
 	}
@@ -79,13 +74,6 @@ func (c *controller) Start() error {
 	}
 
 	go c.watchForUpdates()
-
-	frontends, err := c.frontend.Attach()
-	attachedFrontends.Set(float64(frontends))
-
-	if err != nil {
-		return fmt.Errorf("unable to attach to front end %v", err)
-	}
 
 	c.started = true
 	return nil
@@ -113,13 +101,13 @@ func (c *controller) updateLoadBalancer() error {
 		return err
 	}
 
-	entries := []types.LoadBalancerEntry{}
+	entries := []IngressEntry{}
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {
 				serviceName := fmt.Sprintf("%s.%s.%s",
 					path.Backend.ServiceName, ingress.Namespace, c.serviceDomain)
-				entry := types.LoadBalancerEntry{
+				entry := IngressEntry{
 					Name:        ingress.Namespace + "/" + ingress.Name,
 					Host:        rule.Host,
 					Path:        path.Path,
@@ -134,15 +122,8 @@ func (c *controller) updateLoadBalancer() error {
 	}
 
 	log.Infof("Updating load balancer with %d entry(s)", len(entries))
-	updated, err := c.lb.Update(types.LoadBalancerUpdate{Entries: entries})
-	if err != nil {
+	if err := c.updater.Update(IngressUpdate{Entries: entries}); err != nil {
 		return err
-	}
-
-	if updated {
-		log.Info("Load balancer updated")
-	} else {
-		log.Info("No changes")
 	}
 
 	return nil
@@ -158,14 +139,9 @@ func (c *controller) Stop() error {
 
 	log.Info("Stopping controller")
 
-	err := c.frontend.Detach()
-	if err != nil {
-		log.Warn("Error while detaching front end: ", err)
-	}
-
 	close(c.watcher.Done())
 
-	if err = c.lb.Stop(); err != nil {
+	if err := c.updater.Stop(); err != nil {
 		log.Warn("Error while stopping load balancer: ", err)
 	}
 
@@ -182,7 +158,7 @@ func (c *controller) Health() error {
 		return fmt.Errorf("controller has not started")
 	}
 
-	if err := c.lb.Health(); err != nil {
+	if err := c.updater.Health(); err != nil {
 		return err
 	}
 

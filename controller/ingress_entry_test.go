@@ -1,4 +1,4 @@
-package types
+package controller
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestValidEntry(t *testing.T) {
-	assert.True(t, LoadBalancerEntry{
+	assert.True(t, IngressEntry{
 		Host:        "valid",
 		Path:        "valid",
 		ServiceName: "valid",
@@ -16,13 +16,13 @@ func TestValidEntry(t *testing.T) {
 }
 
 func TestValidateHost(t *testing.T) {
-	assert.False(t, LoadBalancerEntry{
+	assert.False(t, IngressEntry{
 		Host:        "",
 		Path:        "valid",
 		ServiceName: "valid",
 		ServicePort: 9090,
 	}.ValidateEntry())
-	assert.False(t, LoadBalancerEntry{
+	assert.False(t, IngressEntry{
 		Path:        "valid",
 		ServiceName: "valid",
 		ServicePort: 9090,
@@ -30,13 +30,13 @@ func TestValidateHost(t *testing.T) {
 }
 
 func TestValidatePath(t *testing.T) {
-	assert.False(t, LoadBalancerEntry{
+	assert.False(t, IngressEntry{
 		Host:        "valid",
 		Path:        "",
 		ServiceName: "valid",
 		ServicePort: 9090,
 	}.ValidateEntry())
-	assert.False(t, LoadBalancerEntry{
+	assert.False(t, IngressEntry{
 		Host:        "valid",
 		ServiceName: "valid",
 		ServicePort: 9090,
@@ -44,13 +44,13 @@ func TestValidatePath(t *testing.T) {
 }
 
 func TestValidateServiceName(t *testing.T) {
-	assert.False(t, LoadBalancerEntry{
+	assert.False(t, IngressEntry{
 		Host:        "valid",
 		Path:        "valid",
 		ServiceName: "",
 		ServicePort: 9090,
 	}.ValidateEntry())
-	assert.False(t, LoadBalancerEntry{
+	assert.False(t, IngressEntry{
 		Host:        "valid",
 		Path:        "valid",
 		ServicePort: 9090,
@@ -58,13 +58,13 @@ func TestValidateServiceName(t *testing.T) {
 }
 
 func TestValidatePort(t *testing.T) {
-	assert.False(t, LoadBalancerEntry{
+	assert.False(t, IngressEntry{
 		Host:        "valid",
 		Path:        "valid",
 		ServiceName: "valid",
 		ServicePort: 0,
 	}.ValidateEntry())
-	assert.False(t, LoadBalancerEntry{
+	assert.False(t, IngressEntry{
 		Host:        "valid",
 		Path:        "valid",
 		ServiceName: "valid",
@@ -72,14 +72,14 @@ func TestValidatePort(t *testing.T) {
 }
 
 func TestFilterInvalidEntries(t *testing.T) {
-	valid := LoadBalancerEntry{Host: "valid", Path: "valid", ServiceName: "valid", ServicePort: 9090}
-	invalid := LoadBalancerEntry{}
-	entries := []LoadBalancerEntry{
+	valid := IngressEntry{Host: "valid", Path: "valid", ServiceName: "valid", ServicePort: 9090}
+	invalid := IngressEntry{}
+	entries := []IngressEntry{
 		valid,
 		invalid,
 	}
 
 	filtered := FilterInvalidEntries(entries)
 
-	assert.Equal(t, []LoadBalancerEntry{valid}, filtered)
+	assert.Equal(t, []IngressEntry{valid}, filtered)
 }

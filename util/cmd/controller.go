@@ -11,12 +11,14 @@ import (
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/sky-uk/feed/api"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sky-uk/feed/controller"
 )
 
 // ConfigureHealthPort is used to expose the controllers health over http
-func ConfigureHealthPort(controller api.Controller, healthPort int) {
+func ConfigureHealthPort(controller controller.Controller, healthPort int) {
 	http.HandleFunc("/health", checkHealth(controller))
+	http.Handle("/metrics", prometheus.Handler())
 
 	go func() {
 		log.Error(http.ListenAndServe(":"+strconv.Itoa(healthPort), nil))
@@ -25,7 +27,7 @@ func ConfigureHealthPort(controller api.Controller, healthPort int) {
 	}()
 }
 
-func checkHealth(controller api.Controller) func(w http.ResponseWriter, r *http.Request) {
+func checkHealth(controller controller.Controller) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := controller.Health(); err != nil {
 			log.Warnf("Returning unhealthy %v", err)
@@ -40,7 +42,7 @@ func checkHealth(controller api.Controller) func(w http.ResponseWriter, r *http.
 }
 
 // AddSignalHandler allows the  controller to shutdown gracefully by respecting SIGTERM
-func AddSignalHandler(controller api.Controller) {
+func AddSignalHandler(controller controller.Controller) {
 	c := make(chan os.Signal, 1)
 	// SIGTERM is used by Kubernetes to gracefully stop pods.
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)

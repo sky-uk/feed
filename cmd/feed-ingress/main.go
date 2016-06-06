@@ -2,17 +2,15 @@ package main
 
 import (
 	"flag"
-	"net/http"
 	"os"
 
 	_ "net/http/pprof"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/ingress"
 	"github.com/sky-uk/feed/ingress/elb"
 	"github.com/sky-uk/feed/ingress/nginx"
-	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/util/cmd"
 )
 
@@ -103,18 +101,17 @@ func init() {
 func main() {
 	flag.Parse()
 	cmd.ConfigureLogging(debug)
-	lb := createLB()
-	frontend := elb.New(region, clusterName, expectedFrontends)
+
+	ingress := createIngress()
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer)
-	controller := ingress.New(ingress.Config{
-		LoadBalancer:     lb,
+
+	controller := controller.New(controller.Config{
+		Updater:          ingress,
 		KubernetesClient: client,
 		ServiceDomain:    serviceDomain,
-		Frontend:         frontend,
 	})
 
 	cmd.ConfigureHealthPort(controller, healthPort)
-	configureMetrics()
 	cmd.AddSignalHandler(controller)
 
 	err := controller.Start()
@@ -127,8 +124,9 @@ func main() {
 	select {}
 }
 
-func createLB() types.LoadBalancer {
-	return nginx.NewNginxLB(nginx.Conf{
+func createIngress() controller.Updater {
+	frontend := elb.New(region, clusterName, expectedFrontends)
+	proxy := nginx.New(nginx.Conf{
 		BinaryLocation:    nginxBinary,
 		IngressPort:       ingressPort,
 		WorkingDir:        nginxWorkDir,
@@ -139,8 +137,5 @@ func createLB() types.LoadBalancer {
 		Resolver:          nginxResolver,
 		DefaultAllow:      ingressAllow,
 	})
-}
-
-func configureMetrics() {
-	http.Handle("/metrics", prometheus.Handler())
+	return ingress.New(frontend, proxy)
 }

@@ -16,7 +16,8 @@ import (
 	"syscall"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/sky-uk/feed/ingress/types"
+	"github.com/sky-uk/feed/controller"
+	"github.com/sky-uk/feed/ingress"
 	"github.com/sky-uk/feed/util"
 )
 
@@ -69,15 +70,15 @@ type nginxLoadBalancer struct {
 // Used for generating nginx config
 type loadBalancerTemplate struct {
 	Config  Conf
-	Entries []types.LoadBalancerEntry
+	Entries []controller.IngressEntry
 }
 
 func (lb *nginxLoadBalancer) nginxConfFile() string {
 	return lb.WorkingDir + "/nginx.conf"
 }
 
-// NewNginxLB creates a new LoadBalancer
-func NewNginxLB(nginxConf Conf) types.LoadBalancer {
+// New creates an nginx proxy.
+func New(nginxConf Conf) ingress.Proxy {
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
 	if nginxConf.LogLevel == "" {
 		nginxConf.LogLevel = "warn"
@@ -134,7 +135,7 @@ func (lb *nginxLoadBalancer) initialiseNginxConf() error {
 	if err != nil {
 		log.Debugf("Can't remove nginx.conf: %v", err)
 	}
-	_, err = lb.update(types.LoadBalancerUpdate{Entries: []types.LoadBalancerEntry{}})
+	_, err = lb.update(controller.IngressUpdate{Entries: []controller.IngressEntry{}})
 	return err
 }
 
@@ -159,7 +160,7 @@ func (lb *nginxLoadBalancer) Stop() error {
 	return err
 }
 
-func (lb *nginxLoadBalancer) Update(entries types.LoadBalancerUpdate) (bool, error) {
+func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) (bool, error) {
 	updated, err := lb.update(entries.SortedByName())
 	if err != nil {
 		return false, fmt.Errorf("unable to update nginx: %v", err)
@@ -173,7 +174,7 @@ func (lb *nginxLoadBalancer) Update(entries types.LoadBalancerUpdate) (bool, err
 	return updated, err
 }
 
-func (lb *nginxLoadBalancer) update(entries types.LoadBalancerUpdate) (bool, error) {
+func (lb *nginxLoadBalancer) update(entries controller.IngressUpdate) (bool, error) {
 	log.Debugf("Updating loadbalancer %s", entries)
 	file, err := lb.createConfig(entries)
 	if err != nil {
@@ -208,14 +209,14 @@ func (lb *nginxLoadBalancer) update(entries types.LoadBalancerUpdate) (bool, err
 	return true, nil
 }
 
-func (lb *nginxLoadBalancer) createConfig(update types.LoadBalancerUpdate) ([]byte, error) {
+func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]byte, error) {
 	tmpl, err := template.New("nginx.tmpl").ParseFiles(lb.WorkingDir + "/nginx.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
 	var output bytes.Buffer
-	validEntries := types.FilterInvalidEntries(update.Entries)
+	validEntries := controller.FilterInvalidEntries(update.Entries)
 	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: validEntries})
 
 	if err != nil {
