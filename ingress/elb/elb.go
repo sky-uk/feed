@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
-	"github.com/sky-uk/feed/ingress/types"
+	"github.com/sky-uk/feed/ingress"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 )
 
 // New  creates a new ELB frontend
-func New(region string, clusterName string, expectedFrontends int) types.Frontend {
+func New(region string, clusterName string, expectedFrontends int) ingress.Frontend {
 	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, clusterName, expectedFrontends)
 	metadata := ec2metadata.New(session.New())
 	return &elb{

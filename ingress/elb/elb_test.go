@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
-	"github.com/sky-uk/feed/ingress/types"
+	"github.com/sky-uk/feed/ingress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -109,7 +109,7 @@ func mockInstanceMetadata(mockMd *fakeMetadata, instanceID string) {
 	mockMd.On("GetInstanceIdentityDocument").Return(ec2metadata.EC2InstanceIdentityDocument{InstanceID: instanceID}, nil)
 }
 
-func setup() (types.Frontend, *fakeElb, *fakeMetadata) {
+func setup() (ingress.Frontend, *fakeElb, *fakeMetadata) {
 	e := New(region, clusterName, 1)
 	mockElb := &fakeElb{}
 	mockMetadata := &fakeMetadata{}

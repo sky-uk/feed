@@ -1,4 +1,4 @@
-package ingress
+package controller
 
 import (
 	"testing"
@@ -7,8 +7,6 @@ import (
 
 	"fmt"
 
-	"github.com/sky-uk/feed/api"
-	"github.com/sky-uk/feed/ingress/types"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
@@ -17,109 +15,61 @@ import (
 
 const smallWaitTime = time.Millisecond * 50
 
-type fakeLb struct {
+type fakeUpdater struct {
 	mock.Mock
 }
 
-func (lb *fakeLb) Update(update types.LoadBalancerUpdate) (bool, error) {
+func (lb *fakeUpdater) Update(update IngressUpdate) error {
 	r := lb.Called(update)
-	return false, r.Error(0)
+	return r.Error(0)
 }
 
-func (lb *fakeLb) Start() error {
+func (lb *fakeUpdater) Start() error {
 	r := lb.Called()
 	return r.Error(0)
 }
 
-func (lb *fakeLb) Stop() error {
+func (lb *fakeUpdater) Stop() error {
 	r := lb.Called()
 	return r.Error(0)
 }
 
-func (lb *fakeLb) Health() error {
+func (lb *fakeUpdater) Health() error {
 	r := lb.Called()
 	return r.Error(0)
 }
 
-func (lb *fakeLb) String() string {
-	return "FakeLoadBalancer"
+func (lb *fakeUpdater) String() string {
+	return "FakeUpdater"
 }
 
-type fakeFrontend struct {
-	mock.Mock
-}
-
-func (f *fakeFrontend) Attach() (int, error) {
-	args := f.Called()
-	return args.Int(0), args.Error(1)
-}
-
-func (f *fakeFrontend) Detach() error {
-	args := f.Called()
-	return args.Error(0)
-}
-
-func createDefaultStubs() (*fakeLb, *test.FakeClient, *fakeFrontend) {
-	lb := new(fakeLb)
+func createDefaultStubs() (*fakeUpdater, *test.FakeClient) {
+	updater := new(fakeUpdater)
 	client := new(test.FakeClient)
-	frontend := new(fakeFrontend)
 
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
 	client.On("WatchIngresses", mock.Anything).Return(nil)
-	lb.On("Start").Return(nil)
-	lb.On("Stop").Return(nil)
-	lb.On("Update", mock.Anything).Return(nil)
-	lb.On("Health").Return(nil)
-	frontend.On("Attach").Return(1, nil)
-	frontend.On("Detach").Return(nil)
+	updater.On("Start").Return(nil)
+	updater.On("Stop").Return(nil)
+	updater.On("Update", mock.Anything).Return(nil)
+	updater.On("Health").Return(nil)
 
-	return lb, client, frontend
+	return updater, client
 }
 
-func newController(lb types.LoadBalancer, client k8s.Client, frontend types.Frontend) api.Controller {
-	return New(Config{LoadBalancer: lb, KubernetesClient: client, ServiceDomain: serviceDomain, Frontend: frontend})
+func newController(lb Updater, client k8s.Client) Controller {
+	return New(Config{Updater: lb, KubernetesClient: client, ServiceDomain: serviceDomain})
 }
 
-func TestAttachesFrontEndOnStart(t *testing.T) {
-	// given
-	lb, client, _ := createDefaultStubs()
-	frontend := new(fakeFrontend)
-	controller := newController(lb, client, frontend)
-	frontend.On("Attach").Return(5, nil)
-
-	// when
-	err := controller.Start()
-
-	// then
-	assert.NoError(t, err)
-	mock.AssertExpectationsForObjects(t, frontend.Mock)
-}
-
-func TestDetatchOnStop(t *testing.T) {
-	// given
-	lb, client, _ := createDefaultStubs()
-	frontend := new(fakeFrontend)
-	controller := newController(lb, client, frontend)
-	frontend.On("Attach").Return(5, nil)
-	frontend.On("Detach").Return(nil)
-	controller.Start()
-
-	// when
-	err := controller.Stop()
-
-	// then
-	assert.NoError(t, err)
-	mock.AssertExpectationsForObjects(t, frontend.Mock)
-}
-
-func TestControllerCanBeStopped(t *testing.T) {
+func TestControllerCanBeStartedAndStopped(t *testing.T) {
 	assert := assert.New(t)
-	lb, client, frontend := createDefaultStubs()
-	controller := newController(lb, client, frontend)
+	updater, client := createDefaultStubs()
+	controller := newController(updater, client)
 
 	assert.NoError(controller.Start())
 	assert.NoError(controller.Stop())
-	lb.AssertCalled(t, "Stop")
+	updater.AssertCalled(t, "Start")
+	updater.AssertCalled(t, "Stop")
 }
 
 func TestControllerCannotBeRestarted(t *testing.T) {
@@ -162,57 +112,43 @@ func TestControllerIsUnhealthyUntilStarted(t *testing.T) {
 	assert.Error(controller.Health(), "should be unhealthy after stopped")
 }
 
-func TestControllerIsUnhealthyIfLBIsUnhealthy(t *testing.T) {
+func TestControllerIsUnhealthyIfUpdaterIsUnhealthy(t *testing.T) {
 	assert := assert.New(t)
-	_, client, frontend := createDefaultStubs()
-	lb := new(fakeLb)
-	controller := newController(lb, client, frontend)
+	_, client := createDefaultStubs()
+	updater := new(fakeUpdater)
+	controller := newController(updater, client)
 
-	lb.On("Start").Return(nil)
-	lb.On("Stop").Return(nil)
-	lb.On("Update", mock.Anything).Return(nil)
+	updater.On("Start").Return(nil)
+	updater.On("Stop").Return(nil)
+	updater.On("Update", mock.Anything).Return(nil)
 	// first return healthy, then unhealthy for lb
-	lb.On("Health").Return(nil).Once()
+	updater.On("Health").Return(nil).Once()
 	lbErr := fmt.Errorf("dead")
-	lb.On("Health").Return(fmt.Errorf("dead")).Once()
+	updater.On("Health").Return(fmt.Errorf("dead")).Once()
 
 	assert.NoError(controller.Start())
 	assert.NoError(controller.Health())
 	assert.Equal(lbErr, controller.Health())
 }
 
-func TestLoadBalancerReturnsErrorIfWatcherFails(t *testing.T) {
+func TestControllerReturnsErrorIfWatcherFails(t *testing.T) {
 	// given
-	lb, _, frontend := createDefaultStubs()
+	lb, _ := createDefaultStubs()
 	client := new(test.FakeClient)
-	controller := newController(lb, client, frontend)
+	controller := newController(lb, client)
 	client.On("WatchIngresses", mock.Anything).Return(fmt.Errorf("failed to watch ingresses"))
 
 	// when
 	assert.Error(t, controller.Start())
 }
 
-func TestStartStartsLoadBalancer(t *testing.T) {
+func TestControllerReturnsErrorIfUpdaterFails(t *testing.T) {
 	// given
-	_, client, frontend := createDefaultStubs()
-	lb := new(fakeLb)
-	lb.On("Start").Return(nil)
-	controller := newController(lb, client, frontend)
-
-	// when
-	controller.Start()
-
-	// then
-	mock.AssertExpectationsForObjects(t, lb.Mock)
-}
-
-func TestLoadBalancerReturnsErrorIfLoadBalancerFails(t *testing.T) {
-	// given
-	_, client, frontend := createDefaultStubs()
-	lb := new(fakeLb)
-	controller := newController(lb, client, frontend)
-	lb.On("Start").Return(fmt.Errorf("kaboooom"))
-	lb.On("Stop").Return(nil)
+	_, client := createDefaultStubs()
+	updater := new(fakeUpdater)
+	controller := newController(updater, client)
+	updater.On("Start").Return(fmt.Errorf("kaboooom"))
+	updater.On("Stop").Return(nil)
 
 	// when
 	assert.Error(t, controller.Start())
@@ -221,9 +157,9 @@ func TestLoadBalancerReturnsErrorIfLoadBalancerFails(t *testing.T) {
 func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
 	// given
 	assert := assert.New(t)
-	lb, _, frontend := createDefaultStubs()
+	updater, _ := createDefaultStubs()
 	client := new(test.FakeClient)
-	controller := newController(lb, client, frontend)
+	controller := newController(updater, client)
 
 	watcherChan := make(chan k8s.Watcher, 1)
 	client.On("WatchIngresses", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
@@ -242,15 +178,15 @@ func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
 	assert.Equal(watcherErr, controller.Health())
 }
 
-func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
+func TestUpdatesOnIngressUpdates(t *testing.T) {
 	//setup
 	assert := assert.New(t)
 
 	//given
 	client := new(test.FakeClient)
-	lb, _, frontend := createDefaultStubs()
+	updater, _ := createDefaultStubs()
 	ingresses := createIngressesFixture()
-	controller := newController(lb, client, frontend)
+	controller := newController(updater, client)
 	watcherChan := make(chan k8s.Watcher, 1)
 
 	client.On("GetIngresses").Return(ingresses, nil).Once()
@@ -272,7 +208,7 @@ func TestLoadBalancerUpdatesOnIngressUpdates(t *testing.T) {
 
 	//then
 	entries := createLbEntriesFixture()
-	lb.AssertCalled(t, "Update", entries)
+	updater.AssertCalled(t, "Update", entries)
 
 	//cleanup
 	assert.NoError(controller.Stop())
@@ -300,8 +236,8 @@ func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
 	return nil
 }
 
-func createLbEntriesFixture() types.LoadBalancerUpdate {
-	return types.LoadBalancerUpdate{Entries: []types.LoadBalancerEntry{types.LoadBalancerEntry{
+func createLbEntriesFixture() IngressUpdate {
+	return IngressUpdate{Entries: []IngressEntry{IngressEntry{
 		Name:        ingressNamespace + "/" + ingressName,
 		Host:        ingressHost,
 		Path:        ingressPath,

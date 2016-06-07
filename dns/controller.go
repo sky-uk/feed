@@ -5,11 +5,11 @@ import (
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/sky-uk/feed/api"
+	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/k8s"
 )
 
-type controller struct {
+type dns struct {
 	client        k8s.Client
 	watcher       k8s.Watcher
 	started       bool
@@ -17,13 +17,13 @@ type controller struct {
 }
 
 // New creates a dns controller.
-func New(kubernetesClient k8s.Client) api.Controller {
-	return &controller{
+func New(kubernetesClient k8s.Client) controller.Controller {
+	return &dns{
 		client: kubernetesClient,
 	}
 }
 
-func (c *controller) Start() error {
+func (c *dns) Start() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
 
@@ -47,7 +47,7 @@ func (c *controller) Start() error {
 	return nil
 }
 
-func (c *controller) Stop() error {
+func (c *dns) Stop() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
 
@@ -64,7 +64,7 @@ func (c *controller) Stop() error {
 	return nil
 }
 
-func (c *controller) Health() error {
+func (c *dns) Health() error {
 	c.startStopLock.Lock()
 	defer c.startStopLock.Unlock()
 
@@ -79,7 +79,7 @@ func (c *controller) Health() error {
 	return nil
 }
 
-func (c *controller) watchForUpdates() {
+func (c *dns) watchForUpdates() {
 	for {
 		select {
 		case <-c.watcher.Done():
@@ -94,7 +94,7 @@ func (c *controller) watchForUpdates() {
 	}
 }
 
-func (c *controller) updateDNSRecords() error {
+func (c *dns) updateDNSRecords() error {
 	log.Info("Logic to update DNS records")
 	return nil
 }
