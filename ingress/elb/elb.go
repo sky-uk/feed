@@ -10,12 +10,20 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/ingress"
 )
 
 const (
 	elbTag = "sky.uk/KubernetesClusterFrontend"
 )
+
+var attachedFrontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	Namespace: "feed",
+	Subsystem: "ingress",
+	Name:      "frontends_attached",
+	Help:      "The total number of frontends attached",
+})
 
 // New  creates a new ELB frontend
 func New(region string, clusterName string, expectedFrontends int) ingress.Frontend {
@@ -32,14 +40,15 @@ func New(region string, clusterName string, expectedFrontends int) ingress.Front
 }
 
 type elb struct {
-	awsElb            ELB
-	metadata          EC2Metadata
-	clusterName       string
-	region            string
-	expectedFrontends int
-	maxTagQuery       int
-	instanceID        string
-	elbs              []string
+	awsElb              ELB
+	metadata            EC2Metadata
+	clusterName         string
+	region              string
+	expectedFrontends   int
+	maxTagQuery         int
+	instanceID          string
+	elbs                []string
+	registeredFrontends int
 }
 
 // ELB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
@@ -58,15 +67,15 @@ type EC2Metadata interface {
 	GetInstanceIdentityDocument() (ec2metadata.EC2InstanceIdentityDocument, error)
 }
 
-func (e *elb) Attach() (int, error) {
+func (e *elb) Attach() error {
 
 	if e.expectedFrontends == 0 {
-		return 0, nil
+		return nil
 	}
 
 	id, err := e.metadata.GetInstanceIdentityDocument()
 	if err != nil {
-		return 0, fmt.Errorf("unable to query ec2 metadata service for InstanceId: %v", err)
+		return fmt.Errorf("unable to query ec2 metadata service for InstanceId: %v", err)
 	}
 
 	instance := id.InstanceID
@@ -74,7 +83,7 @@ func (e *elb) Attach() (int, error) {
 	clusterFrontEnds, err := e.findFrontEndElbs()
 
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	log.Infof("Found %d front ends", len(clusterFrontEnds))
@@ -84,10 +93,6 @@ func (e *elb) Attach() (int, error) {
 	e.elbs = clusterFrontEnds
 	e.instanceID = instance
 	registered := 0
-
-	if len(clusterFrontEnds) != e.expectedFrontends {
-		log.Warnf("Expected to find %d elb frontends, only found %d", e.expectedFrontends, len(clusterFrontEnds))
-	}
 
 	for _, frontend := range clusterFrontEnds {
 		log.Infof("Registering instance %s with elb %", instance, frontend)
@@ -100,12 +105,16 @@ func (e *elb) Attach() (int, error) {
 		})
 
 		if err != nil {
-			return registered, fmt.Errorf("unable to register instance %s with elb %s: %v", instance, frontend, err)
+			return fmt.Errorf("unable to register instance %s with elb %s: %v", instance, frontend, err)
 		}
 		registered++
 
 	}
-	return registered, nil
+
+	prometheus.Register(attachedFrontendGauge)
+	attachedFrontendGauge.Set(float64(registered))
+	e.registeredFrontends = registered
+	return nil
 }
 
 func (e *elb) findFrontEndElbs() ([]string, error) {
@@ -177,6 +186,13 @@ func (e *elb) Detach() error {
 	}
 	if failed {
 		return errors.New("at least one ELB failed to detach")
+	}
+	return nil
+}
+
+func (e *elb) Health() error {
+	if e.registeredFrontends != e.expectedFrontends {
+		return fmt.Errorf("expected frontends %d registered frontends %d", e.expectedFrontends, e.registeredFrontends)
 	}
 	return nil
 }

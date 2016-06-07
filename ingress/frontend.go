@@ -8,9 +8,11 @@ package ingress
 type Frontend interface {
 	// Attach should register the local proxy with the frontend.
 	// It should block until attaching is complete.
-	// Returns the number of load balancers attached, which depends on the frontend implementation.
-	Attach() (int, error)
+	Attach() error
 	// Detach should de-register the local proxy from the frontend.
 	// It should block until detaching is complete.
 	Detach() error
+	// Health returns if the number of attached of front ends is equal to the expected
+	// number of front ends
+	Health() error
 }
