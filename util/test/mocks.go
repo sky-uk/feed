@@ -17,9 +17,21 @@ func (c *FakeClient) GetIngresses() ([]k8s.Ingress, error) {
 }
 
 // WatchIngresses mocks out calls to WatchIngresses
-func (c *FakeClient) WatchIngresses(w k8s.Watcher) error {
-	r := c.Called(w)
-	return r.Error(0)
+func (c *FakeClient) WatchIngresses() k8s.Watcher {
+	r := c.Called()
+	return r.Get(0).(k8s.Watcher)
+}
+
+// GetServices mocks out calls to GetServices
+func (c *FakeClient) GetServices() ([]k8s.Service, error) {
+	r := c.Called()
+	return r.Get(0).([]k8s.Service), r.Error(1)
+}
+
+// WatchServices mocks out calls to WatchServices
+func (c *FakeClient) WatchServices() k8s.Watcher {
+	r := c.Called()
+	return r.Get(0).(k8s.Watcher)
 }
 
 func (c *FakeClient) String() string {

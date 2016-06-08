@@ -29,20 +29,27 @@ import (
 
 const (
 	ingressPath       = "/apis/extensions/v1beta1/ingresses"
+	servicePath       = "/api/v1/services"
 	initialRetryDelay = time.Millisecond * 100
 	maxRetryDelay     = time.Second * 60
 )
 
 // Client for connecting to a Kubernetes cluster.
+// Watchers will receive a notification whenever the client connects to the API server,
+// including reconnects, to notify that there may be new ingresses that need to be retrieved.
+// It's intended that client code will call the getters to retrieve the current state when notified.
 type Client interface {
 	// GetIngresses returns all the ingresses in the cluster.
 	GetIngresses() ([]Ingress, error)
+
+	// GetServices returns all the services in the cluster.
+	GetServices() ([]Service, error)
+
 	// WatchIngresses watches for updates to ingresses and notifies the Watcher.
-	// It will also send a notification whenever it connects to the API server,
-	// to notify that there may be existing ingresses that need to be retrieved.
-	// It's intended that client code will call GetIngresses to retrieve
-	// the current state when notified.
-	WatchIngresses(Watcher) error
+	WatchIngresses() Watcher
+
+	// WatchServices watches for updates to services and notifies the Watcher.
+	WatchServices() Watcher
 }
 
 type client struct {
@@ -90,41 +97,57 @@ func New(apiServerURL string, caCert []byte, token string) (Client, error) {
 
 func (c *client) GetIngresses() ([]Ingress, error) {
 	var ingressList IngressList
-	err := c.requestAndUnmarshall(ingressPath, &ingressList)
-	if err != nil {
+	if err := c.requestAndUnmarshall(ingressPath, &ingressList); err != nil {
 		return nil, err
 	}
 	return ingressList.Items, nil
 }
 
-func (c *client) WatchIngresses(w Watcher) error {
-	log.Debug("Adding watcher for ingresses")
-
-	notWatching(w)
-	ingressRequest := c.createIngressWatchRequest(w.Done())
-
-	go func() {
-		for watch(w, ingressRequest) {
-		}
-
-		log.Debug("Watch has stopped")
-	}()
-
-	return nil
+func (c *client) GetServices() ([]Service, error) {
+	var serviceList ServiceList
+	if err := c.requestAndUnmarshall(servicePath, &serviceList); err != nil {
+		return nil, err
+	}
+	return serviceList.Items, nil
 }
 
-func (c *client) createIngressWatchRequest(doneCh <-chan struct{}) func() (*http.Response, error) {
-	ingressRequest := func() (*http.Response, error) {
-		resourceVersion, err := c.getIngressResourceVersion()
+func (c *client) WatchIngresses() Watcher {
+	return c.watch(ingressPath)
+}
+
+func (c *client) WatchServices() Watcher {
+	return c.watch(servicePath)
+}
+
+func (c *client) watch(resourcePath string) Watcher {
+	log.Debugf("Adding watcher for %s", resourcePath)
+
+	w := newWatcher()
+	w.notWatching()
+	request := c.createRetryingWatchRequest(resourcePath, w.done)
+
+	go func() {
+		for watch(w, request) {
+		}
+
+		log.Debug("Watch %s has stopped", resourcePath)
+	}()
+
+	return w
+}
+
+func (c *client) createRetryingWatchRequest(resourcePath string, doneCh <-chan struct{}) func() (*http.Response, error) {
+	request := func() (*http.Response, error) {
+		resourceVersion, err := c.getResourceVersion(resourcePath)
 		if err != nil {
 			return nil, err
 		}
-		log.Debugf("Found ingress resource version '%s'", resourceVersion)
-		return c.request(ingressPath + "?watch=true&resourceVersion=" + resourceVersion)
+		log.Debugf("Found %s resource version '%s'", resourcePath, resourceVersion)
+		return c.request(resourcePath + "?watch=true&resourceVersion=" + resourceVersion)
 	}
 
 	retryRequest := func() (*http.Response, error) {
-		return retryRequest(doneCh, ingressRequest)
+		return retryRequest(doneCh, request)
 	}
 
 	return retryRequest
@@ -134,9 +157,9 @@ type genericList struct {
 	ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 }
 
-func (c *client) getIngressResourceVersion() (string, error) {
+func (c *client) getResourceVersion(resourcePath string) (string, error) {
 	var ingresses genericList
-	err := c.requestAndUnmarshall(ingressPath, &ingresses)
+	err := c.requestAndUnmarshall(resourcePath, &ingresses)
 	if err != nil {
 		return "", err
 	}
@@ -144,7 +167,7 @@ func (c *client) getIngressResourceVersion() (string, error) {
 }
 
 // watch returns true if it should be retried, false if the watcher has terminated.
-func watch(w Watcher, request func() (*http.Response, error)) bool {
+func watch(w *watcher, request func() (*http.Response, error)) bool {
 	resp, err := request()
 	if err != nil {
 		log.Infof("Watcher could not make request, shutting down: %v", err)
@@ -152,19 +175,19 @@ func watch(w Watcher, request func() (*http.Response, error)) bool {
 	}
 	defer resp.Body.Close()
 
-	watching(w)
-	defer notWatching(w)
+	w.watching()
+	defer w.notWatching()
 	log.Infof("Watching %v", resp.Request.URL)
 
 	// send an update for a successful watch start
-	w.Updates() <- struct{}{}
+	w.updates <- struct{}{}
 
 	updateCh := make(chan interface{})
 	go handleLongPoll(resp.Body, updateCh)
 
 	for {
 		select {
-		case <-w.Done():
+		case <-w.done:
 			log.Debug("Watcher is done, stopping watch")
 			return false
 		case update := <-updateCh:
@@ -173,7 +196,7 @@ func watch(w Watcher, request func() (*http.Response, error)) bool {
 				return true
 			}
 			log.Debug("Noticed update, sending notification to watcher")
-			w.Updates() <- update
+			w.updates <- update
 		}
 	}
 }
@@ -289,14 +312,6 @@ func (c *client) request(path string) (*http.Response, error) {
 	}
 
 	return resp, nil
-}
-
-func watching(w Watcher) {
-	w.SetHealth(nil)
-}
-
-func notWatching(w Watcher) {
-	w.SetHealth(fmt.Errorf("not watching"))
 }
 
 func (c *client) String() string {

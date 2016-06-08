@@ -5,8 +5,6 @@ import (
 
 	"time"
 
-	"fmt"
-
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
@@ -15,11 +13,51 @@ import (
 
 const smallWaitTime = time.Millisecond * 50
 
+type fakeWatcher struct {
+	mock.Mock
+}
+
+func (w *fakeWatcher) Updates() <-chan interface{} {
+	r := w.Called()
+	return r.Get(0).(<-chan interface{})
+}
+
+func (w *fakeWatcher) Done() chan<- struct{} {
+	r := w.Called()
+	return r.Get(0).(chan<- struct{})
+}
+
+func (w *fakeWatcher) Health() error {
+	r := w.Called()
+	return r.Error(0)
+}
+
+func createFakeWatcher() (*fakeWatcher, chan interface{}, chan struct{}) {
+	watcher := new(fakeWatcher)
+	updateCh := make(chan interface{})
+	doneCh := make(chan struct{})
+	watcher.On("Updates").Return((<-chan interface{})(updateCh))
+	watcher.On("Done").Return((chan<- struct{})(doneCh))
+	return watcher, updateCh, doneCh
+}
+
 func createDefaultStubs() *test.FakeClient {
 	client := new(test.FakeClient)
+	watcher, updateCh, doneCh := createFakeWatcher()
 
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
-	client.On("WatchIngresses", mock.Anything).Return(nil)
+	client.On("WatchIngresses").Return(watcher)
+
+	watcher.On("Health").Return(nil)
+	// clean up the channels
+	t := time.NewTimer(smallWaitTime * 10)
+	go func() {
+		defer close(updateCh)
+		select {
+		case <-doneCh:
+		case <-t.C:
+		}
+	}()
 
 	return client
 }
@@ -74,14 +112,4 @@ func TestControllerIsUnhealthyUntilStarted(t *testing.T) {
 	assert.NoError(controller.Stop())
 	time.Sleep(smallWaitTime)
 	assert.Error(controller.Health(), "should be unhealthy after stopped")
-}
-
-func TestControllerReturnsErrorIfWatcherFails(t *testing.T) {
-	// given
-	client := new(test.FakeClient)
-	controller := New(client)
-	client.On("WatchIngresses", mock.Anything).Return(fmt.Errorf("failed to watch ingresses"))
-
-	// when
-	assert.Error(t, controller.Start())
 }

@@ -43,16 +43,56 @@ func (lb *fakeUpdater) String() string {
 	return "FakeUpdater"
 }
 
+type fakeWatcher struct {
+	mock.Mock
+}
+
+func (w *fakeWatcher) Updates() <-chan interface{} {
+	r := w.Called()
+	return r.Get(0).(<-chan interface{})
+}
+
+func (w *fakeWatcher) Done() chan<- struct{} {
+	r := w.Called()
+	return r.Get(0).(chan<- struct{})
+}
+
+func (w *fakeWatcher) Health() error {
+	r := w.Called()
+	return r.Error(0)
+}
+
+func createFakeWatcher() (*fakeWatcher, chan interface{}, chan struct{}) {
+	watcher := new(fakeWatcher)
+	updateCh := make(chan interface{})
+	doneCh := make(chan struct{})
+	watcher.On("Updates").Return((<-chan interface{})(updateCh))
+	watcher.On("Done").Return((chan<- struct{})(doneCh))
+	return watcher, updateCh, doneCh
+}
+
 func createDefaultStubs() (*fakeUpdater, *test.FakeClient) {
 	updater := new(fakeUpdater)
 	client := new(test.FakeClient)
+	watcher, updateCh, doneCh := createFakeWatcher()
 
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
-	client.On("WatchIngresses", mock.Anything).Return(nil)
+	client.On("WatchIngresses").Return(watcher)
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
 	updater.On("Update", mock.Anything).Return(nil)
 	updater.On("Health").Return(nil)
+
+	watcher.On("Health").Return(nil)
+	// clean up the channels
+	t := time.NewTimer(smallWaitTime * 10)
+	go func() {
+		defer close(updateCh)
+		select {
+		case <-doneCh:
+		case <-t.C:
+		}
+	}()
 
 	return updater, client
 }
@@ -131,17 +171,6 @@ func TestControllerIsUnhealthyIfUpdaterIsUnhealthy(t *testing.T) {
 	assert.Equal(lbErr, controller.Health())
 }
 
-func TestControllerReturnsErrorIfWatcherFails(t *testing.T) {
-	// given
-	lb, _ := createDefaultStubs()
-	client := new(test.FakeClient)
-	controller := newController(lb, client)
-	client.On("WatchIngresses", mock.Anything).Return(fmt.Errorf("failed to watch ingresses"))
-
-	// when
-	assert.Error(t, controller.Start())
-}
-
 func TestControllerReturnsErrorIfUpdaterFails(t *testing.T) {
 	// given
 	_, client := createDefaultStubs()
@@ -161,21 +190,18 @@ func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
 	client := new(test.FakeClient)
 	controller := newController(updater, client)
 
-	watcherChan := make(chan k8s.Watcher, 1)
-	client.On("WatchIngresses", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
-		fmt.Println("WatchIngresses called")
-		watcherChan <- args.Get(0).(k8s.Watcher)
-	})
+	watcher, updateCh, _ := createFakeWatcher()
+	defer close(updateCh)
+
+	client.On("WatchIngresses").Return(watcher)
 	assert.NoError(controller.Start())
 
 	// when
-	watcher, err := getWatcher(watcherChan, smallWaitTime)
-	assert.NoError(err)
-	watcherErr := fmt.Errorf("not watching for updates")
-	watcher.SetHealth(watcherErr)
+	watcherErr := fmt.Errorf("i'm a sad watcher")
+	watcher.On("Health").Return(watcherErr)
 
 	// then
-	assert.Equal(watcherErr, controller.Health())
+	assert.Error(controller.Health())
 }
 
 func TestUpdatesOnIngressUpdates(t *testing.T) {
@@ -187,53 +213,21 @@ func TestUpdatesOnIngressUpdates(t *testing.T) {
 	updater, _ := createDefaultStubs()
 	ingresses := createIngressesFixture()
 	controller := newController(updater, client)
-	watcherChan := make(chan k8s.Watcher, 1)
+
+	watcher, updateCh, _ := createFakeWatcher()
+	defer close(updateCh)
 
 	client.On("GetIngresses").Return(ingresses, nil).Once()
-	client.On("WatchIngresses", mock.Anything).Return(nil).Run(func(args mock.Arguments) {
-		watcherChan <- args.Get(0).(k8s.Watcher)
-	})
+	client.On("WatchIngresses").Return(watcher)
 
 	//when
 	assert.NoError(controller.Start())
-
-	// wait a bit for it to start up
+	updateCh <- ingresses[0]
 	time.Sleep(smallWaitTime)
-
-	// return new set of ingresses, which should be used on update
-	watcher, err := getWatcher(watcherChan, smallWaitTime)
-	assert.Nil(err)
-	err = sendUpdate(watcher, ingresses[0], smallWaitTime)
-	assert.Nil(err)
 
 	//then
 	entries := createLbEntriesFixture()
 	updater.AssertCalled(t, "Update", entries)
-
-	//cleanup
-	assert.NoError(controller.Stop())
-}
-
-func getWatcher(watcher <-chan k8s.Watcher, d time.Duration) (k8s.Watcher, error) {
-	t := time.NewTimer(d)
-	select {
-	case w := <-watcher:
-		return w, nil
-	case <-t.C:
-		return nil, fmt.Errorf("timed out waiting for watcher")
-	}
-}
-
-func sendUpdate(watcher k8s.Watcher, value interface{}, d time.Duration) error {
-	t := time.NewTimer(d)
-	select {
-	case watcher.Updates() <- value:
-		time.Sleep(smallWaitTime) // give it time to be processed
-	case <-t.C:
-		return fmt.Errorf("timed out sending update")
-	}
-
-	return nil
 }
 
 func createLbEntriesFixture() IngressUpdate {

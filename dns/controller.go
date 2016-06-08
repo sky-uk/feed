@@ -35,11 +35,7 @@ func (c *dns) Start() error {
 		return fmt.Errorf("can't restart controller")
 	}
 
-	c.watcher = k8s.NewWatcher()
-	err := c.client.WatchIngresses(c.watcher)
-	if err != nil {
-		return fmt.Errorf("unable to watch ingresses: %v", err)
-	}
+	c.watcher = c.client.WatchIngresses()
 
 	go c.watchForUpdates()
 
@@ -80,16 +76,11 @@ func (c *dns) Health() error {
 }
 
 func (c *dns) watchForUpdates() {
-	for {
-		select {
-		case <-c.watcher.Done():
-			return
-		case <-c.watcher.Updates():
-			log.Info("Received update on watcher")
-			err := c.updateDNSRecords()
-			if err != nil {
-				log.Errorf("Unable to update dns records: %v", err)
-			}
+	for _ = range c.watcher.Updates() {
+		log.Info("Received update on watcher")
+		err := c.updateDNSRecords()
+		if err != nil {
+			log.Errorf("Unable to update dns records: %v", err)
 		}
 	}
 }
