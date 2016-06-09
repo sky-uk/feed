@@ -1,10 +1,6 @@
 package controller
 
-import (
-	"sort"
-
-	log "github.com/Sirupsen/logrus"
-)
+import "sort"
 
 // IngressUpdate data
 type IngressUpdate struct {
@@ -19,44 +15,26 @@ type IngressEntry struct {
 	Host string
 	// Path is the url path after the hostname.
 	Path string
-	// ServiceName is the Kubernetes backend service to proxy traffic to.
-	ServiceName string
+	// Service is a routable address for the Kubernetes backend service to proxy traffic to.
+	ServiceAddress string
 	// ServicePort is the port to proxy traffic to.
 	ServicePort int32
 	// SourceRange is the ip or cidr that is allowed to access the service.
 	Allow string
 }
 
-// FilterInvalidEntries returns a slice of all the valid LoadBalancer entries
-func FilterInvalidEntries(entries []IngressEntry) []IngressEntry {
-	var validEntries []IngressEntry
-
-	for _, entry := range entries {
-		if entry.ValidateEntry() {
-			validEntries = append(validEntries, entry)
-		} else {
-			log.Warnf("Removing invalid load balancer entry for service '%s' host '%s'", entry.ServiceName, entry.Host)
-		}
-	}
-
-	return validEntries
-}
-
-// ValidateEntry returns whether the given entry is valid
-func (entry IngressEntry) ValidateEntry() bool {
+// isEmpty returns true if Host, ServiceAddress, or ServicePort are empty.
+func (entry IngressEntry) isEmpty() bool {
 	if entry.Host == "" {
-		return false
+		return true
 	}
-	if entry.Path == "" {
-		return false
-	}
-	if entry.ServiceName == "" {
-		return false
+	if entry.ServiceAddress == "" {
+		return true
 	}
 	if entry.ServicePort == 0 {
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
 // SortedByName returns the update with entries ordered by their Name.

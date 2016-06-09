@@ -26,33 +26,31 @@ type Controller interface {
 }
 
 type controller struct {
-	updater       Updater
-	client        k8s.Client
-	watcher       k8s.Watcher
-	started       bool
-	startStopLock sync.Mutex
-	serviceDomain string
+	updater     Updater
+	client      k8s.Client
+	watcher     k8s.Watcher
+	watcherDone sync.WaitGroup
+	started     bool
+	sync.Mutex
 }
 
 // Config for creating a new ingress controller.
 type Config struct {
 	Updater          Updater
 	KubernetesClient k8s.Client
-	ServiceDomain    string
 }
 
 // New creates an ingress controller.
 func New(conf Config) Controller {
 	return &controller{
-		updater:       conf.Updater,
-		client:        conf.KubernetesClient,
-		serviceDomain: conf.ServiceDomain,
+		updater: conf.Updater,
+		client:  conf.KubernetesClient,
 	}
 }
 
 func (c *controller) Start() error {
-	c.startStopLock.Lock()
-	defer c.startStopLock.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	if c.started {
 		return fmt.Errorf("controller is already started")
@@ -67,14 +65,23 @@ func (c *controller) Start() error {
 		return fmt.Errorf("unable to start load balancer: %v", err)
 	}
 
-	c.watcher = c.client.WatchIngresses()
-	go c.watchForUpdates()
+	c.watchForUpdates()
 
 	c.started = true
 	return nil
 }
 
 func (c *controller) watchForUpdates() {
+	ingressWatcher := c.client.WatchIngresses()
+	serviceWatcher := c.client.WatchServices()
+	c.watcher = k8s.CombineWatchers(ingressWatcher, serviceWatcher)
+	c.watcherDone.Add(1)
+	go c.handleUpdates()
+}
+
+func (c *controller) handleUpdates() {
+	defer c.watcherDone.Done()
+
 	for range c.watcher.Updates() {
 		log.Info("Received update on watcher")
 		err := c.updateIngresses()
@@ -82,6 +89,8 @@ func (c *controller) watchForUpdates() {
 			log.Errorf("Unable to update ingresses: %v", err)
 		}
 	}
+
+	log.Debug("Controller stopped watching for updates")
 }
 
 func (c *controller) updateIngresses() error {
@@ -90,23 +99,35 @@ func (c *controller) updateIngresses() error {
 	if err != nil {
 		return err
 	}
+	services, err := c.client.GetServices()
+	if err != nil {
+		return err
+	}
+
+	serviceMap := mapNamesToAddresses(services)
 
 	entries := []IngressEntry{}
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {
-				serviceName := fmt.Sprintf("%s.%s.%s",
-					path.Backend.ServiceName, ingress.Namespace, c.serviceDomain)
-				entry := IngressEntry{
-					Name:        ingress.Namespace + "/" + ingress.Name,
-					Host:        rule.Host,
-					Path:        path.Path,
-					ServiceName: serviceName,
-					ServicePort: int32(path.Backend.ServicePort.IntValue()),
-					Allow:       ingress.Annotations[ingressAllowAnnotation],
+
+				serviceName := serviceName{namespace: ingress.Namespace, name: path.Backend.ServiceName}
+
+				if address := serviceMap[serviceName]; address != "" {
+					entry := IngressEntry{
+						Name:           ingress.Namespace + "/" + ingress.Name,
+						Host:           rule.Host,
+						Path:           path.Path,
+						ServiceAddress: address,
+						ServicePort:    int32(path.Backend.ServicePort.IntValue()),
+						Allow:          ingress.Annotations[ingressAllowAnnotation],
+					}
+
+					if !entry.isEmpty() {
+						entries = append(entries, entry)
+					}
 				}
 
-				entries = append(entries, entry)
 			}
 		}
 	}
@@ -119,9 +140,25 @@ func (c *controller) updateIngresses() error {
 	return nil
 }
 
+type serviceName struct {
+	namespace string
+	name      string
+}
+
+func mapNamesToAddresses(services []k8s.Service) map[serviceName]string {
+	m := make(map[serviceName]string)
+
+	for _, svc := range services {
+		name := serviceName{namespace: svc.Namespace, name: svc.Name}
+		m[name] = svc.Spec.ClusterIP
+	}
+
+	return m
+}
+
 func (c *controller) Stop() error {
-	c.startStopLock.Lock()
-	defer c.startStopLock.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	if !c.started {
 		return fmt.Errorf("cannot stop, not started")
@@ -130,9 +167,10 @@ func (c *controller) Stop() error {
 	log.Info("Stopping controller")
 
 	close(c.watcher.Done())
+	c.watcherDone.Wait()
 
 	if err := c.updater.Stop(); err != nil {
-		log.Warn("Error while stopping load balancer: ", err)
+		log.Warnf("Error while stopping: %v", err)
 	}
 
 	c.started = false
@@ -141,8 +179,8 @@ func (c *controller) Stop() error {
 }
 
 func (c *controller) Health() error {
-	c.startStopLock.Lock()
-	defer c.startStopLock.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	if !c.started {
 		return fmt.Errorf("controller has not started")

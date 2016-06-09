@@ -145,7 +145,7 @@ func TestCanSetLogLevel(t *testing.T) {
 	}
 }
 
-func TestReloadOfConfig(t *testing.T) {
+func TestNginxConfigUpdates(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
@@ -162,13 +162,13 @@ func TestReloadOfConfig(t *testing.T) {
 		// Check full ingress entry works.
 		{
 			[]controller.IngressEntry{
-				controller.IngressEntry{
-					Host:        "chris.com",
-					Name:        "chris-ingress",
-					Path:        "/path",
-					ServiceName: "service",
-					ServicePort: 9090,
-					Allow:       "10.82.0.0/16",
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+					Allow:          "10.82.0.0/16",
 				},
 			},
 			[]string{
@@ -193,12 +193,12 @@ func TestReloadOfConfig(t *testing.T) {
 		// Check empty allow skips the allow for the ingress in the output.
 		{
 			[]controller.IngressEntry{
-				controller.IngressEntry{
-					Host:        "foo.com",
-					Name:        "foo-ingress",
-					Path:        "/bar",
-					ServiceName: "lala",
-					ServicePort: 8080,
+				{
+					Host:           "foo.com",
+					Name:           "foo-ingress",
+					Path:           "/bar",
+					ServiceAddress: "lala",
+					ServicePort:    8080,
 				},
 			},
 			[]string{
@@ -223,26 +223,26 @@ func TestReloadOfConfig(t *testing.T) {
 		// Check entries ordered by name.
 		{
 			[]controller.IngressEntry{
-				controller.IngressEntry{
-					Name:        "2-last-ingress",
-					Host:        "foo.com",
-					Path:        "/",
-					ServiceName: "foo",
-					ServicePort: 8080,
+				{
+					Name:           "2-last-ingress",
+					Host:           "foo.com",
+					Path:           "/",
+					ServiceAddress: "foo",
+					ServicePort:    8080,
 				},
-				controller.IngressEntry{
-					Name:        "0-first-ingress",
-					Host:        "foo.com",
-					Path:        "/",
-					ServiceName: "foo",
-					ServicePort: 8080,
+				{
+					Name:           "0-first-ingress",
+					Host:           "foo.com",
+					Path:           "/",
+					ServiceAddress: "foo",
+					ServicePort:    8080,
 				},
-				controller.IngressEntry{
-					Name:        "1-next-ingress",
-					Host:        "foo.com",
-					Path:        "/",
-					ServiceName: "foo",
-					ServicePort: 8080,
+				{
+					Name:           "1-next-ingress",
+					Host:           "foo.com",
+					Path:           "/",
+					ServiceAddress: "foo",
+					ServicePort:    8080,
 				},
 			},
 			[]string{
@@ -296,6 +296,37 @@ func TestReloadOfConfig(t *testing.T) {
 					"    ",
 			},
 		},
+		// Check empty path works.
+		{
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+					Allow:          "10.82.0.0/16",
+				},
+			},
+			[]string{
+				"   # chris-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        allow 10.82.0.0/16;\n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location / {\n" +
+					"            proxy_pass http://service:9090;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -322,50 +353,6 @@ func TestReloadOfConfig(t *testing.T) {
 	mockSignaller.AssertExpectations(t)
 }
 
-func TestResolverIsSpecifiedIfNotEmpty(t *testing.T) {
-	assert := assert.New(t)
-
-	tmpDir := setupWorkDir(t)
-	defer os.Remove(tmpDir)
-
-	resolver := "10.254.0.10:53"
-	lb := New(Conf{
-		BinaryLocation:  "./fake_nginx.sh",
-		WorkingDir:      tmpDir,
-		IngressPort:     port,
-		WorkerProcesses: 1,
-		Resolver:        resolver,
-	})
-	signaller := &mockSignaller{}
-	signaller.On("sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
-	lb.(*nginxLoadBalancer).signaller = signaller
-
-	assert.NoError(lb.Start())
-
-	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
-	assert.NoError(err)
-	configContents := string(config)
-
-	assert.Contains(configContents, "resolver "+resolver+";")
-}
-
-func TestResolverIsNotSpecifiedIfEmpty(t *testing.T) {
-	assert := assert.New(t)
-
-	tmpDir := setupWorkDir(t)
-	defer os.Remove(tmpDir)
-
-	lb, _ := newLb(tmpDir)
-	assert.NoError(lb.Start())
-
-	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
-	assert.NoError(err)
-	configContents := string(config)
-
-	assert.NotContains(configContents, "resolver ")
-
-}
-
 func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
@@ -375,55 +362,17 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	lb.Start()
 
 	entries := []controller.IngressEntry{
-		controller.IngressEntry{
-			Host:        "chris.com",
-			Path:        "/path",
-			ServiceName: "service",
-			ServicePort: 9090,
+		{
+			Host:           "chris.com",
+			Path:           "/path",
+			ServiceAddress: "service",
+			ServicePort:    9090,
 		},
 	}
 	updated, err := lb.Update(controller.IngressUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.True(t, updated)
 
-	updated, err = lb.Update(controller.IngressUpdate{Entries: entries})
-	assert.NoError(t, err)
-	assert.False(t, updated)
-}
-
-func TestInvalidIngressEntryIsIgnored(t *testing.T) {
-	tmpDir := setupWorkDir(t)
-	defer os.Remove(tmpDir)
-	lb, mockSignaller := newLb(tmpDir)
-	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
-
-	lb.Start()
-	entries := []controller.IngressEntry{
-		controller.IngressEntry{
-			Host:        "chris.com",
-			Path:        "/path",
-			ServiceName: "service",
-			ServicePort: 9090,
-		},
-	}
-	updated, err := lb.Update(controller.IngressUpdate{Entries: entries})
-	assert.NoError(t, err)
-
-	// Add an invalid entry
-	entries = []controller.IngressEntry{
-		controller.IngressEntry{ // Invalid due to blank host
-			Host:        "",
-			Path:        "/path",
-			ServiceName: "service",
-			ServicePort: 9090,
-		},
-		controller.IngressEntry{ // Same as the one before
-			Host:        "chris.com",
-			Path:        "/path",
-			ServiceName: "service",
-			ServicePort: 9090,
-		},
-	}
 	updated, err = lb.Update(controller.IngressUpdate{Entries: entries})
 	assert.NoError(t, err)
 	assert.False(t, updated)
