@@ -39,7 +39,24 @@ func TestRetrievesIngressesFromKubernetes(t *testing.T) {
 	ingresses, err := client.GetIngresses()
 	assert.NoError(err)
 
-	assertEqualIngresses(t, ingressFixture.Items, ingresses)
+	assert.Equal(ingressFixture.Items, ingresses)
+}
+
+func TestRetrievesServicesFromKubernetes(t *testing.T) {
+	assert := assert.New(t)
+
+	servicesFixture := createServicesFixture()
+	handler, _ := handleGetServices(servicesFixture)
+	ts := httptest.NewTLSServer(handler)
+	defer ts.Close()
+
+	client, err := New(ts.URL, caCert, testAuthToken)
+	assert.NoError(err)
+
+	services, err := client.GetServices()
+	assert.NoError(err)
+
+	assert.Equal(servicesFixture.Items, services)
 }
 
 func TestErrorIfNon200StatusCode(t *testing.T) {
@@ -74,80 +91,107 @@ func TestErrorIfInvalidJson(t *testing.T) {
 func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 	assert := assert.New(t)
 
-	// given: initial ingresses and a client
-	ingresses := createIngressesFixture()
-	ingresses.ResourceVersion = "99"
+	var tests = []struct {
+		path        string
+		fixture     versioned
+		createWatch func(Client) Watcher
+	}{
+		{
+			ingressPath,
+			createIngressesFixture(),
+			func(client Client) Watcher {
+				return client.WatchIngresses()
+			},
+		},
+		{
+			servicePath,
+			createServicesFixture(),
+			func(client Client) Watcher {
+				return client.WatchServices()
+			},
+		},
+	}
 
-	handler, eventChan := handleGetIngresses(ingresses)
-	ts := httptest.NewTLSServer(handler)
-	defer ts.Close()
-	defer close(eventChan)
+	for _, test := range tests {
+		// given: initial resource and a client
+		resource := test.fixture
+		resource.setVersion("99")
 
-	// and: various events for sending to client
-	okEvent := dummyEvent{Name: "OK"}
-	disconnectEvent := dummyEvent{Name: "DISCONNECT"}
-	badEvent := dummyEvent{Name: "BAD"}
-	goneEvent := dummyEvent{Name: "GONE"}
+		handler, eventChan := handleGet(test.path, resource)
+		ts := httptest.NewTLSServer(handler)
+		defer ts.Close()
+		defer close(eventChan)
 
-	// when: watch ingresses
-	client, err := New(ts.URL, caCert, testAuthToken)
-	assert.NoError(err)
+		// when: watch resource
+		client, err := New(ts.URL, caCert, testAuthToken)
+		assert.NoError(err)
+		watcher := test.createWatch(client)
 
-	watcher := NewWatcher()
-	defer close(watcher.Done())
-	err = client.WatchIngresses(watcher)
-	assert.NoError(err)
+		// consume watcher updates into buffer so the watcher isn't blocked
+		updates := bufferChan(watcher.Updates())
 
-	// consume watcher updates into buffer so the watcher isn't blocked
-	updates := bufferChan(watcher.Updates(), watcher.Done())
+		// then
+		// single update to notify of existing ingresses
+		eventChan <- okEvent
+		assert.Equal(1, countUpdates(updates), "received update for initial ingresses")
+		assert.NoError(watcher.Health())
 
-	// then
-	// single update to notify of existing ingresses
-	eventChan <- okEvent
-	assert.Equal(1, countUpdates(updates), "received update for initial ingresses")
-	assert.NoError(watcher.Health())
+		// send an old resource to test resourceVersion is used
+		oldEvent := dummyEvent{Name: "old-ingress", ResourceVersion: 80}
+		eventChan <- oldEvent
+		assert.Equal(0, countUpdates(updates), "ignore old-ingress")
 
-	// send an old resource to test resourceVersion is used
-	oldEvent := dummyEvent{Name: "old-ingress", ResourceVersion: 80}
-	eventChan <- oldEvent
-	assert.Equal(0, countUpdates(updates), "ignore old-ingress")
+		// send a disconnect event to terminate long poll and ensure that watcher reconnects
+		eventChan <- disconnectEvent
+		assertNotHealthy(t, watcher)
+		eventChan <- okEvent
+		assert.Equal(1, countUpdates(updates), "received update for reconnect")
+		assert.NoError(watcher.Health())
 
-	// send a disconnect event to terminate long poll and ensure that watcher reconnects
-	eventChan <- disconnectEvent
-	assertNotHealthy(t, watcher)
-	eventChan <- okEvent
-	assert.Equal(1, countUpdates(updates), "received update for reconnect")
-	assert.NoError(watcher.Health())
+		// send a modified ingress
+		modifiedIngressEvent := dummyEvent{Name: "modified-ingress", ResourceVersion: 100}
+		eventChan <- modifiedIngressEvent
+		assert.Equal(1, countUpdates(updates), "got modified-ingress")
 
-	// send a modified ingress
-	modifiedIngressEvent := dummyEvent{Name: "modified-ingress", ResourceVersion: 100}
-	eventChan <- modifiedIngressEvent
-	assert.Equal(1, countUpdates(updates), "got modified-ingress")
+		// send 500 bad request to check retry logic
+		// first reset the resource version
+		handlerMutex.Lock()
+		resource.setVersion("110")
+		handlerMutex.Unlock()
 
-	// send 500 bad request to check retry logic
-	// first reset the resource version
-	handlerMutex.Lock()
-	ingresses.ResourceVersion = "110"
-	handlerMutex.Unlock()
+		// then send 500s followed by 410 gone from a k8s restart
+		eventChan <- disconnectEvent
+		eventChan <- badEvent
+		eventChan <- badEvent
+		assertNotHealthy(t, watcher)
+		eventChan <- goneEvent
+		time.Sleep(smallWaitTime * 10)
+		assert.Equal(1, countUpdates(updates), "received update for reconnect")
+		assert.NoError(watcher.Health())
 
-	// then send 500s followed by 410 gone from a k8s restart
-	eventChan <- disconnectEvent
-	eventChan <- badEvent
-	eventChan <- badEvent
-	assertNotHealthy(t, watcher)
-	eventChan <- goneEvent
-	time.Sleep(smallWaitTime * 10)
-	assert.Equal(1, countUpdates(updates), "received update for reconnect")
-	assert.NoError(watcher.Health())
+		// send modified ingress again, should be ignored
+		eventChan <- modifiedIngressEvent
+		assert.Equal(0, countUpdates(updates), "should have ignored modified ingress after reconnect")
 
-	// send modified ingress again, should be ignored
-	eventChan <- modifiedIngressEvent
-	assert.Equal(0, countUpdates(updates), "should have ignored modified ingress after reconnect")
+		// send new modified ingress, should cause an update
+		modified2IngressEvent := dummyEvent{Name: "modified-2-ingress", ResourceVersion: 127}
+		eventChan <- modified2IngressEvent
+		assert.Equal(1, countUpdates(updates), "got modified-2-ingress")
 
-	// send new modified ingress, should cause an update
-	modified2IngressEvent := dummyEvent{Name: "modified-2-ingress", ResourceVersion: 127}
-	eventChan <- modified2IngressEvent
-	assert.Equal(1, countUpdates(updates), "got modified-2-ingress")
+		close(watcher.Done())
+	}
+}
+
+type versioned interface {
+	setVersion(string)
+}
+
+func (i *IngressList) setVersion(v string) {
+	i.ResourceVersion = v
+}
+
+func (s *ServiceList) setVersion(v string) {
+	s.ResourceVersion = v
 }
 
 func assertNotHealthy(t *testing.T, w Watcher) {
@@ -156,17 +200,12 @@ func assertNotHealthy(t *testing.T, w Watcher) {
 	assert.Error(t, w.Health(), "watcher should not be watching")
 }
 
-func bufferChan(ch <-chan interface{}, done <-chan struct{}) <-chan interface{} {
+func bufferChan(ch <-chan interface{}) <-chan interface{} {
 	buffer := make(chan interface{}, 100)
 	go func() {
 		defer close(buffer)
-		for {
-			select {
-			case <-done:
-				return
-			case update := <-ch:
-				buffer <- update
-			}
+		for update := range ch {
+			buffer <- update
 		}
 	}()
 	return buffer
@@ -185,19 +224,6 @@ func countUpdates(updates <-chan interface{}) int {
 	}
 }
 
-func assertEqualIngresses(t *testing.T, expected []Ingress, actual []Ingress) {
-	assert := assert.New(t)
-	assert.Equal(len(expected), len(actual))
-	for i, expected := range expected {
-		actual := actual[i]
-		assert.Equal(expected.Name, actual.Name)
-		assert.Equal(len(expected.Spec.Rules), len(actual.Spec.Rules))
-		for j := range expected.Spec.Rules {
-			assert.Equal(expected.Spec.Rules[j], actual.Spec.Rules[j])
-		}
-	}
-}
-
 type dummyEvent struct {
 	Name            string
 	ResourceVersion int
@@ -206,13 +232,21 @@ type dummyEvent struct {
 var handlerMutex = &sync.Mutex{}
 
 func handleGetIngresses(ingressList *IngressList) (http.Handler, chan<- dummyEvent) {
+	return handleGet(ingressPath, ingressList)
+}
+
+func handleGetServices(serviceList *ServiceList) (http.Handler, chan<- dummyEvent) {
+	return handleGet(servicePath, serviceList)
+}
+
+func handleGet(path string, fixture interface{}) (http.Handler, chan<- dummyEvent) {
 	eventChan := make(chan dummyEvent, 100)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Debug("test: Handling ingress request")
 		defer log.Debug("test: Finished handling ingress request")
 
-		if r.URL.Path != "/apis/extensions/v1beta1/ingresses" {
+		if r.URL.Path != path {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -227,7 +261,7 @@ func handleGetIngresses(ingressList *IngressList) (http.Handler, chan<- dummyEve
 		} else {
 			handlerMutex.Lock()
 			defer handlerMutex.Unlock()
-			writeAsJSON(ingressList, w)
+			writeAsJSON(fixture, w)
 		}
 
 	}), eventChan
@@ -242,6 +276,12 @@ func validAuthToken(r *http.Request) bool {
 	return "Bearer "+testAuthToken == r.Header["Authorization"][0]
 }
 
+// various events for sending to client
+var okEvent = dummyEvent{Name: "OK"}
+var disconnectEvent = dummyEvent{Name: "DISCONNECT"}
+var badEvent = dummyEvent{Name: "BAD"}
+var goneEvent = dummyEvent{Name: "GONE"}
+
 func handleLongPollWatch(eventChan <-chan dummyEvent, w http.ResponseWriter, r *http.Request) {
 	resourceVersion, _ := strconv.Atoi(r.FormValue("resourceVersion"))
 
@@ -252,18 +292,18 @@ func handleLongPollWatch(eventChan <-chan dummyEvent, w http.ResponseWriter, r *
 			if event.Name == "" {
 				return
 			}
-			if event.Name == "OK" {
+			if event == okEvent {
 				w.WriteHeader(http.StatusOK)
 				flush(w)
 			}
-			if event.Name == "DISCONNECT" {
+			if event == disconnectEvent {
 				return
 			}
-			if event.Name == "BAD" {
+			if event == badEvent {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			if event.Name == "GONE" {
+			if event == goneEvent {
 				w.WriteHeader(http.StatusGone)
 				flush(w)
 			}
@@ -320,6 +360,26 @@ func createIngressesFixture() *IngressList {
 						Paths: paths,
 					}},
 				}},
+			},
+		},
+	}}
+}
+
+func createServicesFixture() *ServiceList {
+	return &ServiceList{Items: []Service{
+		Service{
+			ObjectMeta: ObjectMeta{Name: "foo-service"},
+			Spec: ServiceSpec{
+				Type: ServiceTypeClusterIP,
+				Ports: []ServicePort{ServicePort{
+					Name:       "http",
+					Protocol:   ProtocolTCP,
+					Port:       8080,
+					TargetPort: FromInt(80),
+				}},
+				Selector:        map[string]string{"app": "foo-app"},
+				ClusterIP:       "10.254.0.99",
+				SessionAffinity: ServiceAffinityNone,
 			},
 		},
 	}}

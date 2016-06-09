@@ -1,14 +1,20 @@
 package k8s
 
-import "github.com/sky-uk/feed/util"
+import (
+	"fmt"
 
-// Watcher provides channels for receiving updates.
+	"github.com/sky-uk/feed/util"
+)
+
+// Watcher provides channels for receiving updates. It tries its best to run forever, retrying
+// if the underlying connection fails. Use the Health() method to check the state of watcher.
 type Watcher interface {
-	Updates() chan interface{}
-	Done() chan struct{}
-	// Health returns nil if healthy, error otherwise.
+	// Updates provides update notification.
+	Updates() <-chan interface{}
+	// Done should be closed to stop watching.
+	Done() chan<- struct{}
+	// Health returns nil if healthy, error otherwise such as if the watch fails.
 	Health() error
-	SetHealth(error)
 }
 
 type watcher struct {
@@ -18,18 +24,18 @@ type watcher struct {
 }
 
 // NewWatcher returns an initialized watcher.
-func NewWatcher() Watcher {
+func newWatcher() *watcher {
 	return &watcher{
 		updates: make(chan interface{}),
 		done:    make(chan struct{}),
 	}
 }
 
-func (w *watcher) Updates() chan interface{} {
+func (w *watcher) Updates() <-chan interface{} {
 	return w.updates
 }
 
-func (w *watcher) Done() chan struct{} {
+func (w *watcher) Done() chan<- struct{} {
 	return w.done
 }
 
@@ -37,6 +43,10 @@ func (w *watcher) Health() error {
 	return w.health.Get()
 }
 
-func (w *watcher) SetHealth(err error) {
-	w.health.Set(err)
+func (w *watcher) watching() {
+	w.health.Set(nil)
+}
+
+func (w *watcher) notWatching() {
+	w.health.Set(fmt.Errorf("not watching"))
 }

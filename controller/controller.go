@@ -67,12 +67,7 @@ func (c *controller) Start() error {
 		return fmt.Errorf("unable to start load balancer: %v", err)
 	}
 
-	c.watcher = k8s.NewWatcher()
-	err = c.client.WatchIngresses(c.watcher)
-	if err != nil {
-		return fmt.Errorf("unable to watch ingresses: %v", err)
-	}
-
+	c.watcher = c.client.WatchIngresses()
 	go c.watchForUpdates()
 
 	c.started = true
@@ -80,21 +75,16 @@ func (c *controller) Start() error {
 }
 
 func (c *controller) watchForUpdates() {
-	for {
-		select {
-		case <-c.watcher.Done():
-			return
-		case <-c.watcher.Updates():
-			log.Info("Received update on watcher")
-			err := c.updateLoadBalancer()
-			if err != nil {
-				log.Errorf("Unable to update load balancer: %v", err)
-			}
+	for range c.watcher.Updates() {
+		log.Info("Received update on watcher")
+		err := c.updateIngresses()
+		if err != nil {
+			log.Errorf("Unable to update ingresses: %v", err)
 		}
 	}
 }
 
-func (c *controller) updateLoadBalancer() error {
+func (c *controller) updateIngresses() error {
 	ingresses, err := c.client.GetIngresses()
 	log.Infof("Found %d ingress(es)", len(ingresses))
 	if err != nil {
@@ -121,7 +111,7 @@ func (c *controller) updateLoadBalancer() error {
 		}
 	}
 
-	log.Infof("Updating load balancer with %d entry(s)", len(entries))
+	log.Infof("Updating with %d ingress entry(s)", len(entries))
 	if err := c.updater.Update(IngressUpdate{Entries: entries}); err != nil {
 		return err
 	}
