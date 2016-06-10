@@ -77,7 +77,7 @@ http {
 
     # Status port. This should be firewalled to only allow internal access.
     server {
-        listen {{ .Config.StatusPort }} default_server reuseport;
+        listen {{ .Config.HealthPort }} default_server reuseport;
 
         location /health {
             access_log off;
