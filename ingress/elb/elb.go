@@ -5,6 +5,8 @@ import (
 
 	"errors"
 
+	"sync"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
@@ -49,6 +51,7 @@ type elb struct {
 	instanceID          string
 	elbs                []string
 	registeredFrontends int
+	sync.Mutex
 }
 
 // ELB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
@@ -68,6 +71,8 @@ type EC2Metadata interface {
 }
 
 func (e *elb) Attach() error {
+	e.Lock()
+	defer e.Unlock()
 
 	if e.expectedFrontends == 0 {
 		return nil
@@ -191,6 +196,9 @@ func (e *elb) Detach() error {
 }
 
 func (e *elb) Health() error {
+	// Lock required to ensure visibility of e.registeredFrontends
+	e.Lock()
+	defer e.Unlock()
 	if e.registeredFrontends != e.expectedFrontends {
 		return fmt.Errorf("expected frontends %d registered frontends %d", e.expectedFrontends, e.registeredFrontends)
 	}
