@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/ingress"
 )
 
@@ -70,7 +71,7 @@ type EC2Metadata interface {
 	GetInstanceIdentityDocument() (ec2metadata.EC2InstanceIdentityDocument, error)
 }
 
-func (e *elb) Attach() error {
+func (e *elb) Start() error {
 	e.Lock()
 	defer e.Unlock()
 
@@ -174,8 +175,8 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 	return clusterFrontEnds, nil
 }
 
-// Detach removes this instance from all the front end ELBs
-func (e *elb) Detach() error {
+// Stop removes this instance from all the front end ELBs
+func (e *elb) Stop() error {
 	var failed = false
 	for _, elb := range e.elbs {
 		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb)
@@ -202,6 +203,10 @@ func (e *elb) Health() error {
 	if e.registeredFrontends != e.expectedFrontends {
 		return fmt.Errorf("expected frontends %d registered frontends %d", e.expectedFrontends, e.registeredFrontends)
 	}
+	return nil
+}
+
+func (e *elb) Update(controller.IngressUpdate) error {
 	return nil
 }
 

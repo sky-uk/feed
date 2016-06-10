@@ -92,7 +92,7 @@ func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 }
 
 func newController(lb Updater, client k8s.Client) Controller {
-	return New(Config{Updater: lb, KubernetesClient: client})
+	return New(Config{Updaters: []Updater{lb}, KubernetesClient: client})
 }
 
 func TestControllerCanBeStartedAndStopped(t *testing.T) {
@@ -204,6 +204,43 @@ func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
 	assert.Error(controller.Health())
 	assert.Error(controller.Health())
 	assert.NoError(controller.Health())
+
+	// cleanup
+	controller.Stop()
+}
+
+func TestUnhealthyIfUpdaterFails(t *testing.T) {
+	// given
+	assert := assert.New(t)
+	updater := new(fakeUpdater)
+	client := new(fake.FakeClient)
+	controller := newController(updater, client)
+
+	ingressWatcher, updateCh, _ := createFakeWatcher()
+	serviceWatcher, _, _ := createFakeWatcher()
+	ingressWatcher.On("Health").Return(nil)
+	serviceWatcher.On("Health").Return(nil)
+
+	updater.On("Start").Return(nil)
+	updater.On("Stop").Return(nil)
+	updater.On("Update", mock.Anything).Return(nil).Once()
+	updater.On("Update", mock.Anything).Return(fmt.Errorf("kaboom, update failed :(")).Once()
+	updater.On("Health").Return(nil)
+
+	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
+	client.On("GetServices").Return([]k8s.Service{}, nil)
+	client.On("WatchIngresses").Return(ingressWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
+	assert.NoError(controller.Start())
+
+	// expect
+	updateCh <- struct{}{}
+	time.Sleep(smallWaitTime)
+	assert.NoError(controller.Health())
+
+	updateCh <- struct{}{}
+	time.Sleep(smallWaitTime)
+	assert.Error(controller.Health())
 
 	// cleanup
 	controller.Stop()

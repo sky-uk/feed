@@ -159,18 +159,19 @@ func (lb *nginxLoadBalancer) Stop() error {
 	return err
 }
 
-func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) (bool, error) {
+func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
 	updated, err := lb.update(entries.SortedByName())
 	if err != nil {
-		return false, fmt.Errorf("unable to update nginx: %v", err)
+		return fmt.Errorf("unable to update nginx: %v", err)
 	}
 	if updated {
 		err = lb.signaller.sighup(lb.cmd.Process)
 		if err != nil {
-			return false, fmt.Errorf("unable to signal nginx to reload: %v", err)
+			return fmt.Errorf("unable to signal nginx to reload: %v", err)
 		}
+		log.Info("Nginx updated")
 	}
-	return updated, err
+	return err
 }
 
 func (lb *nginxLoadBalancer) update(entries controller.IngressUpdate) (bool, error) {

@@ -11,11 +11,12 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"
+	"github.com/sky-uk/feed/util"
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
 
-// Controller operates on ingress resources.
+// Controller operates on ingress resources, listening for updates and notifying its Updaters.
 type Controller interface {
 	// Run the controller, returning immediately after it starts or an error occurs.
 	Start() error
@@ -26,25 +27,26 @@ type Controller interface {
 }
 
 type controller struct {
-	updater     Updater
-	client      k8s.Client
-	watcher     k8s.Watcher
-	watcherDone sync.WaitGroup
-	started     bool
+	client        k8s.Client
+	updaters      []Updater
+	watcher       k8s.Watcher
+	watcherDone   sync.WaitGroup
+	started       bool
+	updatesHealth util.SafeError
 	sync.Mutex
 }
 
 // Config for creating a new ingress controller.
 type Config struct {
-	Updater          Updater
 	KubernetesClient k8s.Client
+	Updaters         []Updater
 }
 
 // New creates an ingress controller.
 func New(conf Config) Controller {
 	return &controller{
-		updater: conf.Updater,
-		client:  conf.KubernetesClient,
+		client:   conf.KubernetesClient,
+		updaters: conf.Updaters,
 	}
 }
 
@@ -60,9 +62,10 @@ func (c *controller) Start() error {
 		return fmt.Errorf("can't restart controller")
 	}
 
-	err := c.updater.Start()
-	if err != nil {
-		return fmt.Errorf("unable to start load balancer: %v", err)
+	for _, u := range c.updaters {
+		if err := u.Start(); err != nil {
+			return fmt.Errorf("unable to start updater: %v", err)
+		}
 	}
 
 	c.watchForUpdates()
@@ -84,9 +87,11 @@ func (c *controller) handleUpdates() {
 
 	for range c.watcher.Updates() {
 		log.Info("Received update on watcher")
-		err := c.updateIngresses()
-		if err != nil {
+		if err := c.updateIngresses(); err != nil {
+			c.updatesHealth.Set(err)
 			log.Errorf("Unable to update ingresses: %v", err)
+		} else {
+			c.updatesHealth.Set(nil)
 		}
 	}
 
@@ -133,8 +138,11 @@ func (c *controller) updateIngresses() error {
 	}
 
 	log.Infof("Updating with %d ingress entry(s)", len(entries))
-	if err := c.updater.Update(IngressUpdate{Entries: entries}); err != nil {
-		return err
+	update := IngressUpdate{Entries: entries}
+	for _, u := range c.updaters {
+		if err := u.Update(update); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -169,8 +177,10 @@ func (c *controller) Stop() error {
 	close(c.watcher.Done())
 	c.watcherDone.Wait()
 
-	if err := c.updater.Stop(); err != nil {
-		log.Warnf("Error while stopping: %v", err)
+	for _, u := range c.updaters {
+		if err := u.Stop(); err != nil {
+			log.Warnf("Error while stopping: %v", err)
+		}
 	}
 
 	c.started = false
@@ -186,12 +196,18 @@ func (c *controller) Health() error {
 		return fmt.Errorf("controller has not started")
 	}
 
-	if err := c.updater.Health(); err != nil {
-		return err
+	for _, u := range c.updaters {
+		if err := u.Health(); err != nil {
+			return err
+		}
 	}
 
 	if err := c.watcher.Health(); err != nil {
 		return err
+	}
+
+	if err := c.updatesHealth.Get(); err != nil {
+		return fmt.Errorf("updates failed to apply: %v", err)
 	}
 
 	return nil
