@@ -21,11 +21,10 @@ var (
 	tokenFile              string
 	ingressPort            int
 	ingressAllow           string
-	ingressStatusPort      int
+	ingressHealthPort      int
 	healthPort             int
 	nginxBinary            string
 	nginxWorkDir           string
-	nginxResolver          string
 	nginxWorkerProcesses   int
 	nginxWorkerConnections int
 	nginxKeepAliveSeconds  int
@@ -42,7 +41,7 @@ func init() {
 		defaultTokenFile              = "/run/secrets/kubernetes.io/serviceaccount/token"
 		defaultIngressPort            = 8080
 		defaultIngressAllow           = ""
-		defaultIngressStatusPort      = 8081
+		defaultIngressHealthPort      = 8081
 		defaultHealthPort             = 12082
 		defaultNginxBinary            = "/usr/sbin/nginx"
 		defaultNginxWorkingDir        = "/nginx"
@@ -65,19 +64,17 @@ func init() {
 		"File containing kubernetes client authentication token.")
 	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort,
 		"Port to serve ingress traffic to backend services.")
-	flag.IntVar(&ingressStatusPort, "ingress-status-port", defaultIngressStatusPort,
+	flag.IntVar(&ingressHealthPort, "ingress-health-port", defaultIngressHealthPort,
 		"Port for ingress /health and /status pages. Should be used by frontends to determine if ingress is available.")
 	flag.StringVar(&ingressAllow, "ingress-allow", defaultIngressAllow,
 		"Source IP or CIDR to allow ingress access by default. This is in addition to the sky.uk/allow "+
 			"annotation on ingress resources. Leave empty to deny all access by default.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
-		"Port for checking the health of the ingress controller.")
+		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
 	flag.StringVar(&nginxBinary, "nginx-binary", defaultNginxBinary,
 		"Location of nginx binary.")
 	flag.StringVar(&nginxWorkDir, "nginx-workdir", defaultNginxWorkingDir,
 		"Directory to store nginx files. Also the location of the nginx.tmpl file.")
-	flag.StringVar(&nginxResolver, "nginx-resolver", "",
-		"Address to resolve DNS entries for backends. Leave blank to use host DNS resolving.")
 	flag.IntVar(&nginxWorkerProcesses, "nginx-workers", defaultNginxWorkers,
 		"Number of nginx worker processes.")
 	flag.IntVar(&nginxWorkerConnections, "nginx-worker-connections", defaultNginxWorkerConnections,
@@ -128,8 +125,7 @@ func createIngress() controller.Updater {
 		WorkerProcesses:   nginxWorkerProcesses,
 		WorkerConnections: nginxWorkerConnections,
 		KeepAliveSeconds:  nginxKeepAliveSeconds,
-		StatusPort:        ingressStatusPort,
-		Resolver:          nginxResolver,
+		HealthPort:        ingressHealthPort,
 		DefaultAllow:      ingressAllow,
 	})
 	return ingress.New(frontend, proxy)

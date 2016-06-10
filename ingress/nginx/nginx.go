@@ -30,9 +30,8 @@ type Conf struct {
 	WorkerProcesses   int
 	WorkerConnections int
 	KeepAliveSeconds  int
-	StatusPort        int
+	HealthPort        int
 	IngressPort       int
-	Resolver          string
 	DefaultAllow      string
 	LogLevel          string
 }
