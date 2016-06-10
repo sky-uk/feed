@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"errors"
+
 	"github.com/sky-uk/feed/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -41,12 +43,17 @@ type fakeFrontend struct {
 	mock.Mock
 }
 
-func (f *fakeFrontend) Attach() (int, error) {
+func (f *fakeFrontend) Attach() error {
 	args := f.Called()
-	return args.Int(0), args.Error(1)
+	return args.Error(0)
 }
 
 func (f *fakeFrontend) Detach() error {
+	args := f.Called()
+	return args.Error(0)
+}
+
+func (f *fakeFrontend) Health() error {
 	args := f.Called()
 	return args.Error(0)
 }
@@ -55,8 +62,9 @@ func createDefaultStubs() (*fakeFrontend, *fakeProxy) {
 	frontend := new(fakeFrontend)
 	proxy := new(fakeProxy)
 
-	frontend.On("Attach").Return(1, nil)
+	frontend.On("Attach").Return(nil)
 	frontend.On("Detach").Return(nil)
+	frontend.On("Health").Return(nil)
 	proxy.On("Start").Return(nil)
 	proxy.On("Stop").Return(nil)
 	proxy.On("Update", mock.Anything).Return(nil)
@@ -69,7 +77,7 @@ func TestAttachesFrontEndOnStart(t *testing.T) {
 	_, proxy := createDefaultStubs()
 	frontend := new(fakeFrontend)
 	lb := New(frontend, proxy)
-	frontend.On("Attach").Return(5, nil)
+	frontend.On("Attach").Return(nil)
 
 	assert.NoError(t, lb.Start())
 	mock.AssertExpectationsForObjects(t, frontend.Mock)
@@ -79,7 +87,7 @@ func TestDetachOnStop(t *testing.T) {
 	_, proxy := createDefaultStubs()
 	frontend := new(fakeFrontend)
 	lb := New(frontend, proxy)
-	frontend.On("Attach").Return(5, nil)
+	frontend.On("Attach").Return(nil)
 	frontend.On("Detach").Return(nil)
 	lb.Start()
 
@@ -104,7 +112,7 @@ func TestUpdaterReturnsErrorIfFrontendFails(t *testing.T) {
 	_, proxy := createDefaultStubs()
 	frontend := new(fakeFrontend)
 	controller := New(frontend, proxy)
-	frontend.On("Attach").Return(0, fmt.Errorf("kaboooom"))
+	frontend.On("Attach").Return(fmt.Errorf("kaboooom"))
 
 	// when
 	assert.Error(t, controller.Start())
@@ -117,7 +125,22 @@ func TestUpdaterReturnsHealthOfProxy(t *testing.T) {
 	proxy.On("Start").Return(nil)
 	proxy.On("Stop").Return(nil)
 	proxy.On("Health").Return(nil).Once()
-	proxy.On("Health").Return(fmt.Errorf("AURGHGA"))
+	proxy.On("Health").Return(errors.New("AURGHGA"))
+
+	assert := assert.New(t)
+	assert.NoError(controller.Start())
+
+	assert.NoError(controller.Health(), "first it's healthy")
+	assert.Error(controller.Health(), "then it's not")
+}
+
+func TestUpdaterReturnsHealthOfFrontEnd(t *testing.T) {
+	_, proxy := createDefaultStubs()
+	frontend := new(fakeFrontend)
+	controller := New(frontend, proxy)
+	frontend.On("Attach").Return(nil)
+	frontend.On("Health").Return(nil).Once()
+	frontend.On("Health").Return(errors.New("Oh dear oh dear"))
 
 	assert := assert.New(t)
 	assert.NoError(controller.Start())

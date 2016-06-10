@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
 )
 
@@ -12,13 +11,6 @@ type updater struct {
 	frontend Frontend
 	proxy    Proxy
 }
-
-var attachedFrontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Namespace: "feed",
-	Subsystem: "ingress",
-	Name:      "frontends_attached",
-	Help:      "The total number of frontends attached",
-})
 
 // New creates an updater for the external frontend and internal proxy.
 func New(frontend Frontend, proxy Proxy) controller.Updater {
@@ -29,14 +21,11 @@ func New(frontend Frontend, proxy Proxy) controller.Updater {
 }
 
 func (u *updater) Start() error {
-	prometheus.Register(attachedFrontendGauge)
 
-	frontEnds, err := u.frontend.Attach()
+	err := u.frontend.Attach()
 	if err != nil {
 		return fmt.Errorf("unable to attach to front end %v", err)
 	}
-
-	attachedFrontendGauge.Set(float64(frontEnds))
 
 	err = u.proxy.Start()
 
@@ -61,6 +50,10 @@ func (u *updater) Stop() error {
 
 func (u *updater) Health() error {
 	if err := u.proxy.Health(); err != nil {
+		return err
+	}
+
+	if err := u.frontend.Health(); err != nil {
 		return err
 	}
 
