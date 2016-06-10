@@ -216,8 +216,7 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 	}
 
 	var output bytes.Buffer
-	validEntries := controller.FilterInvalidEntries(update.Entries)
-	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: validEntries})
+	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: update.Entries})
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("Unable to execute nginx config duration. It will be out of date: %v", err)

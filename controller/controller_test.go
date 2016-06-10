@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/sky-uk/feed/k8s"
-	"github.com/sky-uk/feed/util/test"
+	fake "github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -64,41 +64,35 @@ func (w *fakeWatcher) Health() error {
 
 func createFakeWatcher() (*fakeWatcher, chan interface{}, chan struct{}) {
 	watcher := new(fakeWatcher)
-	updateCh := make(chan interface{})
+	updateCh := make(chan interface{}, 1)
 	doneCh := make(chan struct{})
 	watcher.On("Updates").Return((<-chan interface{})(updateCh))
 	watcher.On("Done").Return((chan<- struct{})(doneCh))
 	return watcher, updateCh, doneCh
 }
 
-func createDefaultStubs() (*fakeUpdater, *test.FakeClient) {
+func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 	updater := new(fakeUpdater)
-	client := new(test.FakeClient)
-	watcher, updateCh, doneCh := createFakeWatcher()
+	client := new(fake.FakeClient)
+	ingressWatcher, _, _ := createFakeWatcher()
+	serviceWatcher, _, _ := createFakeWatcher()
 
 	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
-	client.On("WatchIngresses").Return(watcher)
+	client.On("GetServices").Return([]k8s.Service{}, nil)
+	client.On("WatchIngresses").Return(ingressWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
 	updater.On("Update", mock.Anything).Return(nil)
 	updater.On("Health").Return(nil)
-
-	watcher.On("Health").Return(nil)
-	// clean up the channels
-	t := time.NewTimer(smallWaitTime * 10)
-	go func() {
-		defer close(updateCh)
-		select {
-		case <-doneCh:
-		case <-t.C:
-		}
-	}()
+	ingressWatcher.On("Health").Return(nil)
+	serviceWatcher.On("Health").Return(nil)
 
 	return updater, client
 }
 
 func newController(lb Updater, client k8s.Client) Controller {
-	return New(Config{Updater: lb, KubernetesClient: client, ServiceDomain: serviceDomain})
+	return New(Config{Updater: lb, KubernetesClient: client})
 }
 
 func TestControllerCanBeStartedAndStopped(t *testing.T) {
@@ -169,6 +163,8 @@ func TestControllerIsUnhealthyIfUpdaterIsUnhealthy(t *testing.T) {
 	assert.NoError(controller.Start())
 	assert.NoError(controller.Health())
 	assert.Equal(lbErr, controller.Health())
+
+	controller.Stop()
 }
 
 func TestControllerReturnsErrorIfUpdaterFails(t *testing.T) {
@@ -187,57 +183,139 @@ func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
 	// given
 	assert := assert.New(t)
 	updater, _ := createDefaultStubs()
-	client := new(test.FakeClient)
+	client := new(fake.FakeClient)
 	controller := newController(updater, client)
 
-	watcher, updateCh, _ := createFakeWatcher()
-	defer close(updateCh)
+	ingressWatcher, _, _ := createFakeWatcher()
+	serviceWatcher, _, _ := createFakeWatcher()
 
-	client.On("WatchIngresses").Return(watcher)
+	client.On("WatchIngresses").Return(ingressWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
 	assert.NoError(controller.Start())
 
 	// when
 	watcherErr := fmt.Errorf("i'm a sad watcher")
-	watcher.On("Health").Return(watcherErr)
+	ingressWatcher.On("Health").Return(watcherErr).Once()
+	ingressWatcher.On("Health").Return(nil)
+	serviceWatcher.On("Health").Return(watcherErr).Once()
+	serviceWatcher.On("Health").Return(nil)
 
 	// then
 	assert.Error(controller.Health())
+	assert.Error(controller.Health())
+	assert.NoError(controller.Health())
+
+	// cleanup
+	controller.Stop()
 }
 
-func TestUpdatesOnIngressUpdates(t *testing.T) {
-	//setup
+func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
+	//given
 	assert := assert.New(t)
 
-	//given
-	client := new(test.FakeClient)
-	updater, _ := createDefaultStubs()
-	ingresses := createIngressesFixture()
-	controller := newController(updater, client)
+	var tests = []struct {
+		description string
+		ingresses   []k8s.Ingress
+		services    []k8s.Service
+		entries     IngressUpdate
+	}{
+		{
+			"ingress with corresponding service",
+			createDefaultIngresses(),
+			createDefaultServices(),
+			createLbEntriesFixture(),
+		},
+		{
+			"ingress with extra services",
+			createDefaultIngresses(),
+			append(createDefaultServices(),
+				createServiceFixture("another one", ingressNamespace, serviceIP)...),
+			createLbEntriesFixture(),
+		},
+		{
+			"ingress without corresponding service",
+			createDefaultIngresses(),
+			[]k8s.Service{},
+			IngressUpdate{Entries: []IngressEntry{}},
+		},
+		{
+			"ingress with service with non-matching namespace",
+			createDefaultIngresses(),
+			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
+			IngressUpdate{Entries: []IngressEntry{}},
+		},
+		{
+			"ingress with service with non-matching name",
+			createDefaultIngresses(),
+			createServiceFixture("lalala service", ingressNamespace, serviceIP),
+			IngressUpdate{Entries: []IngressEntry{}},
+		},
+		{
+			"ingress with missing host name",
+			createIngressesFixture("", ingressSvcName, ingressSvcPort),
+			createDefaultServices(),
+			IngressUpdate{Entries: []IngressEntry{}},
+		},
+		{
+			"ingress with missing service name",
+			createIngressesFixture(ingressHost, "", ingressSvcPort),
+			createDefaultServices(),
+			IngressUpdate{Entries: []IngressEntry{}},
+		},
+		{
+			"ingress with missing service port",
+			createIngressesFixture(ingressHost, ingressSvcName, 0),
+			createDefaultServices(),
+			IngressUpdate{Entries: []IngressEntry{}},
+		},
+		{
+			"ingress with missing service IP",
+			createDefaultIngresses(),
+			createServiceFixture(ingressSvcName, ingressNamespace, ""),
+			IngressUpdate{Entries: []IngressEntry{}},
+		},
+	}
 
-	watcher, updateCh, _ := createFakeWatcher()
-	defer close(updateCh)
+	for _, test := range tests {
+		fmt.Printf("test: %s\n", test.description)
+		client := new(fake.FakeClient)
+		updater := new(fakeUpdater)
+		controller := newController(updater, client)
 
-	client.On("GetIngresses").Return(ingresses, nil).Once()
-	client.On("WatchIngresses").Return(watcher)
+		updater.On("Start").Return(nil)
+		updater.On("Stop").Return(nil)
+		// once for ingress update, once for service update
+		updater.On("Update", test.entries).Return(nil).Times(2)
 
-	//when
-	assert.NoError(controller.Start())
-	updateCh <- ingresses[0]
-	time.Sleep(smallWaitTime)
+		client.On("GetIngresses").Return(test.ingresses, nil)
+		client.On("GetServices").Return(test.services, nil)
 
-	//then
-	entries := createLbEntriesFixture()
-	updater.AssertCalled(t, "Update", entries)
+		ingressWatcher, ingressCh, _ := createFakeWatcher()
+		serviceWatcher, serviceCh, _ := createFakeWatcher()
+		client.On("WatchIngresses").Return(ingressWatcher)
+		client.On("WatchServices").Return(serviceWatcher)
+
+		//when
+		assert.NoError(controller.Start())
+		ingressCh <- struct{}{}
+		serviceCh <- struct{}{}
+		time.Sleep(smallWaitTime)
+
+		//then
+		assert.NoError(controller.Stop())
+		time.Sleep(smallWaitTime)
+		updater.AssertExpectations(t)
+	}
 }
 
 func createLbEntriesFixture() IngressUpdate {
-	return IngressUpdate{Entries: []IngressEntry{IngressEntry{
-		Name:        ingressNamespace + "/" + ingressName,
-		Host:        ingressHost,
-		Path:        ingressPath,
-		ServiceName: ingressSvcName + "." + ingressNamespace + "." + serviceDomain,
-		ServicePort: ingressSvcPort,
-		Allow:       ingressAllow,
+	return IngressUpdate{Entries: []IngressEntry{{
+		Name:           ingressNamespace + "/" + ingressName,
+		Host:           ingressHost,
+		Path:           ingressPath,
+		ServiceAddress: serviceIP,
+		ServicePort:    ingressSvcPort,
+		Allow:          ingressAllow,
 	}}}
 }
 
@@ -248,32 +326,54 @@ const (
 	ingressSvcName   = "foo-svc"
 	ingressSvcPort   = 80
 	ingressNamespace = "happysky"
-	serviceDomain    = "svc.skycluster"
 	ingressAllow     = "10.82.0.0/16"
+	serviceIP        = "10.254.0.82"
 )
 
-func createIngressesFixture() []k8s.Ingress {
-	paths := []k8s.HTTPIngressPath{k8s.HTTPIngressPath{
+func createDefaultIngresses() []k8s.Ingress {
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort)
+}
+
+func createIngressesFixture(host string, serviceName string, servicePort int) []k8s.Ingress {
+	paths := []k8s.HTTPIngressPath{{
 		Path: ingressPath,
 		Backend: k8s.IngressBackend{
-			ServiceName: ingressSvcName,
-			ServicePort: k8s.FromInt(ingressSvcPort),
+			ServiceName: serviceName,
+			ServicePort: k8s.FromInt(servicePort),
 		},
 	}}
 	return []k8s.Ingress{
-		k8s.Ingress{
+		{
 			ObjectMeta: k8s.ObjectMeta{
 				Name:        ingressName,
 				Namespace:   ingressNamespace,
 				Annotations: map[string]string{ingressAllowAnnotation: ingressAllow},
 			},
 			Spec: k8s.IngressSpec{
-				Rules: []k8s.IngressRule{k8s.IngressRule{
-					Host: ingressHost,
+				Rules: []k8s.IngressRule{{
+					Host: host,
 					IngressRuleValue: k8s.IngressRuleValue{HTTP: &k8s.HTTPIngressRuleValue{
 						Paths: paths,
 					}},
 				}},
+			},
+		},
+	}
+}
+
+func createDefaultServices() []k8s.Service {
+	return createServiceFixture(ingressSvcName, ingressNamespace, serviceIP)
+}
+
+func createServiceFixture(name string, namespace string, clusterIP string) []k8s.Service {
+	return []k8s.Service{
+		{
+			ObjectMeta: k8s.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			Spec: k8s.ServiceSpec{
+				ClusterIP: clusterIP,
 			},
 		},
 	}

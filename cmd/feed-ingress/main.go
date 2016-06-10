@@ -26,7 +26,6 @@ var (
 	nginxBinary            string
 	nginxWorkDir           string
 	nginxResolver          string
-	serviceDomain          string
 	nginxWorkerProcesses   int
 	nginxWorkerConnections int
 	nginxKeepAliveSeconds  int
@@ -45,7 +44,6 @@ func init() {
 		defaultIngressAllow           = ""
 		defaultIngressStatusPort      = 8081
 		defaultHealthPort             = 12082
-		defaultServiceDomain          = "svc.cluster"
 		defaultNginxBinary            = "/usr/sbin/nginx"
 		defaultNginxWorkingDir        = "/nginx"
 		defaultNginxWorkers           = 1
@@ -74,8 +72,6 @@ func init() {
 			"annotation on ingress resources. Leave empty to deny all access by default.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller.")
-	flag.StringVar(&serviceDomain, "service-domain", defaultServiceDomain,
-		"Search domain for backend services. For kube2sky, this should be svc.<cluster-name>.")
 	flag.StringVar(&nginxBinary, "nginx-binary", defaultNginxBinary,
 		"Location of nginx binary.")
 	flag.StringVar(&nginxWorkDir, "nginx-workdir", defaultNginxWorkingDir,
@@ -108,7 +104,6 @@ func main() {
 	controller := controller.New(controller.Config{
 		Updater:          ingress,
 		KubernetesClient: client,
-		ServiceDomain:    serviceDomain,
 	})
 
 	cmd.ConfigureHealthPort(controller, healthPort)
