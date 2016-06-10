@@ -5,8 +5,6 @@ import (
 
 	"errors"
 
-	"sync"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
@@ -51,7 +49,6 @@ type elb struct {
 	instanceID          string
 	elbs                []string
 	registeredFrontends int
-	sync.Mutex
 }
 
 // ELB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
@@ -71,9 +68,6 @@ type EC2Metadata interface {
 }
 
 func (e *elb) Start() error {
-	e.Lock()
-	defer e.Unlock()
-
 	if e.expectedFrontends == 0 {
 		return nil
 	}
@@ -119,6 +113,11 @@ func (e *elb) Start() error {
 	prometheus.Register(attachedFrontendGauge)
 	attachedFrontendGauge.Set(float64(registered))
 	e.registeredFrontends = registered
+
+	if registered != e.expectedFrontends {
+		return fmt.Errorf("expected ELBs: %d actual: %d", e.expectedFrontends, registered)
+	}
+
 	return nil
 }
 
@@ -195,13 +194,8 @@ func (e *elb) Stop() error {
 	return nil
 }
 
+// Health is a no-op atm. Could be updated in the future to check all the ELBs are still attached
 func (e *elb) Health() error {
-	// Lock required to ensure visibility of e.registeredFrontends
-	e.Lock()
-	defer e.Unlock()
-	if e.registeredFrontends != e.expectedFrontends {
-		return fmt.Errorf("expected frontends %d registered frontends %d", e.expectedFrontends, e.registeredFrontends)
-	}
 	return nil
 }
 
