@@ -64,7 +64,7 @@ func (c *controller) Start() error {
 
 	for _, u := range c.updaters {
 		if err := u.Start(); err != nil {
-			return fmt.Errorf("unable to start updater: %v", err)
+			return fmt.Errorf("unable to start %v: %v", u, err)
 		}
 	}
 
@@ -179,7 +179,7 @@ func (c *controller) Stop() error {
 
 	for _, u := range c.updaters {
 		if err := u.Stop(); err != nil {
-			log.Warnf("Error while stopping: %v", err)
+			log.Warnf("Error while stopping %v: %v", u, err)
 		}
 	}
 
@@ -198,7 +198,7 @@ func (c *controller) Health() error {
 
 	for _, u := range c.updaters {
 		if err := u.Health(); err != nil {
-			return err
+			return fmt.Errorf("unhealthy %v: %v", u, err)
 		}
 	}
 

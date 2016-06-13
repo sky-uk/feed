@@ -157,7 +157,7 @@ func TestControllerIsUnhealthyIfUpdaterIsUnhealthy(t *testing.T) {
 	updater.On("Update", mock.Anything).Return(nil)
 	// first return healthy, then unhealthy for lb
 	updater.On("Health").Return(nil).Once()
-	lbErr := fmt.Errorf("dead")
+	lbErr := fmt.Errorf("unhealthy FakeUpdater: dead")
 	updater.On("Health").Return(fmt.Errorf("dead")).Once()
 
 	assert.NoError(controller.Start())

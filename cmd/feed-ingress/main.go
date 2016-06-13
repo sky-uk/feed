@@ -8,8 +8,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/ingress/elb"
-	"github.com/sky-uk/feed/ingress/nginx"
+	"github.com/sky-uk/feed/elb"
+	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
 )
 

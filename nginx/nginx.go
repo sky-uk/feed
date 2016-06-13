@@ -17,7 +17,6 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/ingress"
 	"github.com/sky-uk/feed/util"
 )
 
@@ -77,7 +76,7 @@ func (lb *nginxLoadBalancer) nginxConfFile() string {
 }
 
 // New creates an nginx proxy.
-func New(nginxConf Conf) ingress.Proxy {
+func New(nginxConf Conf) controller.Updater {
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
 	if nginxConf.LogLevel == "" {
 		nginxConf.LogLevel = "warn"
@@ -233,7 +232,7 @@ func (lb *nginxLoadBalancer) Health() error {
 }
 
 func (lb *nginxLoadBalancer) String() string {
-	return "[nginx lb]"
+	return "nginx proxy"
 }
 
 func writeFile(location string, contents []byte) (bool, error) {

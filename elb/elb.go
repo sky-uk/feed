@@ -14,7 +14,6 @@ import (
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/ingress"
 )
 
 const (
@@ -29,7 +28,7 @@ var attachedFrontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 })
 
 // New  creates a new ELB frontend
-func New(region string, clusterName string, expectedFrontends int) ingress.Frontend {
+func New(region string, clusterName string, expectedFrontends int) controller.Updater {
 	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, clusterName, expectedFrontends)
 	metadata := ec2metadata.New(session.New())
 	return &elb{
@@ -215,4 +214,8 @@ func min(x, y int) int {
 		return x
 	}
 	return y
+}
+
+func (e *elb) String() string {
+	return "ELB frontend"
 }

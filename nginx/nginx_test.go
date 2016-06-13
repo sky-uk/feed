@@ -10,7 +10,6 @@ import (
 	"os/exec"
 
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/ingress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -44,16 +43,16 @@ func defaultConf(tmpDir string, binary string) Conf {
 	}
 }
 
-func newLb(tmpDir string) (ingress.Proxy, *mockSignaller) {
+func newLb(tmpDir string) (controller.Updater, *mockSignaller) {
 	return newLbWithBinary(tmpDir, "./fake_nginx.sh")
 }
 
-func newLbWithBinary(tmpDir string, binary string) (ingress.Proxy, *mockSignaller) {
+func newLbWithBinary(tmpDir string, binary string) (controller.Updater, *mockSignaller) {
 	conf := defaultConf(tmpDir, binary)
 	return newLbWithConf(conf)
 }
 
-func newLbWithConf(conf Conf) (ingress.Proxy, *mockSignaller) {
+func newLbWithConf(conf Conf) (controller.Updater, *mockSignaller) {
 	lb := New(conf)
 	signaller := &mockSignaller{}
 	signaller.On("sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
