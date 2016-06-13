@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sky-uk/feed/ingress"
+	"github.com/sky-uk/feed/controller"
 )
 
 const (
@@ -28,7 +28,7 @@ var attachedFrontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 })
 
 // New  creates a new ELB frontend
-func New(region string, clusterName string, expectedFrontends int) ingress.Frontend {
+func New(region string, clusterName string, expectedFrontends int) controller.Updater {
 	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, clusterName, expectedFrontends)
 	metadata := ec2metadata.New(session.New())
 	return &elb{
@@ -70,7 +70,7 @@ type EC2Metadata interface {
 	GetInstanceIdentityDocument() (ec2metadata.EC2InstanceIdentityDocument, error)
 }
 
-func (e *elb) Attach() error {
+func (e *elb) Start() error {
 	e.Lock()
 	defer e.Unlock()
 
@@ -174,8 +174,8 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 	return clusterFrontEnds, nil
 }
 
-// Detach removes this instance from all the front end ELBs
-func (e *elb) Detach() error {
+// Stop removes this instance from all the front end ELBs
+func (e *elb) Stop() error {
 	var failed = false
 	for _, elb := range e.elbs {
 		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb)
@@ -205,9 +205,17 @@ func (e *elb) Health() error {
 	return nil
 }
 
+func (e *elb) Update(controller.IngressUpdate) error {
+	return nil
+}
+
 func min(x, y int) int {
 	if x < y {
 		return x
 	}
 	return y
+}
+
+func (e *elb) String() string {
+	return "ELB frontend"
 }

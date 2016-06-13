@@ -10,7 +10,6 @@ import (
 	"os/exec"
 
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/ingress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -44,16 +43,16 @@ func defaultConf(tmpDir string, binary string) Conf {
 	}
 }
 
-func newLb(tmpDir string) (ingress.Proxy, *mockSignaller) {
+func newLb(tmpDir string) (controller.Updater, *mockSignaller) {
 	return newLbWithBinary(tmpDir, "./fake_nginx.sh")
 }
 
-func newLbWithBinary(tmpDir string, binary string) (ingress.Proxy, *mockSignaller) {
+func newLbWithBinary(tmpDir string, binary string) (controller.Updater, *mockSignaller) {
 	conf := defaultConf(tmpDir, binary)
 	return newLbWithConf(conf)
 }
 
-func newLbWithConf(conf Conf) (ingress.Proxy, *mockSignaller) {
+func newLbWithConf(conf Conf) (controller.Updater, *mockSignaller) {
 	lb := New(conf)
 	signaller := &mockSignaller{}
 	signaller.On("sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
@@ -331,9 +330,8 @@ func TestNginxConfigUpdates(t *testing.T) {
 
 	for _, test := range tests {
 		entries := test.entries
-		updated, err := lb.Update(controller.IngressUpdate{Entries: entries})
+		err := lb.Update(controller.IngressUpdate{Entries: entries})
 		assert.NoError(err)
-		assert.True(updated)
 
 		config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
 		assert.NoError(err)
@@ -354,10 +352,11 @@ func TestNginxConfigUpdates(t *testing.T) {
 }
 
 func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
+	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 	lb, mockSignaller := newLb(tmpDir)
-	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
+	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Once()
 
 	lb.Start()
 
@@ -369,13 +368,21 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 			ServicePort:    9090,
 		},
 	}
-	updated, err := lb.Update(controller.IngressUpdate{Entries: entries})
-	assert.NoError(t, err)
-	assert.True(t, updated)
 
-	updated, err = lb.Update(controller.IngressUpdate{Entries: entries})
-	assert.NoError(t, err)
-	assert.False(t, updated)
+	err := lb.Update(controller.IngressUpdate{Entries: entries})
+	assert.NoError(err)
+	config1, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+	assert.NoError(err)
+
+	err = lb.Update(controller.IngressUpdate{Entries: entries})
+	assert.NoError(err)
+	config2, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+	assert.NoError(err)
+
+	lb.Stop()
+
+	assert.Equal(string(config1), string(config2), "configs should be identical")
+	mockSignaller.AssertExpectations(t)
 }
 
 func setupWorkDir(t *testing.T) string {

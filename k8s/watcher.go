@@ -12,7 +12,7 @@ import (
 // Watcher provides channels for receiving updates. It tries its best to run forever, retrying
 // if the underlying connection fails. Use the Health() method to check the state of watcher.
 type Watcher interface {
-	// Updates provides update notification.
+	// Updates provides update notification. Closed when Done() channel is closed.
 	Updates() <-chan interface{}
 	// Done should be closed to stop watching.
 	Done() chan<- struct{}

@@ -17,7 +17,6 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/ingress"
 	"github.com/sky-uk/feed/util"
 )
 
@@ -77,7 +76,7 @@ func (lb *nginxLoadBalancer) nginxConfFile() string {
 }
 
 // New creates an nginx proxy.
-func New(nginxConf Conf) ingress.Proxy {
+func New(nginxConf Conf) controller.Updater {
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
 	if nginxConf.LogLevel == "" {
 		nginxConf.LogLevel = "warn"
@@ -159,18 +158,19 @@ func (lb *nginxLoadBalancer) Stop() error {
 	return err
 }
 
-func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) (bool, error) {
+func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
 	updated, err := lb.update(entries.SortedByName())
 	if err != nil {
-		return false, fmt.Errorf("unable to update nginx: %v", err)
+		return fmt.Errorf("unable to update nginx: %v", err)
 	}
 	if updated {
 		err = lb.signaller.sighup(lb.cmd.Process)
 		if err != nil {
-			return false, fmt.Errorf("unable to signal nginx to reload: %v", err)
+			return fmt.Errorf("unable to signal nginx to reload: %v", err)
 		}
+		log.Info("Nginx updated")
 	}
-	return updated, err
+	return err
 }
 
 func (lb *nginxLoadBalancer) update(entries controller.IngressUpdate) (bool, error) {
@@ -232,7 +232,7 @@ func (lb *nginxLoadBalancer) Health() error {
 }
 
 func (lb *nginxLoadBalancer) String() string {
-	return "[nginx lb]"
+	return "nginx proxy"
 }
 
 func writeFile(location string, contents []byte) (bool, error) {

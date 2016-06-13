@@ -8,9 +8,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/ingress"
-	"github.com/sky-uk/feed/ingress/elb"
-	"github.com/sky-uk/feed/ingress/nginx"
+	"github.com/sky-uk/feed/elb"
+	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
 )
 
@@ -95,12 +94,12 @@ func main() {
 	flag.Parse()
 	cmd.ConfigureLogging(debug)
 
-	ingress := createIngress()
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer)
+	updaters := createIngressUpdaters()
 
 	controller := controller.New(controller.Config{
-		Updater:          ingress,
 		KubernetesClient: client,
+		Updaters:         updaters,
 	})
 
 	cmd.ConfigureHealthPort(controller, healthPort)
@@ -116,7 +115,7 @@ func main() {
 	select {}
 }
 
-func createIngress() controller.Updater {
+func createIngressUpdaters() []controller.Updater {
 	frontend := elb.New(region, clusterName, expectedFrontends)
 	proxy := nginx.New(nginx.Conf{
 		BinaryLocation:    nginxBinary,
@@ -128,5 +127,5 @@ func createIngress() controller.Updater {
 		HealthPort:        ingressHealthPort,
 		DefaultAllow:      ingressAllow,
 	})
-	return ingress.New(frontend, proxy)
+	return []controller.Updater{frontend, proxy}
 }

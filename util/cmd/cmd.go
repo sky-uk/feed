@@ -12,24 +12,31 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sky-uk/feed/controller"
 )
 
-// ConfigureHealthPort is used to expose the controllers health over http
-func ConfigureHealthPort(controller controller.Controller, healthPort int) {
-	http.HandleFunc("/health", checkHealth(controller))
+// Pulse represents something alive whose health can be checked.
+type Pulse interface {
+	// Health returns the current health, nil if healthy.
+	Health() error
+	// Stop the thing that's alive.
+	Stop() error
+}
+
+// ConfigureHealthPort is used to expose the health over http
+func ConfigureHealthPort(pulse Pulse, healthPort int) {
+	http.HandleFunc("/health", healthHandler(pulse))
 	http.Handle("/metrics", prometheus.Handler())
 
 	go func() {
 		log.Error(http.ListenAndServe(":"+strconv.Itoa(healthPort), nil))
-		log.Info(controller.Stop())
+		log.Info(pulse.Stop())
 		os.Exit(-1)
 	}()
 }
 
-func checkHealth(controller controller.Controller) func(w http.ResponseWriter, r *http.Request) {
+func healthHandler(pulse Pulse) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := controller.Health(); err != nil {
+		if err := pulse.Health(); err != nil {
 			log.Warnf("Returning unhealthy %v", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			io.WriteString(w, fmt.Sprintf("%v\n", err))
@@ -42,7 +49,7 @@ func checkHealth(controller controller.Controller) func(w http.ResponseWriter, r
 }
 
 // AddSignalHandler allows the  controller to shutdown gracefully by respecting SIGTERM
-func AddSignalHandler(controller controller.Controller) {
+func AddSignalHandler(pulse Pulse) {
 	c := make(chan os.Signal, 1)
 	// SIGTERM is used by Kubernetes to gracefully stop pods.
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
@@ -50,9 +57,9 @@ func AddSignalHandler(controller controller.Controller) {
 	go func() {
 		for sig := range c {
 			log.Infof("Signalled %v, shutting down gracefully", sig)
-			err := controller.Stop()
+			err := pulse.Stop()
 			if err != nil {
-				log.Error("Error while stopping controller: ", err)
+				log.Errorf("Error while stopping: %v", err)
 				os.Exit(-1)
 			}
 			os.Exit(0)

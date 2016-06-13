@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
-	"github.com/sky-uk/feed/ingress"
+	"github.com/sky-uk/feed/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -109,7 +109,7 @@ func mockInstanceMetadata(mockMd *fakeMetadata, instanceID string) {
 	mockMd.On("GetInstanceIdentityDocument").Return(ec2metadata.EC2InstanceIdentityDocument{InstanceID: instanceID}, nil)
 }
 
-func setup() (ingress.Frontend, *fakeElb, *fakeMetadata) {
+func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
 	e := New(region, clusterName, 1)
 	mockElb := &fakeElb{}
 	mockMetadata := &fakeMetadata{}
@@ -124,8 +124,8 @@ func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
 	e.(*elb).expectedFrontends = 0
 
 	//when
-	e.Attach()
-	e.Detach()
+	e.Start()
+	e.Stop()
 
 	//then
 	mock.AssertExpectationsForObjects(t, mockElb.Mock, mockMetadata.Mock)
@@ -147,7 +147,7 @@ func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
 	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
 
 	//when
-	err := e.Attach()
+	err := e.Start()
 
 	//then
 	assert.NoError(t, e.Health())
@@ -173,7 +173,7 @@ func TestReportsInHealthyIfExpectedFrontendsNotMatched(t *testing.T) {
 	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
 
 	//when
-	e.Attach()
+	e.Start()
 	err := e.Health()
 
 	//then
@@ -196,7 +196,7 @@ func TestAttachWithMultipleMatchingLoadBalancers(t *testing.T) {
 	mockRegisterInstances(mockElb, clusterFrontEnd2, instanceID)
 
 	//when
-	err := e.Attach()
+	err := e.Start()
 
 	//then
 	mockElb.AssertExpectations(t)
@@ -208,7 +208,7 @@ func TestErrorGettingMetadata(t *testing.T) {
 	e, _, mockMetadata := setup()
 	mockMetadata.On("GetInstanceIdentityDocument").Return(ec2metadata.EC2InstanceIdentityDocument{}, fmt.Errorf("No metadata for you"))
 
-	err := e.Attach()
+	err := e.Start()
 
 	assert.EqualError(t, err, "unable to query ec2 metadata service for InstanceId: No metadata for you")
 }
@@ -219,7 +219,7 @@ func TestErrorDescribingInstances(t *testing.T) {
 	mockInstanceMetadata(mockMetadata, instanceID)
 	mockElb.On("DescribeLoadBalancers", mock.AnythingOfType("*elb.DescribeLoadBalancersInput")).Return(&aws_elb.DescribeLoadBalancersOutput{}, errors.New("oh dear oh dear"))
 
-	err := e.Attach()
+	err := e.Start()
 
 	assert.EqualError(t, err, "unable to describe load balancers: oh dear oh dear")
 }
@@ -231,7 +231,7 @@ func TestErrorDescribingTags(t *testing.T) {
 	mockLoadBalancers(mockElb, "one")
 	mockElb.On("DescribeTags", mock.AnythingOfType("*elb.DescribeTagsInput")).Return(&aws_elb.DescribeTagsOutput{}, errors.New("oh dear oh dear"))
 
-	err := e.Attach()
+	err := e.Start()
 
 	assert.EqualError(t, err, "unable to describe tags: oh dear oh dear")
 }
@@ -247,7 +247,7 @@ func TestNoMatchingElbs(t *testing.T) {
 	mockClusterTags(mockElb, lbTags{name: loadBalancerName, tags: []*aws_elb.Tag{}})
 
 	// when
-	err := e.Attach()
+	err := e.Start()
 
 	// then
 	assert.NoError(t, err)
@@ -267,7 +267,7 @@ func TestGetLoadBalancerPages(t *testing.T) {
 	mockRegisterInstances(mockElb, loadBalancerName, instanceID)
 
 	// when
-	err := e.Attach()
+	err := e.Start()
 
 	// then
 	assert.NoError(t, err)
@@ -289,7 +289,7 @@ func TestTagCallsPage(t *testing.T) {
 	mockRegisterInstances(mockElb, loadBalancerName2, instanceID)
 
 	// when
-	err := e.Attach()
+	err := e.Start()
 
 	// then
 	assert.NoError(t, err)
@@ -326,8 +326,8 @@ func TestDeregistersWithAttachedELBs(t *testing.T) {
 	}, nil)
 
 	//when
-	e.Attach()
-	err := e.Detach()
+	e.Start()
+	err := e.Stop()
 
 	//then
 	assert.NoError(t, err)
@@ -347,7 +347,7 @@ func TestRegisterInstanceError(t *testing.T) {
 	mockElb.On("RegisterInstancesWithLoadBalancer", mock.Anything).Return(&aws_elb.RegisterInstancesWithLoadBalancerOutput{}, errors.New("no register for you"))
 
 	// when
-	err := e.Attach()
+	err := e.Start()
 
 	// then
 	assert.EqualError(t, err, "unable to register instance cow with elb cluster-frontend: no register for you")
@@ -367,8 +367,8 @@ func TestDeRegisterInstanceError(t *testing.T) {
 	mockElb.On("DeregisterInstancesFromLoadBalancer", mock.Anything).Return(&aws_elb.DeregisterInstancesFromLoadBalancerOutput{}, errors.New("no deregister for you"))
 
 	// when
-	e.Attach()
-	err := e.Detach()
+	e.Start()
+	err := e.Stop()
 
 	// then
 	assert.EqualError(t, err, "at least one ELB failed to detach")
