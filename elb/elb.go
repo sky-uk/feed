@@ -34,8 +34,13 @@ func New(region string, labelValue string, expectedNumber int) controller.Update
 		labelValue:     labelValue,
 		region:         region,
 		expectedNumber: expectedNumber,
-		maxTagQuery:    20,
 	}
+}
+
+// LoadBalancerDetails stores all the elb information we use.
+type LoadBalancerDetails struct {
+	Name         string
+	HostedZoneID string
 }
 
 type elb struct {
@@ -44,9 +49,8 @@ type elb struct {
 	labelValue          string
 	region              string
 	expectedNumber      int
-	maxTagQuery         int
 	instanceID          string
-	elbs                []string
+	elbs                map[string]LoadBalancerDetails
 	registeredFrontends int
 }
 
@@ -78,7 +82,7 @@ func (e *elb) Start() error {
 
 	instance := id.InstanceID
 	log.Infof("Attaching to ELBs from instance %s", instance)
-	clusterFrontEnds, err := e.findFrontEndElbs()
+	clusterFrontEnds, err := FindFrontEndElbs(e.awsElb, e.labelValue)
 
 	if err != nil {
 		return err
@@ -93,17 +97,17 @@ func (e *elb) Start() error {
 	registered := 0
 
 	for _, frontend := range clusterFrontEnds {
-		log.Infof("Registering instance %s with elb %s", instance, frontend)
+		log.Infof("Registering instance %s with elb %s", instance, frontend.Name)
 		_, err = e.awsElb.RegisterInstancesWithLoadBalancer(&aws_elb.RegisterInstancesWithLoadBalancerInput{
 			Instances: []*aws_elb.Instance{
 				{
 					InstanceId: aws.String(instance),
 				}},
-			LoadBalancerName: aws.String(frontend),
+			LoadBalancerName: aws.String(frontend.Name),
 		})
 
 		if err != nil {
-			return fmt.Errorf("unable to register instance %s with elb %s: %v", instance, frontend, err)
+			return fmt.Errorf("unable to register instance %s with elb %s: %v", instance, frontend.Name, err)
 		}
 		registered++
 
@@ -120,18 +124,26 @@ func (e *elb) Start() error {
 	return nil
 }
 
-func (e *elb) findFrontEndElbs() ([]string, error) {
+// FindFrontEndElbs finds all elbs tagged with 'sky.uk/KubernetesClusterFrontend=<labelValue>'
+func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDetails, error) {
+	maxTagQuery := 20
 	// Find the load balancers that are tagged with this cluster name
 	request := &aws_elb.DescribeLoadBalancersInput{}
 	var lbNames []*string
+	allLbs := make(map[string]LoadBalancerDetails)
+
 	for {
-		resp, err := e.awsElb.DescribeLoadBalancers(request)
+		resp, err := awsElb.DescribeLoadBalancers(request)
 
 		if err != nil {
 			return nil, fmt.Errorf("unable to describe load balancers: %v", err)
 		}
 
 		for _, entry := range resp.LoadBalancerDescriptions {
+			allLbs[*entry.LoadBalancerName] = LoadBalancerDetails{
+				Name:         *entry.LoadBalancerName,
+				HostedZoneID: *entry.CanonicalHostedZoneNameID,
+			}
 			lbNames = append(lbNames, entry.LoadBalancerName)
 		}
 
@@ -145,14 +157,14 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 		}
 	}
 
-	log.Infof("Found %d loadbalancers. Checking for %s tag set to %s", len(lbNames), ElbTag, e.labelValue)
-	var clusterFrontEnds []string
+	log.Infof("Found %d loadbalancers. Checking for %s tag set to %s", len(lbNames), ElbTag, labelValue)
+	clusterFrontEnds := make(map[string]LoadBalancerDetails)
 	totalLbs := len(lbNames)
-	for i := 0; i < len(lbNames); i += e.maxTagQuery {
-		to := min(i+e.maxTagQuery, totalLbs)
+	for i := 0; i < len(lbNames); i += maxTagQuery {
+		to := min(i+maxTagQuery, totalLbs)
 		log.Debugf("Querying tags from %d to %d", i, to)
 		names := lbNames[i:to]
-		output, err := e.awsElb.DescribeTags(&aws_elb.DescribeTagsInput{
+		output, err := awsElb.DescribeTags(&aws_elb.DescribeTagsInput{
 			LoadBalancerNames: names,
 		})
 
@@ -162,9 +174,9 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 
 		for _, description := range output.TagDescriptions {
 			for _, tag := range description.Tags {
-				if *tag.Key == ElbTag && *tag.Value == e.labelValue {
+				if *tag.Key == ElbTag && *tag.Value == labelValue {
 					log.Infof("Found frontend elb %s", *description.LoadBalancerName)
-					clusterFrontEnds = append(clusterFrontEnds, *description.LoadBalancerName)
+					clusterFrontEnds[*description.LoadBalancerName] = allLbs[*description.LoadBalancerName]
 				}
 			}
 		}
@@ -176,14 +188,14 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 func (e *elb) Stop() error {
 	var failed = false
 	for _, elb := range e.elbs {
-		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb)
+		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb.Name)
 		_, err := e.awsElb.DeregisterInstancesFromLoadBalancer(&aws_elb.DeregisterInstancesFromLoadBalancerInput{
 			Instances:        []*aws_elb.Instance{&aws_elb.Instance{InstanceId: aws.String(e.instanceID)}},
-			LoadBalancerName: aws.String(elb),
+			LoadBalancerName: aws.String(elb.Name),
 		})
 
 		if err != nil {
-			log.Warnf("unable to deregister instance %s with elb %s: %v", e.instanceID, elb, err)
+			log.Warnf("unable to deregister instance %s with elb %s: %v", e.instanceID, elb.Name, err)
 			failed = true
 		}
 	}
