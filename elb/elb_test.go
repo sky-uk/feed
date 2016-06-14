@@ -156,7 +156,7 @@ func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestReportsInHealthyIfExpectedFrontendsNotMatched(t *testing.T) {
+func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
 	e.(*elb).expectedFrontends = 2
@@ -173,16 +173,16 @@ func TestReportsInHealthyIfExpectedFrontendsNotMatched(t *testing.T) {
 	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
 
 	//when
-	e.Start()
-	err := e.Health()
+	err := e.Start()
 
 	//then
-	assert.EqualError(t, err, "expected frontends 2 registered frontends 1")
+	assert.EqualError(t, err, "expected ELBs: 2 actual: 1")
 }
 
 func TestAttachWithMultipleMatchingLoadBalancers(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
+	e.(*elb).expectedFrontends = 2
 	instanceID := "cow"
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEnd2 := "cluster-frontend2"
@@ -250,7 +250,7 @@ func TestNoMatchingElbs(t *testing.T) {
 	err := e.Start()
 
 	// then
-	assert.NoError(t, err)
+	assert.Error(t, err, "expected ELBs: 1 actual: 0")
 }
 
 func TestGetLoadBalancerPages(t *testing.T) {
@@ -277,6 +277,7 @@ func TestGetLoadBalancerPages(t *testing.T) {
 func TestTagCallsPage(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
+	e.(*elb).expectedFrontends = 2
 	e.(*elb).maxTagQuery = 1
 	instanceID := "cow"
 	loadBalancerName1 := "lb1"
