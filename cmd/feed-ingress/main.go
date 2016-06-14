@@ -28,9 +28,9 @@ var (
 	nginxWorkerConnections int
 	nginxKeepAliveSeconds  int
 	nginxLogLevel          string
-	clusterName            string
-	region                 string
-	expectedFrontends      int
+	elbLabelValue          string
+	elbRegion              string
+	elbExpectedNumber      int
 )
 
 func init() {
@@ -48,9 +48,9 @@ func init() {
 		defaultNginxWorkerConnections = 1024
 		defaultNginxKeepAliveSeconds  = 65
 		defaultNginxLogLevel          = "info"
-		defaultClusterName            = "cluster"
-		defaultRegion                 = "eu-west-1"
-		defaultExpectedFrontends      = 0
+		defaultElbLabelValue          = ""
+		defaultElbRegion              = "eu-west-1"
+		defaultElbExpectedNumber      = 0
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -82,12 +82,13 @@ func init() {
 		"Keep alive time for persistent client connections to nginx.")
 	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
-	flag.StringVar(&clusterName, "cluster-name", defaultClusterName,
-		"Kubernetes cluster name. ELBs tagged wtih `sky.uk/KubernetesClusterFrontend` will be added as frontends.")
-	flag.StringVar(&region, "aws-region", defaultRegion,
-		"AWS region")
-	flag.IntVar(&expectedFrontends, "expected-frontends", defaultExpectedFrontends,
-		"Expected number of front ends. If 0 the controller will not attempt to attach. A warning is logged if the incorrect number are found.")
+	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
+		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
+	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
+		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
+			" otherwise it fails to start if it can't attach to this number.")
+	flag.StringVar(&elbRegion, "elb-region", defaultElbRegion,
+		"AWS region for ELBs.")
 }
 
 func main() {
@@ -116,7 +117,7 @@ func main() {
 }
 
 func createIngressUpdaters() []controller.Updater {
-	frontend := elb.New(region, clusterName, expectedFrontends)
+	frontend := elb.New(elbRegion, elbLabelValue, elbExpectedNumber)
 	proxy := nginx.New(nginx.Conf{
 		BinaryLocation:    nginxBinary,
 		IngressPort:       ingressPort,

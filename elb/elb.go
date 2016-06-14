@@ -14,9 +14,8 @@ import (
 	"github.com/sky-uk/feed/controller"
 )
 
-const (
-	elbTag = "sky.uk/KubernetesClusterFrontend"
-)
+// ElbTag is the tag key used for identifying ELBs to attach to.
+const ElbTag = "sky.uk/KubernetesClusterFrontend"
 
 var attachedFrontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "feed",
@@ -26,25 +25,25 @@ var attachedFrontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 })
 
 // New  creates a new ELB frontend
-func New(region string, clusterName string, expectedFrontends int) controller.Updater {
-	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, clusterName, expectedFrontends)
+func New(region string, labelValue string, expectedNumber int) controller.Updater {
+	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, labelValue, expectedNumber)
 	metadata := ec2metadata.New(session.New())
 	return &elb{
-		metadata:          metadata,
-		awsElb:            aws_elb.New(session.New(&aws.Config{Region: &region})),
-		clusterName:       clusterName,
-		region:            region,
-		expectedFrontends: expectedFrontends,
-		maxTagQuery:       20,
+		metadata:       metadata,
+		awsElb:         aws_elb.New(session.New(&aws.Config{Region: &region})),
+		labelValue:     labelValue,
+		region:         region,
+		expectedNumber: expectedNumber,
+		maxTagQuery:    20,
 	}
 }
 
 type elb struct {
 	awsElb              ELB
 	metadata            EC2Metadata
-	clusterName         string
+	labelValue          string
 	region              string
-	expectedFrontends   int
+	expectedNumber      int
 	maxTagQuery         int
 	instanceID          string
 	elbs                []string
@@ -68,7 +67,7 @@ type EC2Metadata interface {
 }
 
 func (e *elb) Start() error {
-	if e.expectedFrontends == 0 {
+	if e.labelValue == "" {
 		return nil
 	}
 
@@ -94,10 +93,10 @@ func (e *elb) Start() error {
 	registered := 0
 
 	for _, frontend := range clusterFrontEnds {
-		log.Infof("Registering instance %s with elb %", instance, frontend)
+		log.Infof("Registering instance %s with elb %s", instance, frontend)
 		_, err = e.awsElb.RegisterInstancesWithLoadBalancer(&aws_elb.RegisterInstancesWithLoadBalancerInput{
 			Instances: []*aws_elb.Instance{
-				&aws_elb.Instance{
+				{
 					InstanceId: aws.String(instance),
 				}},
 			LoadBalancerName: aws.String(frontend),
@@ -114,8 +113,8 @@ func (e *elb) Start() error {
 	attachedFrontendGauge.Set(float64(registered))
 	e.registeredFrontends = registered
 
-	if registered != e.expectedFrontends {
-		return fmt.Errorf("expected ELBs: %d actual: %d", e.expectedFrontends, registered)
+	if e.expectedNumber > 0 && registered != e.expectedNumber {
+		return fmt.Errorf("expected ELBs: %d actual: %d", e.expectedNumber, registered)
 	}
 
 	return nil
@@ -146,7 +145,7 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 		}
 	}
 
-	log.Infof("Found %d loadbalancers. Checking for %s tag set to %s", len(lbNames), elbTag, e.clusterName)
+	log.Infof("Found %d loadbalancers. Checking for %s tag set to %s", len(lbNames), ElbTag, e.labelValue)
 	var clusterFrontEnds []string
 	totalLbs := len(lbNames)
 	for i := 0; i < len(lbNames); i += e.maxTagQuery {
@@ -163,7 +162,7 @@ func (e *elb) findFrontEndElbs() ([]string, error) {
 
 		for _, description := range output.TagDescriptions {
 			for _, tag := range description.Tags {
-				if *tag.Key == elbTag && *tag.Value == e.clusterName {
+				if *tag.Key == ElbTag && *tag.Value == e.labelValue {
 					log.Infof("Found frontend elb %s", *description.LoadBalancerName)
 					clusterFrontEnds = append(clusterFrontEnds, *description.LoadBalancerName)
 				}
