@@ -18,11 +18,6 @@ events {
 http {
     default_type text/html;
 
-    # Access log format
-    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
-    '$status $body_bytes_sent "$http_referer" '
-    '"$http_user_agent" "$http_x_forwarded_for"';
-
     # Keep alive time for client connections
     keepalive_timeout {{ .Config.KeepAliveSeconds }}s;
 
@@ -35,7 +30,7 @@ http {
     real_ip_recursive off;
 
     # Put all data into the working directory
-    access_log             {{ .Config.WorkingDir }}/access.log main gzip;
+    access_log             off;
     client_body_temp_path  {{ .Config.WorkingDir }}/tmp_client_body 1 2;
     proxy_temp_path        {{ .Config.WorkingDir }}/tmp_proxy 1 2;
     fastcgi_temp_path      {{ .Config.WorkingDir }}/tmp_fastcgi 1 2;
