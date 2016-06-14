@@ -9,6 +9,8 @@ import (
 
 	"fmt"
 
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util"
@@ -125,7 +127,7 @@ func (c *controller) updateIngresses() error {
 						Path:           path.Path,
 						ServiceAddress: address,
 						ServicePort:    int32(path.Backend.ServicePort.IntValue()),
-						Allow:          ingress.Annotations[ingressAllowAnnotation],
+						Allow:          strings.Split(ingress.Annotations[ingressAllowAnnotation], ","),
 					}
 
 					if !entry.isEmpty() {

@@ -7,6 +7,8 @@ import (
 
 	"fmt"
 
+	"strings"
+
 	"github.com/sky-uk/feed/k8s"
 	fake "github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
@@ -352,7 +354,7 @@ func createLbEntriesFixture() IngressUpdate {
 		Path:           ingressPath,
 		ServiceAddress: serviceIP,
 		ServicePort:    ingressSvcPort,
-		Allow:          ingressAllow,
+		Allow:          strings.Split(ingressAllow, ","),
 	}}}
 }
 
@@ -363,7 +365,7 @@ const (
 	ingressSvcName   = "foo-svc"
 	ingressSvcPort   = 80
 	ingressNamespace = "happysky"
-	ingressAllow     = "10.82.0.0/16"
+	ingressAllow     = "10.82.0.0/16,10.44.0.0/16"
 	serviceIP        = "10.254.0.82"
 )
 

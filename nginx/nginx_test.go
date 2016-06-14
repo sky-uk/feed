@@ -17,6 +17,7 @@ import (
 const (
 	port         = 9090
 	defaultAllow = "10.50.0.0/16"
+	fakeNginx    = "./fake_nginx.sh"
 )
 
 type mockSignaller struct {
@@ -33,7 +34,7 @@ func (m *mockSignaller) sighup(p *os.Process) error {
 	return nil
 }
 
-func defaultConf(tmpDir string, binary string) Conf {
+func newConf(tmpDir string, binary string) Conf {
 	return Conf{
 		WorkingDir:      tmpDir,
 		BinaryLocation:  binary,
@@ -44,11 +45,11 @@ func defaultConf(tmpDir string, binary string) Conf {
 }
 
 func newLb(tmpDir string) (controller.Updater, *mockSignaller) {
-	return newLbWithBinary(tmpDir, "./fake_nginx.sh")
+	return newLbWithBinary(tmpDir, fakeNginx)
 }
 
 func newLbWithBinary(tmpDir string, binary string) (controller.Updater, *mockSignaller) {
-	conf := defaultConf(tmpDir, binary)
+	conf := newConf(tmpDir, binary)
 	return newLbWithConf(conf)
 }
 
@@ -114,8 +115,8 @@ func TestCanSetLogLevel(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
-	defaultLogLevel := defaultConf(tmpDir, "./fake_nginx.sh")
-	customLogLevel := defaultConf(tmpDir, "./fake_nginx.sh")
+	defaultLogLevel := newConf(tmpDir, fakeNginx)
+	customLogLevel := newConf(tmpDir, fakeNginx)
 	customLogLevel.LogLevel = "info"
 
 	var tests = []struct {
@@ -149,17 +150,16 @@ func TestNginxConfigUpdates(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
-	lb, mockSignaller := newLb(tmpDir)
-	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
-
-	assert.NoError(lb.Start())
+	defaultConf := newConf(tmpDir, fakeNginx)
 
 	var tests = []struct {
+		lbConf        Conf
 		entries       []controller.IngressEntry
 		configEntries []string
 	}{
 		// Check full ingress entry works.
 		{
+			defaultConf,
 			[]controller.IngressEntry{
 				{
 					Host:           "chris.com",
@@ -167,7 +167,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "/path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          "10.82.0.0/16",
+					Allow:          []string{"10.82.0.0/16"},
 				},
 			},
 			[]string{
@@ -177,9 +177,9 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name chris.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
 					"        allow 10.82.0.0/16;\n" +
+					"        \n" +
 					"        deny all;\n" +
 					"\n" +
 					"        location /path/ {\n" +
@@ -191,6 +191,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 		},
 		// Check empty allow skips the allow for the ingress in the output.
 		{
+			defaultConf,
 			[]controller.IngressEntry{
 				{
 					Host:           "foo.com",
@@ -207,8 +208,8 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name foo.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
+					"        allow 10.50.0.0/16;\n" +
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +
@@ -221,6 +222,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 		},
 		// Check entries ordered by name.
 		{
+			defaultConf,
 			[]controller.IngressEntry{
 				{
 					Name:           "2-last-ingress",
@@ -251,8 +253,8 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name foo.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
+					"        allow 10.50.0.0/16;\n" +
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +
@@ -267,8 +269,8 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name foo.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
+					"        allow 10.50.0.0/16;\n" +
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +
@@ -283,8 +285,8 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name foo.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
+					"        allow 10.50.0.0/16;\n" +
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +
@@ -297,6 +299,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 		},
 		// Check path slashes are added correctly
 		{
+			defaultConf,
 			[]controller.IngressEntry{
 				{
 					Host:           "chris.com",
@@ -304,7 +307,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          "10.82.0.0/16",
+					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Host:           "chris.com",
@@ -312,7 +315,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "/prefix-with-slash/",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          "10.82.0.0/16",
+					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Host:           "chris.com",
@@ -320,7 +323,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "prefix-without-preslash/",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          "10.82.0.0/16",
+					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Host:           "chris.com",
@@ -328,7 +331,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "/prefix-without-postslash",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          "10.82.0.0/16",
+					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Host:           "chris.com",
@@ -336,7 +339,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "prefix-without-anyslash",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          "10.82.0.0/16",
+					Allow:          []string{"10.82.0.0/16"},
 				},
 			},
 			[]string{
@@ -346,9 +349,9 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name chris.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
 					"        allow 10.82.0.0/16;\n" +
+					"        \n" +
 					"        deny all;\n" +
 					"\n" +
 					"        location / {\n" +
@@ -362,9 +365,9 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name chris.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
 					"        allow 10.82.0.0/16;\n" +
+					"        \n" +
 					"        deny all;\n" +
 					"\n" +
 					"        location /prefix-with-slash/ {\n" +
@@ -378,9 +381,9 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name chris.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
 					"        allow 10.82.0.0/16;\n" +
+					"        \n" +
 					"        deny all;\n" +
 					"\n" +
 					"        location /prefix-without-preslash/ {\n" +
@@ -394,9 +397,9 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name chris.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
 					"        allow 10.82.0.0/16;\n" +
+					"        \n" +
 					"        deny all;\n" +
 					"\n" +
 					"        location /prefix-without-postslash/ {\n" +
@@ -410,9 +413,9 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server_name chris.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
-					"        allow 10.50.0.0/16;\n" +
 					"        allow 127.0.0.1;\n" +
 					"        allow 10.82.0.0/16;\n" +
+					"        \n" +
 					"        deny all;\n" +
 					"\n" +
 					"        location /prefix-without-anyslash/ {\n" +
@@ -422,9 +425,82 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"    ",
 			},
 		},
+		// Check multiple allows work
+		{
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+					Allow:          []string{"10.82.0.0/16", "10.99.0.0/16"},
+				},
+			},
+			[]string{
+				"   # chris-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 127.0.0.1;\n" +
+					"        allow 10.82.0.0/16;\n" +
+					"        allow 10.99.0.0/16;\n" +
+					"        \n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location / {\n" +
+					"            proxy_pass http://service:9090/;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+			},
+		},
+		// Check no allows work
+		{
+			Conf{
+				WorkingDir:      tmpDir,
+				BinaryLocation:  fakeNginx,
+				IngressPort:     port,
+				WorkerProcesses: 1,
+				DefaultAllow:    "",
+			},
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+			},
+			[]string{
+				"   # chris-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 127.0.0.1;\n" +
+					"        \n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location / {\n" +
+					"            proxy_pass http://service:9090/;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+			},
+		},
 	}
 
 	for _, test := range tests {
+		lb, mockSignaller := newLbWithConf(test.lbConf)
+		mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
+
+		assert.NoError(lb.Start())
 		entries := test.entries
 		err := lb.Update(controller.IngressUpdate{Entries: entries})
 		assert.NoError(err)
@@ -441,10 +517,10 @@ func TestNginxConfigUpdates(t *testing.T) {
 		for i := range test.configEntries {
 			assert.Equal(test.configEntries[i], serverEntries[i][1])
 		}
-	}
 
-	assert.Nil(lb.Stop())
-	mockSignaller.AssertExpectations(t)
+		assert.Nil(lb.Stop())
+		mockSignaller.AssertExpectations(t)
+	}
 }
 
 func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
