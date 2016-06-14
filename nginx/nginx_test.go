@@ -182,8 +182,8 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        allow 10.82.0.0/16;\n" +
 					"        deny all;\n" +
 					"\n" +
-					"        location /path {\n" +
-					"            proxy_pass http://service:9090;\n" +
+					"        location /path/ {\n" +
+					"            proxy_pass http://service:9090/;\n" +
 					"        }\n" +
 					"    }\n" +
 					"    ",
@@ -212,8 +212,8 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +
-					"        location /bar {\n" +
-					"            proxy_pass http://lala:8080;\n" +
+					"        location /bar/ {\n" +
+					"            proxy_pass http://lala:8080/;\n" +
 					"        }\n" +
 					"    }\n" +
 					"    ",
@@ -257,7 +257,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        deny all;\n" +
 					"\n" +
 					"        location / {\n" +
-					"            proxy_pass http://foo:8080;\n" +
+					"            proxy_pass http://foo:8080/;\n" +
 					"        }\n" +
 					"    }\n" +
 					"    ",
@@ -273,7 +273,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        deny all;\n" +
 					"\n" +
 					"        location / {\n" +
-					"            proxy_pass http://foo:8080;\n" +
+					"            proxy_pass http://foo:8080/;\n" +
 					"        }\n" +
 					"    }\n" +
 					"    ",
@@ -289,19 +289,51 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        deny all;\n" +
 					"\n" +
 					"        location / {\n" +
-					"            proxy_pass http://foo:8080;\n" +
+					"            proxy_pass http://foo:8080/;\n" +
 					"        }\n" +
 					"    }\n" +
 					"    ",
 			},
 		},
-		// Check empty path works.
+		// Check path slashes are added correctly
 		{
 			[]controller.IngressEntry{
 				{
 					Host:           "chris.com",
 					Name:           "chris-ingress",
 					Path:           "",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+					Allow:          "10.82.0.0/16",
+				},
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/prefix-with-slash/",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+					Allow:          "10.82.0.0/16",
+				},
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "prefix-without-preslash/",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+					Allow:          "10.82.0.0/16",
+				},
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/prefix-without-postslash",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+					Allow:          "10.82.0.0/16",
+				},
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "prefix-without-anyslash",
 					ServiceAddress: "service",
 					ServicePort:    9090,
 					Allow:          "10.82.0.0/16",
@@ -320,7 +352,71 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        deny all;\n" +
 					"\n" +
 					"        location / {\n" +
-					"            proxy_pass http://service:9090;\n" +
+					"            proxy_pass http://service:9090/;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+				"   # chris-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        allow 10.82.0.0/16;\n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location /prefix-with-slash/ {\n" +
+					"            proxy_pass http://service:9090/;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+				"   # chris-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        allow 10.82.0.0/16;\n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location /prefix-without-preslash/ {\n" +
+					"            proxy_pass http://service:9090/;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+				"   # chris-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        allow 10.82.0.0/16;\n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location /prefix-without-postslash/ {\n" +
+					"            proxy_pass http://service:9090/;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+				"   # chris-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 10.50.0.0/16;\n" +
+					"        allow 127.0.0.1;\n" +
+					"        allow 10.82.0.0/16;\n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location /prefix-without-anyslash/ {\n" +
+					"            proxy_pass http://service:9090/;\n" +
 					"        }\n" +
 					"    }\n" +
 					"    ",
