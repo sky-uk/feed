@@ -216,7 +216,6 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 
 	var templateEntries []controller.IngressEntry
 	for _, entry := range update.Entries {
-		fmt.Printf("%v\n", entry)
 		trimmedPath := strings.TrimSuffix(strings.TrimPrefix(entry.Path, "/"), "/")
 		if len(trimmedPath) == 0 {
 			entry.Path = "/"
@@ -225,8 +224,6 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 		}
 		templateEntries = append(templateEntries, entry)
 	}
-
-	fmt.Printf("%d\n", len(templateEntries))
 
 	var output bytes.Buffer
 	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: templateEntries})

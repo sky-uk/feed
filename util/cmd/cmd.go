@@ -10,6 +10,8 @@ import (
 
 	"fmt"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -22,8 +24,8 @@ type Pulse interface {
 	Stop() error
 }
 
-// ConfigureHealthPort is used to expose the health over http
-func ConfigureHealthPort(pulse Pulse, healthPort int) {
+// AddHealthPort is used to expose the health over http.
+func AddHealthPort(pulse Pulse, healthPort int) {
 	http.HandleFunc("/health", healthHandler(pulse))
 	http.Handle("/metrics", prometheus.Handler())
 
@@ -37,7 +39,6 @@ func ConfigureHealthPort(pulse Pulse, healthPort int) {
 func healthHandler(pulse Pulse) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := pulse.Health(); err != nil {
-			log.Warnf("Returning unhealthy %v", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			io.WriteString(w, fmt.Sprintf("%v\n", err))
 			return
@@ -48,7 +49,26 @@ func healthHandler(pulse Pulse) func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// AddSignalHandler allows the  controller to shutdown gracefully by respecting SIGTERM
+// AddUnhealthyLogger adds a periodic poller which reports an unhealthy status as a log message.
+func AddUnhealthyLogger(pulse Pulse, pollInterval time.Duration) {
+	go func() {
+		healthy := true
+		tickCh := time.Tick(pollInterval)
+		for range tickCh {
+			if err := pulse.Health(); err != nil {
+				if healthy {
+					log.Warnf("Unhealthy: %v", err)
+					healthy = false
+				}
+			} else if !healthy {
+				log.Info("Health restored")
+				healthy = true
+			}
+		}
+	}()
+}
+
+// AddSignalHandler allows the  controller to shutdown gracefully by respecting SIGTERM.
 func AddSignalHandler(pulse Pulse) {
 	c := make(chan os.Signal, 1)
 	// SIGTERM is used by Kubernetes to gracefully stop pods.

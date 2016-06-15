@@ -200,7 +200,7 @@ func (c *controller) Health() error {
 
 	for _, u := range c.updaters {
 		if err := u.Health(); err != nil {
-			return fmt.Errorf("unhealthy %v: %v", u, err)
+			return fmt.Errorf("%v: %v", u, err)
 		}
 	}
 
