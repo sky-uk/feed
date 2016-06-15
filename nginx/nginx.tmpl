@@ -53,8 +53,8 @@ http {
         {{ if $entry.Allow }}allow {{ $entry.Allow }};{{ end }}
         deny all;
 
-        location {{ if $entry.Path }}{{ $entry.Path }}{{ else }}/{{ end }} {
-            proxy_pass http://{{ $entry.ServiceAddress }}:{{ $entry.ServicePort }};
+        location {{ if $entry.Path }}{{ $entry.Path }}{{ end }} {
+            proxy_pass http://{{ $entry.ServiceAddress }}:{{ $entry.ServicePort }}/;
         }
     }
     # End entry

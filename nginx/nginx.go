@@ -214,8 +214,22 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 		return nil, err
 	}
 
+	var templateEntries []controller.IngressEntry
+	for _, entry := range update.Entries {
+		fmt.Printf("%v\n", entry)
+		trimmedPath := strings.TrimSuffix(strings.TrimPrefix(entry.Path, "/"), "/")
+		if len(trimmedPath) == 0 {
+			entry.Path = "/"
+		} else {
+			entry.Path = fmt.Sprintf("/%s/", trimmedPath)
+		}
+		templateEntries = append(templateEntries, entry)
+	}
+
+	fmt.Printf("%d\n", len(templateEntries))
+
 	var output bytes.Buffer
-	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: update.Entries})
+	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: templateEntries})
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("Unable to execute nginx config duration. It will be out of date: %v", err)
