@@ -48,9 +48,10 @@ http {
         server_name {{ $entry.Host }};
 
         # Restrict clients
-        {{ if $defaultAllow }}allow {{ $defaultAllow }};{{ end }}
         allow 127.0.0.1;
-        {{ if $entry.Allow }}allow {{ $entry.Allow }};{{ end }}
+        {{ if $entry.Allow }}{{ range $entry.Allow }}allow {{ . }};
+        {{ end }}{{ else if $defaultAllow }}allow {{ $defaultAllow }};
+        {{ end }}
         deny all;
 
         location {{ if $entry.Path }}{{ $entry.Path }}{{ end }} {

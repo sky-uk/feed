@@ -66,7 +66,7 @@ func init() {
 	flag.IntVar(&ingressHealthPort, "ingress-health-port", defaultIngressHealthPort,
 		"Port for ingress /health and /status pages. Should be used by frontends to determine if ingress is available.")
 	flag.StringVar(&ingressAllow, "ingress-allow", defaultIngressAllow,
-		"Source IP or CIDR to allow ingress access by default. This is in addition to the sky.uk/allow "+
+		"Source IP or CIDR to allow ingress access by default. This is overridden by the sky.uk/allow "+
 			"annotation on ingress resources. Leave empty to deny all access by default.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")

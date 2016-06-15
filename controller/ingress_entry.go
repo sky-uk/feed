@@ -19,8 +19,8 @@ type IngressEntry struct {
 	ServiceAddress string
 	// ServicePort is the port to proxy traffic to.
 	ServicePort int32
-	// SourceRange is the ip or cidr that is allowed to access the service.
-	Allow string
+	// Allow are the ips or cidrs that are allowed to access the service.
+	Allow []string
 }
 
 // isEmpty returns true if Host, ServiceAddress, or ServicePort are empty.
