@@ -121,7 +121,7 @@ func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
 func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
 	//given
 	e, mockElb, mockMetadata := setup()
-	e.(*elb).expectedFrontends = 0
+	e.(*elb).labelValue = ""
 
 	//when
 	e.Start()
@@ -159,7 +159,7 @@ func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
 func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
-	e.(*elb).expectedFrontends = 2
+	e.(*elb).expectedNumber = 2
 	instanceID := "cow"
 	mockInstanceMetadata(mockMetadata, instanceID)
 	clusterFrontEnd := "cluster-frontend"
@@ -182,7 +182,7 @@ func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 func TestAttachWithMultipleMatchingLoadBalancers(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
-	e.(*elb).expectedFrontends = 2
+	e.(*elb).expectedNumber = 2
 	instanceID := "cow"
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEnd2 := "cluster-frontend2"
@@ -277,7 +277,7 @@ func TestGetLoadBalancerPages(t *testing.T) {
 func TestTagCallsPage(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
-	e.(*elb).expectedFrontends = 2
+	e.(*elb).expectedNumber = 2
 	e.(*elb).maxTagQuery = 1
 	instanceID := "cow"
 	loadBalancerName1 := "lb1"
