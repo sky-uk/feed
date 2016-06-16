@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	clusterName = "cluster_name"
-	region      = "eu-west-1"
-	frontendTag = "sky.uk/KubernetesClusterFrontend"
+	clusterName               = "cluster_name"
+	region                    = "eu-west-1"
+	frontendTag               = "sky.uk/KubernetesClusterFrontend"
+	canonicalHostedZoneNameID = "test-id"
 )
 
 type fakeElb struct {
@@ -67,7 +68,8 @@ func mockLoadBalancers(m *fakeElb, lbs ...string) {
 	var descriptions []*aws_elb.LoadBalancerDescription
 	for _, lb := range lbs {
 		descriptions = append(descriptions, &aws_elb.LoadBalancerDescription{
-			LoadBalancerName: aws.String(lb),
+			LoadBalancerName:          aws.String(lb),
+			CanonicalHostedZoneNameID: aws.String(canonicalHostedZoneNameID),
 		})
 
 	}
@@ -179,6 +181,26 @@ func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 	assert.EqualError(t, err, "expected ELBs: 2 actual: 1")
 }
 
+func TestNameAndHostedZoneIDLoadBalancerDetailsAreExtracted(t *testing.T) {
+	//given
+	mockElb := &fakeElb{}
+	clusterFrontEnd := "cluster-frontend"
+	clusterFrontEndDifferentCluster := "cluster-frontend-different-cluster"
+	mockLoadBalancers(mockElb, clusterFrontEnd, clusterFrontEndDifferentCluster, "other")
+	mockClusterTags(mockElb,
+		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
+		lbTags{name: clusterFrontEndDifferentCluster, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String("different cluster")}}},
+		lbTags{name: "other elb", tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String("Bannana"), Value: aws.String("Tasty")}}},
+	)
+
+	//when
+	frontEnds, _ := FindFrontEndElbs(mockElb, clusterName)
+
+	//then
+	assert.Equal(t, frontEnds["cluster-frontend"].Name, "cluster-frontend")
+	assert.Equal(t, frontEnds["cluster-frontend"].HostedZoneID, canonicalHostedZoneNameID)
+}
+
 func TestAttachWithMultipleMatchingLoadBalancers(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
@@ -260,7 +282,10 @@ func TestGetLoadBalancerPages(t *testing.T) {
 	loadBalancerName := "lb1"
 	mockElb.On("DescribeLoadBalancers", &aws_elb.DescribeLoadBalancersInput{}).Return(&aws_elb.DescribeLoadBalancersOutput{NextMarker: aws.String("Use me")}, nil)
 	mockElb.On("DescribeLoadBalancers", &aws_elb.DescribeLoadBalancersInput{Marker: aws.String("Use me")}).Return(&aws_elb.DescribeLoadBalancersOutput{
-		LoadBalancerDescriptions: []*aws_elb.LoadBalancerDescription{&aws_elb.LoadBalancerDescription{LoadBalancerName: aws.String(loadBalancerName)}},
+		LoadBalancerDescriptions: []*aws_elb.LoadBalancerDescription{&aws_elb.LoadBalancerDescription{
+			LoadBalancerName:          aws.String(loadBalancerName),
+			CanonicalHostedZoneNameID: aws.String(canonicalHostedZoneNameID),
+		}},
 	}, nil)
 	mockInstanceMetadata(mockMetadata, instanceID)
 	mockClusterTags(mockElb, lbTags{name: loadBalancerName, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
@@ -278,14 +303,14 @@ func TestTagCallsPage(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
 	e.(*elb).expectedNumber = 2
-	e.(*elb).maxTagQuery = 1
 	instanceID := "cow"
 	loadBalancerName1 := "lb1"
-	loadBalancerName2 := "lb1"
+	loadBalancerName2 := "lb2"
 	mockInstanceMetadata(mockMetadata, instanceID)
 	mockLoadBalancers(mockElb, loadBalancerName1, loadBalancerName2)
-	mockClusterTags(mockElb, lbTags{name: loadBalancerName1, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
-	mockClusterTags(mockElb, lbTags{name: loadBalancerName2, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
+	mockClusterTags(mockElb,
+		lbTags{name: loadBalancerName1, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
+		lbTags{name: loadBalancerName2, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
 	mockRegisterInstances(mockElb, loadBalancerName1, instanceID)
 	mockRegisterInstances(mockElb, loadBalancerName2, instanceID)
 
