@@ -39,7 +39,7 @@ func main() {
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer)
 	controller := dns.New(client)
 
-	cmd.ConfigureHealthPort(controller, healthPort)
+	cmd.AddHealthPort(controller, healthPort)
 	cmd.AddSignalHandler(controller)
 
 	err := controller.Start()

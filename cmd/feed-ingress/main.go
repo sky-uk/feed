@@ -6,6 +6,8 @@ import (
 
 	_ "net/http/pprof"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
@@ -103,7 +105,7 @@ func main() {
 		Updaters:         updaters,
 	})
 
-	cmd.ConfigureHealthPort(controller, healthPort)
+	cmd.AddHealthPort(controller, healthPort)
 	cmd.AddSignalHandler(controller)
 
 	err := controller.Start()
@@ -112,6 +114,8 @@ func main() {
 		os.Exit(-1)
 	}
 	log.Info("Controller started")
+
+	cmd.AddUnhealthyLogger(controller, time.Second*5)
 
 	select {}
 }

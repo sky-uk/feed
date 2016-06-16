@@ -208,7 +208,7 @@ func handleLongPoll(r io.Reader, updateCh chan<- interface{}) {
 
 	for scanner.Scan() {
 		event := scanner.Text()
-		log.Infof("Received event %s", event)
+		log.Debugf("Received event %s", event)
 		updateCh <- struct{}{}
 	}
 
