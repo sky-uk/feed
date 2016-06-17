@@ -59,16 +59,25 @@ type client struct {
 	http    *http.Client
 }
 
+// Conf is the config for the k8s client.
+type Conf struct {
+	APIServerURL string
+	CaCert       []byte
+	Token        string
+	ClientCert   []byte
+	ClientKey    []byte
+}
+
 // New creates a client for the kubernetes apiserver.
-func New(apiServerURL string, caCert []byte, token string) (Client, error) {
-	parsedURL, err := url.Parse(apiServerURL)
+func New(conf Conf) (Client, error) {
+	parsedURL, err := url.Parse(conf.APIServerURL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid url %s: %v", apiServerURL, err)
+		return nil, fmt.Errorf("invalid url %s: %v", conf.APIServerURL, err)
 	}
 	baseURL := strings.TrimSuffix(parsedURL.String(), "/")
 
 	pool := x509.NewCertPool()
-	if ok := pool.AppendCertsFromPEM(caCert); !ok {
+	if ok := pool.AppendCertsFromPEM(conf.CaCert); !ok {
 		return nil, fmt.Errorf("unable to parse ca certificate")
 	}
 
@@ -82,15 +91,24 @@ func New(apiServerURL string, caCert []byte, token string) (Client, error) {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
+
+	if len(conf.ClientCert) > 0 && len(conf.ClientKey) > 0 {
+		cert, err := tls.X509KeyPair(conf.ClientCert, conf.ClientKey)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create client certificate: %v", err)
+		}
+		tr.TLSClientConfig.Certificates = []tls.Certificate{cert}
+	}
+
 	httpClient := &http.Client{Transport: tr}
 
 	log.Debugf("Constructing client with url: %s, token: %s, caCert: %v",
-		baseURL, token, string(caCert))
+		baseURL, conf.Token, string(conf.CaCert))
 
 	return &client{
 			baseURL: baseURL,
-			caCert:  caCert,
-			token:   token,
+			caCert:  conf.CaCert,
+			token:   conf.Token,
 			http:    httpClient},
 		nil
 }
@@ -293,7 +311,9 @@ func (c *client) request(path string) (*http.Response, error) {
 		return nil, err
 	}
 
-	req.Header.Add("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		req.Header.Add("Authorization", "Bearer "+c.token)
+	}
 
 	log.Debugf("k8s<-: %v", *req)
 	resp, err := c.http.Do(req)

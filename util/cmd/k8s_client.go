@@ -9,11 +9,25 @@ import (
 )
 
 // CreateK8sClient creates a client for the kubernetes apiserver reading the caCert and token from file.
-func CreateK8sClient(caCertFile string, tokenFile string, apiServer string) k8s.Client {
+func CreateK8sClient(caCertFile, tokenFile, apiServer, clientCertFile, clientKeyFile string) k8s.Client {
 	caCert := readFile(caCertFile)
-	token := string(readFile(tokenFile))
 
-	client, err := k8s.New(apiServer, caCert, token)
+	conf := k8s.Conf{
+		APIServerURL: apiServer,
+		CaCert:       caCert,
+	}
+
+	if tokenFile != "" {
+		conf.Token = string(readFile(tokenFile))
+	}
+
+	if clientCertFile != "" && clientKeyFile != "" {
+		conf.ClientCert = readFile(clientCertFile)
+		conf.ClientKey = readFile(clientKeyFile)
+	}
+
+	client, err := k8s.New(conf)
+
 	if err != nil {
 		log.Errorf("Unable to create Kubernetes client: %v", err)
 		os.Exit(-1)

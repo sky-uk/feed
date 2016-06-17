@@ -20,6 +20,8 @@ var (
 	apiServer              string
 	caCertFile             string
 	tokenFile              string
+	clientCertFile         string
+	clientKeyFile          string
 	ingressPort            int
 	ingressAllow           string
 	ingressHealthPort      int
@@ -39,7 +41,9 @@ func init() {
 	const (
 		defaultAPIServer              = "https://kubernetes:443"
 		defaultCaCertFile             = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-		defaultTokenFile              = "/run/secrets/kubernetes.io/serviceaccount/token"
+		defaultTokenFile              = ""
+		defaultClientCertFile         = ""
+		defaultClientKeyFile          = ""
 		defaultIngressPort            = 8080
 		defaultIngressAllow           = ""
 		defaultIngressHealthPort      = 8081
@@ -60,9 +64,13 @@ func init() {
 	flag.StringVar(&apiServer, "apiserver", defaultAPIServer,
 		"Kubernetes API server URL.")
 	flag.StringVar(&caCertFile, "cacertfile", defaultCaCertFile,
-		"File containing kubernetes ca certificate.")
+		"File containing the Kubernetes API server certificate.")
 	flag.StringVar(&tokenFile, "tokenfile", defaultTokenFile,
-		"File containing kubernetes client authentication token.")
+		"File containing kubernetes client authentication token. Leave empty to not use a token.")
+	flag.StringVar(&clientCertFile, "client-certfile", defaultClientCertFile,
+		"File containing client certificate. Leave empty to not use a client certificate.")
+	flag.StringVar(&clientKeyFile, "client-keyfile", defaultClientKeyFile,
+		"File containing client key. Leave empty to not use a client certificate.")
 	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort,
 		"Port to serve ingress traffic to backend services.")
 	flag.IntVar(&ingressHealthPort, "ingress-health-port", defaultIngressHealthPort,
@@ -97,7 +105,7 @@ func main() {
 	flag.Parse()
 	cmd.ConfigureLogging(debug)
 
-	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer)
+	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer, clientCertFile, clientKeyFile)
 	updaters := createIngressUpdaters()
 
 	controller := controller.New(controller.Config{
