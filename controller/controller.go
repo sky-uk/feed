@@ -31,6 +31,7 @@ type Controller interface {
 type controller struct {
 	client        k8s.Client
 	updaters      []Updater
+	defaultAllow  []string
 	watcher       k8s.Watcher
 	watcherDone   sync.WaitGroup
 	started       bool
@@ -42,13 +43,15 @@ type controller struct {
 type Config struct {
 	KubernetesClient k8s.Client
 	Updaters         []Updater
+	DefaultAllow     string
 }
 
 // New creates an ingress controller.
 func New(conf Config) Controller {
 	return &controller{
-		client:   conf.KubernetesClient,
-		updaters: conf.Updaters,
+		client:       conf.KubernetesClient,
+		updaters:     conf.Updaters,
+		defaultAllow: strings.Split(conf.DefaultAllow, ","),
 	}
 }
 
@@ -127,7 +130,15 @@ func (c *controller) updateIngresses() error {
 						Path:           path.Path,
 						ServiceAddress: address,
 						ServicePort:    int32(path.Backend.ServicePort.IntValue()),
-						Allow:          strings.Split(ingress.Annotations[ingressAllowAnnotation], ","),
+						Allow:          c.defaultAllow,
+					}
+
+					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
+						if allow == "" {
+							entry.Allow = []string{}
+						} else {
+							entry.Allow = strings.Split(allow, ",")
+						}
 					}
 
 					if !entry.isEmpty() {

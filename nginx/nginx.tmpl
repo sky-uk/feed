@@ -38,7 +38,6 @@ http {
     scgi_temp_path         {{ .Config.WorkingDir }}/tmp_scgi 1 2;
 
     # Configure ingresses
-    {{ $defaultAllow := .Config.DefaultAllow }}
     {{ $port := .Config.IngressPort }}
     {{ range $entry := .Entries }}
     # Start entry
@@ -49,8 +48,7 @@ http {
 
         # Restrict clients
         allow 127.0.0.1;
-        {{ if $entry.Allow }}{{ range $entry.Allow }}allow {{ . }};
-        {{ end }}{{ else if $defaultAllow }}allow {{ $defaultAllow }};
+        {{ range $entry.Allow }}allow {{ . }};
         {{ end }}
         deny all;
 

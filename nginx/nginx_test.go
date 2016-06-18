@@ -15,9 +15,8 @@ import (
 )
 
 const (
-	port         = 9090
-	defaultAllow = "10.50.0.0/16"
-	fakeNginx    = "./fake_nginx.sh"
+	port      = 9090
+	fakeNginx = "./fake_nginx.sh"
 )
 
 type mockSignaller struct {
@@ -40,7 +39,6 @@ func newConf(tmpDir string, binary string) Conf {
 		BinaryLocation:  binary,
 		IngressPort:     port,
 		WorkerProcesses: 1,
-		DefaultAllow:    defaultAllow,
 	}
 }
 
@@ -189,7 +187,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"    ",
 			},
 		},
-		// Check empty allow skips the allow for the ingress in the output.
+		// Check no allows works.
 		{
 			defaultConf,
 			[]controller.IngressEntry{
@@ -199,6 +197,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "/bar",
 					ServiceAddress: "lala",
 					ServicePort:    8080,
+					Allow:          []string{},
 				},
 			},
 			[]string{
@@ -209,7 +208,37 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"\n" +
 					"        # Restrict clients\n" +
 					"        allow 127.0.0.1;\n" +
-					"        allow 10.50.0.0/16;\n" +
+					"        \n" +
+					"        deny all;\n" +
+					"\n" +
+					"        location /bar/ {\n" +
+					"            proxy_pass http://lala:8080/;\n" +
+					"        }\n" +
+					"    }\n" +
+					"    ",
+			},
+		},
+		// Check nil allow works.
+		{
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "foo.com",
+					Name:           "foo-ingress",
+					Path:           "/bar",
+					ServiceAddress: "lala",
+					ServicePort:    8080,
+					Allow:          nil,
+				},
+			},
+			[]string{
+				"   # foo-ingress\n" +
+					"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name foo.com;\n" +
+					"\n" +
+					"        # Restrict clients\n" +
+					"        allow 127.0.0.1;\n" +
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +
@@ -230,6 +259,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "/",
 					ServiceAddress: "foo",
 					ServicePort:    8080,
+					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Name:           "0-first-ingress",
@@ -237,6 +267,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "/",
 					ServiceAddress: "foo",
 					ServicePort:    8080,
+					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Name:           "1-next-ingress",
@@ -244,6 +275,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					Path:           "/",
 					ServiceAddress: "foo",
 					ServicePort:    8080,
+					Allow:          []string{"10.82.0.0/16"},
 				},
 			},
 			[]string{
@@ -254,7 +286,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"\n" +
 					"        # Restrict clients\n" +
 					"        allow 127.0.0.1;\n" +
-					"        allow 10.50.0.0/16;\n" +
+					"        allow 10.82.0.0/16;\n" +
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +
@@ -270,7 +302,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"\n" +
 					"        # Restrict clients\n" +
 					"        allow 127.0.0.1;\n" +
-					"        allow 10.50.0.0/16;\n" +
+					"        allow 10.82.0.0/16;\n" +
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +
@@ -286,7 +318,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"\n" +
 					"        # Restrict clients\n" +
 					"        allow 127.0.0.1;\n" +
-					"        allow 10.50.0.0/16;\n" +
+					"        allow 10.82.0.0/16;\n" +
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +
@@ -448,42 +480,6 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        allow 127.0.0.1;\n" +
 					"        allow 10.82.0.0/16;\n" +
 					"        allow 10.99.0.0/16;\n" +
-					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location / {\n" +
-					"            proxy_pass http://service:9090/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
-			},
-		},
-		// Check no allows work
-		{
-			Conf{
-				WorkingDir:      tmpDir,
-				BinaryLocation:  fakeNginx,
-				IngressPort:     port,
-				WorkerProcesses: 1,
-				DefaultAllow:    "",
-			},
-			[]controller.IngressEntry{
-				{
-					Host:           "chris.com",
-					Name:           "chris-ingress",
-					Path:           "",
-					ServiceAddress: "service",
-					ServicePort:    9090,
-				},
-			},
-			[]string{
-				"   # chris-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name chris.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
-					"        allow 127.0.0.1;\n" +
 					"        \n" +
 					"        deny all;\n" +
 					"\n" +

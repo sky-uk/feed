@@ -94,7 +94,11 @@ func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 }
 
 func newController(lb Updater, client k8s.Client) Controller {
-	return New(Config{Updaters: []Updater{lb}, KubernetesClient: client})
+	return New(Config{
+		Updaters:         []Updater{lb},
+		KubernetesClient: client,
+		DefaultAllow:     ingressDefaultAllow,
+	})
 }
 
 func TestControllerCanBeStartedAndStopped(t *testing.T) {
@@ -291,19 +295,19 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with missing host name",
-			createIngressesFixture("", ingressSvcName, ingressSvcPort),
+			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with missing service name",
-			createIngressesFixture(ingressHost, "", ingressSvcPort),
+			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with missing service port",
-			createIngressesFixture(ingressHost, ingressSvcName, 0),
+			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
@@ -312,6 +316,32 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createDefaultIngresses(),
 			createServiceFixture(ingressSvcName, ingressNamespace, ""),
 			IngressUpdate{Entries: []IngressEntry{}},
+		},
+		{
+			"ingress with default allow",
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING"),
+			createDefaultServices(),
+			IngressUpdate{Entries: []IngressEntry{{
+				Name:           ingressNamespace + "/" + ingressName,
+				Host:           ingressHost,
+				Path:           ingressPath,
+				ServiceAddress: serviceIP,
+				ServicePort:    ingressSvcPort,
+				Allow:          strings.Split(ingressDefaultAllow, ","),
+			}}},
+		},
+		{
+			"ingress with empty allow",
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ""),
+			createDefaultServices(),
+			IngressUpdate{Entries: []IngressEntry{{
+				Name:           ingressNamespace + "/" + ingressName,
+				Host:           ingressHost,
+				Path:           ingressPath,
+				ServiceAddress: serviceIP,
+				ServicePort:    ingressSvcPort,
+				Allow:          []string{},
+			}}},
 		},
 	}
 
@@ -359,21 +389,22 @@ func createLbEntriesFixture() IngressUpdate {
 }
 
 const (
-	ingressHost      = "foo.sky.com"
-	ingressPath      = "/foo"
-	ingressName      = "foo-ingress"
-	ingressSvcName   = "foo-svc"
-	ingressSvcPort   = 80
-	ingressNamespace = "happysky"
-	ingressAllow     = "10.82.0.0/16,10.44.0.0/16"
-	serviceIP        = "10.254.0.82"
+	ingressHost         = "foo.sky.com"
+	ingressPath         = "/foo"
+	ingressName         = "foo-ingress"
+	ingressSvcName      = "foo-svc"
+	ingressSvcPort      = 80
+	ingressNamespace    = "happysky"
+	ingressAllow        = "10.82.0.0/16,10.44.0.0/16"
+	ingressDefaultAllow = "10.50.0.0/16,10.1.0.0/16"
+	serviceIP           = "10.254.0.82"
 )
 
 func createDefaultIngresses() []k8s.Ingress {
-	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort)
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow)
 }
 
-func createIngressesFixture(host string, serviceName string, servicePort int) []k8s.Ingress {
+func createIngressesFixture(host string, serviceName string, servicePort int, allow string) []k8s.Ingress {
 	paths := []k8s.HTTPIngressPath{{
 		Path: ingressPath,
 		Backend: k8s.IngressBackend{
@@ -381,12 +412,18 @@ func createIngressesFixture(host string, serviceName string, servicePort int) []
 			ServicePort: k8s.FromInt(servicePort),
 		},
 	}}
+
+	annotations := make(map[string]string)
+	if allow != "MISSING" {
+		annotations[ingressAllowAnnotation] = allow
+	}
+
 	return []k8s.Ingress{
 		{
 			ObjectMeta: k8s.ObjectMeta{
 				Name:        ingressName,
 				Namespace:   ingressNamespace,
-				Annotations: map[string]string{ingressAllowAnnotation: ingressAllow},
+				Annotations: annotations,
 			},
 			Spec: k8s.IngressSpec{
 				Rules: []k8s.IngressRule{{
