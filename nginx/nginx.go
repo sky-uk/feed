@@ -24,14 +24,16 @@ const nginxStartDelay = time.Millisecond * 100
 
 // Conf configuration for nginx
 type Conf struct {
-	BinaryLocation    string
-	WorkingDir        string
-	WorkerProcesses   int
-	WorkerConnections int
-	KeepAliveSeconds  int
-	HealthPort        int
-	IngressPort       int
-	LogLevel          string
+	BinaryLocation          string
+	WorkingDir              string
+	WorkerProcesses         int
+	WorkerConnections       int
+	KeepaliveSeconds        int
+	BackendKeepalives       int
+	BackendKeepaliveSeconds int
+	HealthPort              int
+	IngressPort             int
+	LogLevel                string
 }
 
 // Signaller interface around signalling the loadbalancer process
@@ -67,7 +69,12 @@ type nginxLoadBalancer struct {
 // Used for generating nginx config
 type loadBalancerTemplate struct {
 	Config  Conf
-	Entries []controller.IngressEntry
+	Entries []nginxEntry
+}
+
+type nginxEntry struct {
+	controller.IngressEntry
+	UpstreamID string
 }
 
 func (lb *nginxLoadBalancer) nginxConfFile() string {
@@ -103,7 +110,6 @@ func (lb *nginxLoadBalancer) Start() error {
 	lb.cmd.Stderr = log.StandardLogger().Writer()
 	lb.cmd.Stdin = os.Stdin
 
-	log.Info("(Ignore errors about /var/log/nginx/error.log - they are expected)")
 	if err := lb.cmd.Start(); err != nil {
 		return fmt.Errorf("unable to start nginx: %v", err)
 	}
@@ -158,7 +164,7 @@ func (lb *nginxLoadBalancer) Stop() error {
 }
 
 func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
-	updated, err := lb.update(entries.SortedByName())
+	updated, err := lb.update(entries)
 	if err != nil {
 		return fmt.Errorf("unable to update nginx: %v", err)
 	}
@@ -213,19 +219,26 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 		return nil, err
 	}
 
-	var templateEntries []controller.IngressEntry
-	for _, entry := range update.Entries {
-		trimmedPath := strings.TrimSuffix(strings.TrimPrefix(entry.Path, "/"), "/")
+	sortedIngressEntries := update.SortedByName().Entries
+
+	var entries []nginxEntry
+	for idx, ingressEntry := range sortedIngressEntries {
+		trimmedPath := strings.TrimSuffix(strings.TrimPrefix(ingressEntry.Path, "/"), "/")
 		if len(trimmedPath) == 0 {
-			entry.Path = "/"
+			ingressEntry.Path = "/"
 		} else {
-			entry.Path = fmt.Sprintf("/%s/", trimmedPath)
+			ingressEntry.Path = fmt.Sprintf("/%s/", trimmedPath)
 		}
-		templateEntries = append(templateEntries, entry)
+
+		entry := nginxEntry{
+			IngressEntry: ingressEntry,
+			UpstreamID:   fmt.Sprintf("upstream%03d", idx),
+		}
+		entries = append(entries, entry)
 	}
 
 	var output bytes.Buffer
-	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: templateEntries})
+	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: entries})
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("Unable to execute nginx config duration. It will be out of date: %v", err)

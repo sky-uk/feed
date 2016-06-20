@@ -116,6 +116,7 @@ func (c *controller) updateIngresses() error {
 
 	serviceMap := mapNamesToAddresses(services)
 
+	var skipped int
 	entries := []IngressEntry{}
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
@@ -141,8 +142,11 @@ func (c *controller) updateIngresses() error {
 						}
 					}
 
-					if !entry.isEmpty() {
+					if err := entry.validate(); err == nil {
 						entries = append(entries, entry)
+					} else {
+						log.Debugf("Skipping entry: %v", err)
+						skipped++
 					}
 				}
 
@@ -150,7 +154,7 @@ func (c *controller) updateIngresses() error {
 		}
 	}
 
-	log.Infof("Updating with %d ingress entry(s)", len(entries))
+	log.Infof("Updating with %d ingress entry(s), skipped %d invalid", len(entries), skipped)
 	update := IngressUpdate{Entries: entries}
 	for _, u := range c.updaters {
 		if err := u.Update(update); err != nil {
