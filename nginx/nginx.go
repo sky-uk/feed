@@ -31,7 +31,6 @@ type Conf struct {
 	KeepAliveSeconds  int
 	HealthPort        int
 	IngressPort       int
-	DefaultAllow      string
 	LogLevel          string
 }
 

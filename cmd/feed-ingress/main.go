@@ -103,6 +103,7 @@ func main() {
 	controller := controller.New(controller.Config{
 		KubernetesClient: client,
 		Updaters:         updaters,
+		DefaultAllow:     ingressAllow,
 	})
 
 	cmd.AddHealthPort(controller, healthPort)
@@ -130,7 +131,6 @@ func createIngressUpdaters() []controller.Updater {
 		WorkerConnections: nginxWorkerConnections,
 		KeepAliveSeconds:  nginxKeepAliveSeconds,
 		HealthPort:        ingressHealthPort,
-		DefaultAllow:      ingressAllow,
 	})
 	return []controller.Updater{frontend, proxy}
 }
