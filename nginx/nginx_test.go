@@ -5,20 +5,29 @@ import (
 
 	"io/ioutil"
 	"os"
-	"regexp"
-
 	"os/exec"
-
+	"regexp"
 	"strings"
 
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/sky-uk/feed/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 const (
-	port      = 9090
-	fakeNginx = "./fake_nginx.sh"
+	port          = 9090
+	fakeNginx     = "./fake_nginx.sh"
+	smallWaitTime = time.Millisecond * 10
 )
 
 type mockSignaller struct {
@@ -92,12 +101,32 @@ func TestHealthyWhileRunning(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
-	lb, _ := newLb(tmpDir)
+	ts := stubHealthPort()
+	defer ts.Close()
+	conf := newConf(tmpDir, fakeNginx)
+	conf.HealthPort = getPort(ts)
+	lb, _ := newLbWithConf(conf)
 
 	assert.Error(lb.Health(), "should be unhealthy")
 	assert.NoError(lb.Start())
+
+	time.Sleep(smallWaitTime)
 	assert.NoError(lb.Health(), "should be healthy")
+
 	assert.NoError(lb.Stop())
+	assert.Error(lb.Health(), "should be unhealthy")
+}
+
+func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	lb, _ := newLb(tmpDir)
+
+	assert.NoError(lb.Start())
+
+	time.Sleep(smallWaitTime)
 	assert.Error(lb.Health(), "should be unhealthy")
 }
 
@@ -490,6 +519,69 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 
 	assert.Equal(string(config1), string(config2), "configs should be identical")
 	mockSignaller.AssertExpectations(t)
+}
+
+func TestUpdatesMetricsFromNginxStatusPage(t *testing.T) {
+	// given
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	ts := stubHealthPort()
+	defer ts.Close()
+
+	conf := newConf(tmpDir, fakeNginx)
+	conf.HealthPort = getPort(ts)
+	lb, _ := newLbWithConf(conf)
+
+	// when
+	assert.NoError(lb.Start())
+	time.Sleep(time.Millisecond * 50)
+
+	// then
+	assert.Equal(9.0, gaugeValue(connectionGauge))
+	assert.Equal(2.0, gaugeValue(readingConnectionsGauge))
+	assert.Equal(1.0, gaugeValue(writingConnectionsGauge))
+	assert.Equal(8.0, gaugeValue(waitingConnectionsGauge))
+	assert.Equal(13287.0, gaugeValue(acceptsGauge))
+	assert.Equal(13286.0, gaugeValue(handledGauge))
+	assert.Equal(66627.0, gaugeValue(requestsGauge))
+}
+
+func stubHealthPort() *httptest.Server {
+	statusBody := `Active connections: 9
+server accepts handled requests
+ 13287 13286 66627
+Reading: 2 Writing: 1 Waiting: 8
+`
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" {
+			fmt.Fprintln(w, statusBody)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+func getPort(ts *httptest.Server) int {
+	_, port, err := net.SplitHostPort(ts.Listener.Addr().String())
+	if err != nil {
+		panic(err)
+	}
+	intPort, err := strconv.Atoi(port)
+	if err != nil {
+		panic(err)
+	}
+	return intPort
+}
+
+func gaugeValue(g prometheus.Gauge) float64 {
+	metricCh := make(chan prometheus.Metric, 1)
+	g.Collect(metricCh)
+	metric := <-metricCh
+	var metricVal dto.Metric
+	metric.Write(&metricVal)
+	return *metricVal.Gauge.Value
 }
 
 func setupWorkDir(t *testing.T) string {
