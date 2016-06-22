@@ -1,6 +1,9 @@
 package controller
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+)
 
 // IngressUpdate data
 type IngressUpdate struct {
@@ -13,28 +16,29 @@ type IngressEntry struct {
 	Name string
 	// Host is the fully qualified domain name used for external access.
 	Host string
-	// Path is the url path after the hostname.
+	// Path is the url path after the hostname. Must be non-empty.
 	Path string
-	// Service is a routable address for the Kubernetes backend service to proxy traffic to.
+	// ServiceAddress is a routable address for the Kubernetes backend service to proxy traffic to.
+	// Must be non-empty.
 	ServiceAddress string
-	// ServicePort is the port to proxy traffic to.
+	// ServicePort is the port to proxy traffic to. Must be non-zero.
 	ServicePort int32
 	// Allow are the ips or cidrs that are allowed to access the service.
 	Allow []string
 }
 
-// isEmpty returns true if Host, ServiceAddress, or ServicePort are empty.
-func (entry IngressEntry) isEmpty() bool {
+// validate returns error if entry has invalid fields.
+func (entry IngressEntry) validate() error {
 	if entry.Host == "" {
-		return true
+		return fmt.Errorf("%s had empty Host", entry.Name)
 	}
 	if entry.ServiceAddress == "" {
-		return true
+		return fmt.Errorf("%s had empty ServiceAddress", entry.Name)
 	}
 	if entry.ServicePort == 0 {
-		return true
+		return fmt.Errorf("%s had 0 ServicePort", entry.Name)
 	}
-	return false
+	return nil
 }
 
 // SortedByName returns the update with entries ordered by their Name.

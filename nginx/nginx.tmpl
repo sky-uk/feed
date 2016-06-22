@@ -18,18 +18,22 @@ events {
 http {
     default_type text/html;
 
-    # Keep alive time for client connections
-    keepalive_timeout {{ .Config.KeepAliveSeconds }}s;
+    # Keep alive time for client connections. Don't limit by number of requests.
+    keepalive_timeout {{ .Config.KeepaliveSeconds }}s;
+    keepalive_requests 2147483647;
 
-    # Optimize for latency over throughput for persistent connections
+    # Optimize for latency over throughput for persistent connections.
     tcp_nodelay on;
+
+    # Disable nginx version leakage to external clients.
+    server_tokens off;
 
     # Obtain client IP from frontend's X-Forward-For header
     set_real_ip_from 0.0.0.0/0;
     real_ip_header X-Forwarded-For;
     real_ip_recursive off;
 
-    # Put all data into the working directory
+    # Put all data into the working directory.
     access_log             off;
     client_body_temp_path  {{ .Config.WorkingDir }}/tmp_client_body 1 2;
     proxy_temp_path        {{ .Config.WorkingDir }}/tmp_proxy 1 2;
@@ -39,9 +43,16 @@ http {
 
     # Configure ingresses
     {{ $port := .Config.IngressPort }}
+    {{ $keepalive := .Config.BackendKeepalives }}
+    {{ $keepaliveSeconds := .Config.BackendKeepaliveSeconds }}
     {{ range $entry := .Entries }}
     # Start entry
     # {{ $entry.Name }}
+    upstream {{ $entry.UpstreamID }} {
+        server {{ $entry.ServiceAddress }}:{{ $entry.ServicePort }};
+        keepalive {{ $keepalive }};
+    }
+
     server {
         listen {{ $port }};
         server_name {{ $entry.Host }};
@@ -53,7 +64,29 @@ http {
         deny all;
 
         location {{ if $entry.Path }}{{ $entry.Path }}{{ end }} {
-            proxy_pass http://{{ $entry.ServiceAddress }}:{{ $entry.ServicePort }}/;
+            # Strip location path when proxying.
+            proxy_pass http://{{ $entry.UpstreamID }}/;
+
+            # Enable keepalive to backend.
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+
+            # Add X-Forwarded-For and X-Original-URI for proxy information.
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Original-URI $request_uri;
+
+            # Timeout faster than the default 60s on initial connect.
+            proxy_connect_timeout 10s;
+
+            # Close proxy connections after backend keepalive time.
+            proxy_read_timeout {{ $keepaliveSeconds }}s;
+            proxy_send_timeout {{ $keepaliveSeconds }}s;
+
+            # Disable buffering, as we'll be interacting with ELBs with http listeners, which we assume will
+            # quickly consume and generate responses and requests.
+            # This should be enabled if nginx will directly serve traffic externally to unknown clients.
+            proxy_buffering off;
+            proxy_request_buffering off;
         }
     }
     # End entry

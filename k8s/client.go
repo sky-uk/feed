@@ -148,7 +148,7 @@ func (c *client) watch(resourcePath string) Watcher {
 		for watch(w, request) {
 		}
 
-		log.Debug("Watch %s has stopped", resourcePath)
+		log.Debugf("Watch %s has stopped", resourcePath)
 	}()
 
 	return w

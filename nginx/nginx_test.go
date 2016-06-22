@@ -9,6 +9,8 @@ import (
 
 	"os/exec"
 
+	"strings"
+
 	"github.com/sky-uk/feed/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -35,10 +37,12 @@ func (m *mockSignaller) sighup(p *os.Process) error {
 
 func newConf(tmpDir string, binary string) Conf {
 	return Conf{
-		WorkingDir:      tmpDir,
-		BinaryLocation:  binary,
-		IngressPort:     port,
-		WorkerProcesses: 1,
+		WorkingDir:              tmpDir,
+		BinaryLocation:          binary,
+		IngressPort:             port,
+		WorkerProcesses:         1,
+		BackendKeepalives:       1024,
+		BackendKeepaliveSeconds: 58,
 	}
 }
 
@@ -151,12 +155,13 @@ func TestNginxConfigUpdates(t *testing.T) {
 	defaultConf := newConf(tmpDir, fakeNginx)
 
 	var tests = []struct {
+		name          string
 		lbConf        Conf
 		entries       []controller.IngressEntry
 		configEntries []string
 	}{
-		// Check full ingress entry works.
 		{
+			"Check full ingress entry works",
 			defaultConf,
 			[]controller.IngressEntry{
 				{
@@ -170,6 +175,11 @@ func TestNginxConfigUpdates(t *testing.T) {
 			},
 			[]string{
 				"   # chris-ingress\n" +
+					"    upstream upstream000 {\n" +
+					"        server service:9090;\n" +
+					"        keepalive 1024;\n" +
+					"    }\n" +
+					"\n" +
 					"    server {\n" +
 					"        listen 9090;\n" +
 					"        server_name chris.com;\n" +
@@ -181,76 +191,95 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        deny all;\n" +
 					"\n" +
 					"        location /path/ {\n" +
-					"            proxy_pass http://service:9090/;\n" +
+					"            # Strip location path when proxying.\n" +
+					"            proxy_pass http://upstream000/;\n" +
+					"\n" +
+					"            # Enable keepalive to backend.\n" +
+					"            proxy_http_version 1.1;\n" +
+					"            proxy_set_header Connection \"\";\n" +
+					"\n" +
+					"            # Add X-Forwarded-For and X-Original-URI for proxy information.\n" +
+					"            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n" +
+					"            proxy_set_header X-Original-URI $request_uri;\n" +
+					"\n            # Timeout faster than the default 60s on initial connect.\n" +
+					"            proxy_connect_timeout 10s;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 58s;\n" +
+					"            proxy_send_timeout 58s;\n" +
+					"\n" +
+					"            # Disable buffering, as we'll be interacting with ELBs with http listeners, which we assume will\n" +
+					"            # quickly consume and generate responses and requests.\n" +
+					"            # This should be enabled if nginx will directly serve traffic externally to unknown clients.\n" +
+					"            proxy_buffering off;\n" +
+					"            proxy_request_buffering off;\n" +
 					"        }\n" +
 					"    }\n" +
 					"    ",
 			},
 		},
-		// Check no allows works.
 		{
+			"Check no allows works",
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "foo.com",
-					Name:           "foo-ingress",
-					Path:           "/bar",
-					ServiceAddress: "lala",
-					ServicePort:    8080,
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
 					Allow:          []string{},
 				},
 			},
 			[]string{
-				"   # foo-ingress\n" +
+				"   # chris-ingress\n" +
+					"    upstream upstream000 {\n" +
+					"        server service:9090;\n" +
+					"        keepalive 1024;\n" +
+					"    }\n" +
+					"\n" +
 					"    server {\n" +
 					"        listen 9090;\n" +
-					"        server_name foo.com;\n" +
+					"        server_name chris.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
 					"        allow 127.0.0.1;\n" +
 					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location /bar/ {\n" +
-					"            proxy_pass http://lala:8080/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
+					"        deny all;\n",
 			},
 		},
-		// Check nil allow works.
 		{
+			"Check nil allow works",
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "foo.com",
-					Name:           "foo-ingress",
-					Path:           "/bar",
-					ServiceAddress: "lala",
-					ServicePort:    8080,
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
 					Allow:          nil,
 				},
 			},
 			[]string{
-				"   # foo-ingress\n" +
+				"   # chris-ingress\n" +
+					"    upstream upstream000 {\n" +
+					"        server service:9090;\n" +
+					"        keepalive 1024;\n" +
+					"    }\n" +
+					"\n" +
 					"    server {\n" +
 					"        listen 9090;\n" +
-					"        server_name foo.com;\n" +
+					"        server_name chris.com;\n" +
 					"\n" +
 					"        # Restrict clients\n" +
 					"        allow 127.0.0.1;\n" +
 					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location /bar/ {\n" +
-					"            proxy_pass http://lala:8080/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
+					"        deny all;\n",
 			},
 		},
-		// Check entries ordered by name.
 		{
+			"Check entries ordered by name",
 			defaultConf,
 			[]controller.IngressEntry{
 				{
@@ -280,57 +309,50 @@ func TestNginxConfigUpdates(t *testing.T) {
 			},
 			[]string{
 				"   # 0-first-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name foo.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
-					"        allow 127.0.0.1;\n" +
-					"        allow 10.82.0.0/16;\n" +
-					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location / {\n" +
-					"            proxy_pass http://foo:8080/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
+					"    upstream upstream000 {\n",
 				"   # 1-next-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name foo.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
-					"        allow 127.0.0.1;\n" +
-					"        allow 10.82.0.0/16;\n" +
-					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location / {\n" +
-					"            proxy_pass http://foo:8080/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
+					"    upstream upstream001 {\n",
 				"   # 2-last-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name foo.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
-					"        allow 127.0.0.1;\n" +
-					"        allow 10.82.0.0/16;\n" +
-					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location / {\n" +
-					"            proxy_pass http://foo:8080/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
+					"    upstream upstream002 {\n",
 			},
 		},
-		// Check path slashes are added correctly
 		{
+			"Check proxy_pass ordered correctly",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Name:           "2-last-ingress",
+					Host:           "foo.com",
+					Path:           "/",
+					ServiceAddress: "foo",
+					ServicePort:    8080,
+					Allow:          []string{"10.82.0.0/16"},
+				},
+				{
+					Name:           "0-first-ingress",
+					Host:           "foo.com",
+					Path:           "/",
+					ServiceAddress: "foo",
+					ServicePort:    8080,
+					Allow:          []string{"10.82.0.0/16"},
+				},
+				{
+					Name:           "1-next-ingress",
+					Host:           "foo.com",
+					Path:           "/",
+					ServiceAddress: "foo",
+					ServicePort:    8080,
+					Allow:          []string{"10.82.0.0/16"},
+				},
+			},
+			[]string{
+				"    proxy_pass http://upstream000/;\n",
+				"    proxy_pass http://upstream001/;\n",
+				"    proxy_pass http://upstream002/;\n",
+			},
+		},
+		{
+			"Check path slashes are added correctly",
 			defaultConf,
 			[]controller.IngressEntry{
 				{
@@ -375,90 +397,15 @@ func TestNginxConfigUpdates(t *testing.T) {
 				},
 			},
 			[]string{
-				"   # chris-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name chris.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
-					"        allow 127.0.0.1;\n" +
-					"        allow 10.82.0.0/16;\n" +
-					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location / {\n" +
-					"            proxy_pass http://service:9090/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
-				"   # chris-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name chris.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
-					"        allow 127.0.0.1;\n" +
-					"        allow 10.82.0.0/16;\n" +
-					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location /prefix-with-slash/ {\n" +
-					"            proxy_pass http://service:9090/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
-				"   # chris-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name chris.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
-					"        allow 127.0.0.1;\n" +
-					"        allow 10.82.0.0/16;\n" +
-					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location /prefix-without-preslash/ {\n" +
-					"            proxy_pass http://service:9090/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
-				"   # chris-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name chris.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
-					"        allow 127.0.0.1;\n" +
-					"        allow 10.82.0.0/16;\n" +
-					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location /prefix-without-postslash/ {\n" +
-					"            proxy_pass http://service:9090/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
-				"   # chris-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name chris.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
-					"        allow 127.0.0.1;\n" +
-					"        allow 10.82.0.0/16;\n" +
-					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location /prefix-without-anyslash/ {\n" +
-					"            proxy_pass http://service:9090/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
+				"        location / {\n",
+				"        location /prefix-with-slash/ {\n",
+				"        location /prefix-without-preslash/ {\n",
+				"        location /prefix-without-postslash/ {\n",
+				"        location /prefix-without-anyslash/ {\n",
 			},
 		},
-		// Check multiple allows work
 		{
+			"Check multiple allows work",
 			defaultConf,
 			[]controller.IngressEntry{
 				{
@@ -471,23 +418,12 @@ func TestNginxConfigUpdates(t *testing.T) {
 				},
 			},
 			[]string{
-				"   # chris-ingress\n" +
-					"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name chris.com;\n" +
-					"\n" +
-					"        # Restrict clients\n" +
+				"        # Restrict clients\n" +
 					"        allow 127.0.0.1;\n" +
 					"        allow 10.82.0.0/16;\n" +
 					"        allow 10.99.0.0/16;\n" +
 					"        \n" +
-					"        deny all;\n" +
-					"\n" +
-					"        location / {\n" +
-					"            proxy_pass http://service:9090/;\n" +
-					"        }\n" +
-					"    }\n" +
-					"    ",
+					"        deny all;\n",
 			},
 		},
 	}
@@ -511,7 +447,10 @@ func TestNginxConfigUpdates(t *testing.T) {
 
 		assert.Equal(len(test.configEntries), len(serverEntries))
 		for i := range test.configEntries {
-			assert.Equal(test.configEntries[i], serverEntries[i][1])
+			expected := test.configEntries[i]
+			actual := serverEntries[i][1]
+			assert.True(strings.Contains(actual, expected),
+				"%s\nExpected:\n%s\nActual:\n%s\n", test.name, expected, actual)
 		}
 
 		assert.Nil(lb.Stop())

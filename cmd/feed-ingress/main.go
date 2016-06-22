@@ -16,47 +16,51 @@ import (
 )
 
 var (
-	debug                  bool
-	apiServer              string
-	caCertFile             string
-	tokenFile              string
-	clientCertFile         string
-	clientKeyFile          string
-	ingressPort            int
-	ingressAllow           string
-	ingressHealthPort      int
-	healthPort             int
-	nginxBinary            string
-	nginxWorkDir           string
-	nginxWorkerProcesses   int
-	nginxWorkerConnections int
-	nginxKeepAliveSeconds  int
-	nginxLogLevel          string
-	elbLabelValue          string
-	elbRegion              string
-	elbExpectedNumber      int
+	debug                        bool
+	apiServer                    string
+	caCertFile                   string
+	tokenFile                    string
+	clientCertFile               string
+	clientKeyFile                string
+	ingressPort                  int
+	ingressAllow                 string
+	ingressHealthPort            int
+	healthPort                   int
+	nginxBinary                  string
+	nginxWorkDir                 string
+	nginxWorkerProcesses         int
+	nginxWorkerConnections       int
+	nginxKeepAliveSeconds        int
+	nginxBackendKeepalives       int
+	nginxBackendKeepaliveSeconds int
+	nginxLogLevel                string
+	elbLabelValue                string
+	elbRegion                    string
+	elbExpectedNumber            int
 )
 
 func init() {
 	const (
-		defaultAPIServer              = "https://kubernetes:443"
-		defaultCaCertFile             = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-		defaultTokenFile              = ""
-		defaultClientCertFile         = ""
-		defaultClientKeyFile          = ""
-		defaultIngressPort            = 8080
-		defaultIngressAllow           = ""
-		defaultIngressHealthPort      = 8081
-		defaultHealthPort             = 12082
-		defaultNginxBinary            = "/usr/sbin/nginx"
-		defaultNginxWorkingDir        = "/nginx"
-		defaultNginxWorkers           = 1
-		defaultNginxWorkerConnections = 1024
-		defaultNginxKeepAliveSeconds  = 65
-		defaultNginxLogLevel          = "info"
-		defaultElbLabelValue          = ""
-		defaultElbRegion              = "eu-west-1"
-		defaultElbExpectedNumber      = 0
+		defaultAPIServer                    = "https://kubernetes:443"
+		defaultCaCertFile                   = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+		defaultTokenFile                    = ""
+		defaultClientCertFile               = ""
+		defaultClientKeyFile                = ""
+		defaultIngressPort                  = 8080
+		defaultIngressAllow                 = ""
+		defaultIngressHealthPort            = 8081
+		defaultHealthPort                   = 12082
+		defaultNginxBinary                  = "/usr/sbin/nginx"
+		defaultNginxWorkingDir              = "/nginx"
+		defaultNginxWorkers                 = 1
+		defaultNginxWorkerConnections       = 1024
+		defaultNginxKeepAliveSeconds        = 60
+		defaultNginxBackendKeepalives       = 512
+		defaultNginxBackendKeepaliveSeconds = 60
+		defaultNginxLogLevel                = "info"
+		defaultElbLabelValue                = ""
+		defaultElbRegion                    = "eu-west-1"
+		defaultElbExpectedNumber            = 0
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -89,7 +93,14 @@ func init() {
 	flag.IntVar(&nginxWorkerConnections, "nginx-worker-connections", defaultNginxWorkerConnections,
 		"Max number of connections per nginx worker. Includes both client and proxy connections.")
 	flag.IntVar(&nginxKeepAliveSeconds, "nginx-keepalive-seconds", defaultNginxKeepAliveSeconds,
-		"Keep alive time for persistent client connections to nginx.")
+		"Keep alive time for persistent client connections to nginx. Should generally be set larger than frontend "+
+			"keep alive times to prevent stale connections.")
+	flag.IntVar(&nginxBackendKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
+		"Maximum number of keepalive connections per backend service. Keepalive connections count against"+
+			" nginx-worker-connections limit, and will be restricted by that global limit as well.")
+	flag.IntVar(&nginxBackendKeepaliveSeconds, "nginx-backend-keepalive-seconds", defaultNginxBackendKeepaliveSeconds,
+		"Time to keep backend keepalive connections open. This should generally be set smaller than backend service keepalive "+
+			"times to prevent stale connections.")
 	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
@@ -132,13 +143,15 @@ func main() {
 func createIngressUpdaters() []controller.Updater {
 	frontend := elb.New(elbRegion, elbLabelValue, elbExpectedNumber)
 	proxy := nginx.New(nginx.Conf{
-		BinaryLocation:    nginxBinary,
-		IngressPort:       ingressPort,
-		WorkingDir:        nginxWorkDir,
-		WorkerProcesses:   nginxWorkerProcesses,
-		WorkerConnections: nginxWorkerConnections,
-		KeepAliveSeconds:  nginxKeepAliveSeconds,
-		HealthPort:        ingressHealthPort,
+		BinaryLocation:          nginxBinary,
+		IngressPort:             ingressPort,
+		WorkingDir:              nginxWorkDir,
+		WorkerProcesses:         nginxWorkerProcesses,
+		WorkerConnections:       nginxWorkerConnections,
+		KeepaliveSeconds:        nginxKeepAliveSeconds,
+		BackendKeepalives:       nginxBackendKeepalives,
+		BackendKeepaliveSeconds: nginxBackendKeepaliveSeconds,
+		HealthPort:              ingressHealthPort,
 	})
 	return []controller.Updater{frontend, proxy}
 }
