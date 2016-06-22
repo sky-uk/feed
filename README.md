@@ -9,13 +9,15 @@ Kubernetes controllers for managing external ingress with AWS.
 `feed-ingress` manages an nginx instance for load balancing ingress traffic to Kubernetes services.
 It's intended to be replicated to scale.
 
+Run with:
+
+    docker run skycirrus/feed-ingress:latest -h
+
+See all tags at https://hub.docker.com/r/skycirrus/feed-ingress/tags/.
+
 ## feed-dns
 
 `feed-dns` manages Route53 entries to point to the correct ELBs.
-
-## feed-elb
-
-`feed-elb` manages ELBs, attaching and removing ingress nodes.
 
 # Building
 
