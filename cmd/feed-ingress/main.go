@@ -11,9 +11,11 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/nginx"
+	"github.com/sky-uk/feed/util"
 	"github.com/sky-uk/feed/util/cmd"
 )
 
@@ -43,6 +45,13 @@ var (
 	pushgatewayURL               string
 	pushgatewayIntervalSeconds   int
 )
+
+var unhealthyCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: util.PrometheusNamespace,
+	Subsystem: util.PrometheusIngressSubsystem,
+	Name:      "unhealthy_time",
+	Help:      "The number of seconds feed-ingress has been unhealthy.",
+})
 
 func init() {
 	const (
@@ -124,6 +133,8 @@ func init() {
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
 	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
 		"Interval in seconds for pushing metrics.")
+
+	prometheus.MustRegister(unhealthyCounter)
 }
 
 func main() {
@@ -149,7 +160,7 @@ func main() {
 	}
 	log.Info("Controller started")
 
-	cmd.AddUnhealthyLogger(controller, time.Second*5)
+	cmd.AddUnhealthyLogger(controller, unhealthyCounter)
 	cmd.AddMetricsPusher("feed-ingress", pushgatewayURL, time.Second*time.Duration(pushgatewayIntervalSeconds))
 
 	select {}

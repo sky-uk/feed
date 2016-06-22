@@ -49,13 +49,17 @@ func healthHandler(pulse Pulse) func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// AddUnhealthyLogger adds a periodic poller which reports an unhealthy status as a log message.
-func AddUnhealthyLogger(pulse Pulse, pollInterval time.Duration) {
+const pollInterval = time.Second
+
+// AddUnhealthyLogger adds a periodic poller which reports an unhealthy status.
+// The healthCounter is increased by pollInterval if unhealthy.
+func AddUnhealthyLogger(pulse Pulse, unhealthyCounter prometheus.Counter) {
 	go func() {
 		healthy := true
 		tickCh := time.Tick(pollInterval)
 		for range tickCh {
 			if err := pulse.Health(); err != nil {
+				unhealthyCounter.Add(pollInterval.Seconds())
 				if healthy {
 					log.Warnf("Unhealthy: %v", err)
 					healthy = false
