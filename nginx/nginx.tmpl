@@ -1,15 +1,15 @@
-worker_processes  {{ .Config.WorkerProcesses }};
+worker_processes  {{ .WorkerProcesses }};
 daemon off;
 
-error_log stderr {{ .Config.LogLevel }};
-pid {{ .Config.WorkingDir }}/nginx.pid;
+error_log stderr {{ .LogLevel }};
+pid {{ .WorkingDir }}/nginx.pid;
 
 events {
     # Accept connections as fast as possible.
     multi_accept on;
     # Includes both proxy and client connections.
     # So e.g. 4096 = 2048 persistent client connections to backends per worker.
-    worker_connections {{ .Config.WorkerConnections }};
+    worker_connections {{ .WorkerConnections }};
     # Use most optimal non-blocking selector on linux.
     # Should be selected by default on linux, we just make it explicit here.
     use epoll;
@@ -19,7 +19,7 @@ http {
     default_type text/html;
 
     # Keep alive time for client connections. Don't limit by number of requests.
-    keepalive_timeout {{ .Config.KeepaliveSeconds }}s;
+    keepalive_timeout {{ .KeepaliveSeconds }}s;
     keepalive_requests 2147483647;
 
     # Optimize for latency over throughput for persistent connections.
@@ -29,22 +29,23 @@ http {
     server_tokens off;
 
     # Obtain client IP from frontend's X-Forward-For header
-    set_real_ip_from 0.0.0.0/0;
+{{ range .TrustedFrontends }}    set_real_ip_from {{ . }};
+{{ end }}
     real_ip_header X-Forwarded-For;
-    real_ip_recursive off;
+    real_ip_recursive on;
 
     # Put all data into the working directory.
     access_log             off;
-    client_body_temp_path  {{ .Config.WorkingDir }}/tmp_client_body 1 2;
-    proxy_temp_path        {{ .Config.WorkingDir }}/tmp_proxy 1 2;
-    fastcgi_temp_path      {{ .Config.WorkingDir }}/tmp_fastcgi 1 2;
-    uwsgi_temp_path        {{ .Config.WorkingDir }}/tmp_uwsgi 1 2;
-    scgi_temp_path         {{ .Config.WorkingDir }}/tmp_scgi 1 2;
+    client_body_temp_path  {{ .WorkingDir }}/tmp_client_body 1 2;
+    proxy_temp_path        {{ .WorkingDir }}/tmp_proxy 1 2;
+    fastcgi_temp_path      {{ .WorkingDir }}/tmp_fastcgi 1 2;
+    uwsgi_temp_path        {{ .WorkingDir }}/tmp_uwsgi 1 2;
+    scgi_temp_path         {{ .WorkingDir }}/tmp_scgi 1 2;
 
     # Configure ingresses
-    {{ $port := .Config.IngressPort }}
-    {{ $keepalive := .Config.BackendKeepalives }}
-    {{ $keepaliveSeconds := .Config.BackendKeepaliveSeconds }}
+    {{ $port := .IngressPort }}
+    {{ $keepalive := .BackendKeepalives }}
+    {{ $keepaliveSeconds := .BackendKeepaliveSeconds }}
     {{ range $entry := .Entries }}
     # Start entry
     # {{ $entry.Name }}
@@ -96,7 +97,7 @@ http {
 
     # Default backend
     server {
-        listen {{ .Config.IngressPort }} default_server;
+        listen {{ .IngressPort }} default_server;
         location / {
             return 404;
         }
@@ -104,7 +105,7 @@ http {
 
     # Status port. This should be firewalled to only allow internal access.
     server {
-        listen {{ .Config.HealthPort }} default_server reuseport;
+        listen {{ .HealthPort }} default_server reuseport;
 
         location /health {
             access_log off;

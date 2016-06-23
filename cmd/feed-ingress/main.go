@@ -8,6 +8,8 @@ import (
 
 	"time"
 
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
@@ -34,6 +36,7 @@ var (
 	nginxBackendKeepalives       int
 	nginxBackendKeepaliveSeconds int
 	nginxLogLevel                string
+	nginxTrustedFrontends        string
 	elbLabelValue                string
 	elbRegion                    string
 	elbExpectedNumber            int
@@ -103,6 +106,10 @@ func init() {
 			"times to prevent stale connections.")
 	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
+	flag.StringVar(&nginxTrustedFrontends, "nginx-trusted-frontends", "",
+		"Comma separated list of CIDRs to trust when determining the client's real IP from the "+
+			"X-Forwarded-For header. The client IP is used for allowing or denying ingress access. "+
+			"This will typically be the ELB subnet.")
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
@@ -142,6 +149,10 @@ func main() {
 
 func createIngressUpdaters() []controller.Updater {
 	frontend := elb.New(elbRegion, elbLabelValue, elbExpectedNumber)
+	trustedFrontends := []string{}
+	if nginxTrustedFrontends != "" {
+		trustedFrontends = strings.Split(nginxTrustedFrontends, ",")
+	}
 	proxy := nginx.New(nginx.Conf{
 		BinaryLocation:          nginxBinary,
 		IngressPort:             ingressPort,
@@ -152,6 +163,7 @@ func createIngressUpdaters() []controller.Updater {
 		BackendKeepalives:       nginxBackendKeepalives,
 		BackendKeepaliveSeconds: nginxBackendKeepaliveSeconds,
 		HealthPort:              ingressHealthPort,
+		TrustedFrontends:        trustedFrontends,
 	})
 	return []controller.Updater{frontend, proxy}
 }

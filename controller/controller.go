@@ -105,7 +105,7 @@ func (c *controller) handleUpdates() {
 
 func (c *controller) updateIngresses() error {
 	ingresses, err := c.client.GetIngresses()
-	log.Infof("Found %d ingress(es)", len(ingresses))
+	log.Infof("Found %d ingresses", len(ingresses))
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (c *controller) updateIngresses() error {
 		}
 	}
 
-	log.Infof("Updating with %d ingress entry(s), skipped %d invalid", len(entries), skipped)
+	log.Infof("Updating with %d entries, skipping %d invalid", len(entries), skipped)
 	update := IngressUpdate{Entries: entries}
 	for _, u := range c.updaters {
 		if err := u.Update(update); err != nil {

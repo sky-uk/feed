@@ -32,6 +32,7 @@ type Conf struct {
 	BackendKeepalives       int
 	BackendKeepaliveSeconds int
 	HealthPort              int
+	TrustedFrontends        []string
 	IngressPort             int
 	LogLevel                string
 }
@@ -68,7 +69,7 @@ type nginxLoadBalancer struct {
 
 // Used for generating nginx config
 type loadBalancerTemplate struct {
-	Config  Conf
+	Conf
 	Entries []nginxEntry
 }
 
@@ -238,7 +239,7 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 	}
 
 	var output bytes.Buffer
-	err = tmpl.Execute(&output, loadBalancerTemplate{Config: lb.Conf, Entries: entries})
+	err = tmpl.Execute(&output, loadBalancerTemplate{Conf: lb.Conf, Entries: entries})
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("Unable to execute nginx config duration. It will be out of date: %v", err)
