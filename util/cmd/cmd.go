@@ -39,7 +39,7 @@ func AddHealthPort(pulse Pulse, healthPort int) {
 func healthHandler(pulse Pulse) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := pulse.Health(); err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
+			w.WriteHeader(http.StatusInternalServerError)
 			io.WriteString(w, fmt.Sprintf("%v\n", err))
 			return
 		}
