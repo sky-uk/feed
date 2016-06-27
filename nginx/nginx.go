@@ -20,7 +20,10 @@ import (
 	"github.com/sky-uk/feed/util"
 )
 
-const nginxStartDelay = time.Millisecond * 100
+const (
+	nginxStartDelay       = time.Millisecond * 100
+	metricsUpdateInterval = time.Second * 10
+)
 
 // Conf configuration for nginx
 type Conf struct {
@@ -60,10 +63,12 @@ func (s *osSignaller) sighup(p *os.Process) error {
 // Nginx implementation
 type nginxLoadBalancer struct {
 	Conf
-	cmd        *exec.Cmd
-	signaller  signaller
-	running    util.SafeBool
-	finishedCh chan error
+	cmd              *exec.Cmd
+	signaller        signaller
+	running          util.SafeBool
+	lastErr          util.SafeError
+	metricsUnhealthy util.SafeBool
+	doneCh           chan struct{}
 }
 
 // Used for generating nginx config
@@ -89,9 +94,9 @@ func New(nginxConf Conf) controller.Updater {
 	}
 
 	return &nginxLoadBalancer{
-		Conf:       nginxConf,
-		signaller:  &osSignaller{},
-		finishedCh: make(chan error),
+		Conf:      nginxConf,
+		signaller: &osSignaller{},
+		doneCh:    make(chan struct{}),
 	}
 }
 
@@ -122,6 +127,8 @@ func (lb *nginxLoadBalancer) Start() error {
 		return fmt.Errorf("nginx died shortly after starting")
 	}
 
+	go lb.periodicallyUpdateMetrics()
+
 	log.Debugf("Nginx pid %d", lb.cmd.Process.Pid)
 	return nil
 }
@@ -150,7 +157,31 @@ func (lb *nginxLoadBalancer) waitForNginxToFinish() {
 		log.Info("Nginx has shutdown successfully")
 	}
 	lb.running.Set(false)
-	lb.finishedCh <- err
+	lb.lastErr.Set(err)
+	close(lb.doneCh)
+}
+
+func (lb *nginxLoadBalancer) periodicallyUpdateMetrics() {
+	lb.updateMetrics()
+	ticker := time.NewTicker(metricsUpdateInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-lb.doneCh:
+			return
+		case <-ticker.C:
+			lb.updateMetrics()
+		}
+	}
+}
+
+func (lb *nginxLoadBalancer) updateMetrics() {
+	if err := parseAndSetNginxMetrics(lb.HealthPort, "/status"); err != nil {
+		log.Warnf("Unable to update nginx metrics: %v", err)
+		lb.metricsUnhealthy.Set(true)
+	} else {
+		lb.metricsUnhealthy.Set(false)
+	}
 }
 
 func (lb *nginxLoadBalancer) Stop() error {
@@ -159,8 +190,8 @@ func (lb *nginxLoadBalancer) Stop() error {
 	if err := lb.signaller.sigquit(lb.cmd.Process); err != nil {
 		return fmt.Errorf("error shutting down nginx: %v", err)
 	}
-	err := <-lb.finishedCh
-	return err
+	<-lb.doneCh
+	return lb.lastErr.Get()
 }
 
 func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
@@ -250,6 +281,9 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 func (lb *nginxLoadBalancer) Health() error {
 	if !lb.running.Get() {
 		return fmt.Errorf("nginx is not running")
+	}
+	if lb.metricsUnhealthy.Get() {
+		return fmt.Errorf("nginx metrics are failing to update")
 	}
 	return nil
 }
