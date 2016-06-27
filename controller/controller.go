@@ -17,6 +17,7 @@ import (
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
+const frontendElbScheme = "sky.uk/frontend-elb-scheme"
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
 type Controller interface {
@@ -132,6 +133,7 @@ func (c *controller) updateIngresses() error {
 						ServiceAddress: address,
 						ServicePort:    int32(path.Backend.ServicePort.IntValue()),
 						Allow:          c.defaultAllow,
+						ELbScheme:      ingress.Annotations[frontendElbScheme],
 					}
 
 					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {

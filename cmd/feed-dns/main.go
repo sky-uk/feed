@@ -2,10 +2,13 @@ package main
 
 import (
 	"flag"
+
 	"os"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/dns"
+	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/util/cmd"
 )
 
@@ -17,6 +20,9 @@ var (
 	clientKeyFile  string
 	debug          bool
 	healthPort     int
+	elbLabelValue  string
+	elbRegion      string
+	r53HostedZone  string
 )
 
 func init() {
@@ -27,6 +33,9 @@ func init() {
 		defaultClientCertFile = ""
 		defaultClientKeyFile  = ""
 		defaultHealthPort     = 12082
+		defaultElbRegion      = "eu-west-1"
+		defaultElbLabelValue  = ""
+		defaultHostedZone     = ""
 	)
 
 	flag.StringVar(&apiServer, "apiserver", defaultAPIServer,
@@ -43,23 +52,47 @@ func init() {
 		"Enable debug logging.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller.")
+	flag.StringVar(&elbRegion, "elb-region", defaultElbRegion,
+		"AWS region for ELBs.")
+	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
+		"Alias to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
+	flag.StringVar(&r53HostedZone, "r53-hosted-zone", defaultHostedZone,
+		"Route53 Hosted zone to manage.")
 }
 
 func main() {
 	flag.Parse()
 	cmd.ConfigureLogging(debug)
+	validateConfig()
 
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer, clientCertFile, clientKeyFile)
-	controller := dns.New(client)
+	updater := dns.New(r53HostedZone, elbRegion, elbLabelValue, elbRegion)
 
-	cmd.AddHealthPort(controller, healthPort)
-	cmd.AddSignalHandler(controller)
+	controller := controller.New(controller.Config{
+		KubernetesClient: client,
+		Updaters:         []controller.Updater{updater},
+	})
+
+	cmd.AddHealthPort(updater, healthPort)
+	cmd.AddSignalHandler(updater)
 
 	err := controller.Start()
 	if err != nil {
 		log.Error("Error while starting controller: ", err)
+	}
+
+	err = updater.Start()
+	if err != nil {
+		log.Error("Error while starting updater: ", err)
 		os.Exit(-1)
 	}
 
 	select {}
+}
+
+func validateConfig() {
+	if r53HostedZone == "" {
+		log.Error("Must supply r53-hosted-zone")
+		os.Exit(-1)
+	}
 }

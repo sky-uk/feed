@@ -18,6 +18,9 @@ const (
 	region                    = "eu-west-1"
 	frontendTag               = "sky.uk/KubernetesClusterFrontend"
 	canonicalHostedZoneNameID = "test-id"
+	elbDNSName                = "elb-dnsname"
+	elbInternalScheme         = "internal"
+	elbInternetFacingScheme   = "internet-facing"
 )
 
 type fakeElb struct {
@@ -64,12 +67,19 @@ func (m *fakeMetadata) GetInstanceIdentityDocument() (ec2metadata.EC2InstanceIde
 	return args.Get(0).(ec2metadata.EC2InstanceIdentityDocument), args.Error(1)
 }
 
-func mockLoadBalancers(m *fakeElb, lbs ...string) {
+type lb struct {
+	name   string
+	scheme string
+}
+
+func mockLoadBalancers(m *fakeElb, lbs ...lb) {
 	var descriptions []*aws_elb.LoadBalancerDescription
 	for _, lb := range lbs {
 		descriptions = append(descriptions, &aws_elb.LoadBalancerDescription{
-			LoadBalancerName:          aws.String(lb),
+			LoadBalancerName:          aws.String(lb.name),
 			CanonicalHostedZoneNameID: aws.String(canonicalHostedZoneNameID),
+			Scheme:  aws.String(lb.scheme),
+			DNSName: aws.String(elbDNSName),
 		})
 
 	}
@@ -140,7 +150,11 @@ func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
 	mockInstanceMetadata(mockMetadata, instanceID)
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndDifferentCluster := "cluster-frontend-different-cluster"
-	mockLoadBalancers(mockElb, clusterFrontEnd, clusterFrontEndDifferentCluster, "other")
+	mockLoadBalancers(mockElb,
+		lb{clusterFrontEnd, elbInternalScheme},
+		lb{clusterFrontEndDifferentCluster, elbInternalScheme},
+		lb{"other", elbInternalScheme})
+
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 		lbTags{name: clusterFrontEndDifferentCluster, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String("different cluster")}}},
@@ -166,7 +180,10 @@ func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 	mockInstanceMetadata(mockMetadata, instanceID)
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndDifferentCluster := "cluster-frontend-different-cluster"
-	mockLoadBalancers(mockElb, clusterFrontEnd, clusterFrontEndDifferentCluster, "other")
+	mockLoadBalancers(mockElb,
+		lb{name: clusterFrontEnd, scheme: elbInternalScheme},
+		lb{name: clusterFrontEndDifferentCluster, scheme: elbInternalScheme},
+		lb{name: "other", scheme: elbInternalScheme})
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 		lbTags{name: clusterFrontEndDifferentCluster, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String("different cluster")}}},
@@ -181,41 +198,43 @@ func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 	assert.EqualError(t, err, "expected ELBs: 2 actual: 1")
 }
 
-func TestNameAndHostedZoneIDLoadBalancerDetailsAreExtracted(t *testing.T) {
+func TestNameAndDNSNameAndHostedZoneIDLoadBalancerDetailsAreExtracted(t *testing.T) {
 	//given
 	mockElb := &fakeElb{}
 	clusterFrontEnd := "cluster-frontend"
-	clusterFrontEndDifferentCluster := "cluster-frontend-different-cluster"
-	mockLoadBalancers(mockElb, clusterFrontEnd, clusterFrontEndDifferentCluster, "other")
+	mockLoadBalancers(mockElb, lb{name: clusterFrontEnd, scheme: elbInternalScheme})
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
-		lbTags{name: clusterFrontEndDifferentCluster, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String("different cluster")}}},
-		lbTags{name: "other elb", tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String("Bannana"), Value: aws.String("Tasty")}}},
 	)
 
 	//when
-	frontEnds, _ := FindFrontEndElbs(mockElb, clusterName)
+	frontends, _ := FindFrontEndElbs(mockElb, clusterName)
+	fmt.Println(frontends)
 
 	//then
-	assert.Equal(t, frontEnds["cluster-frontend"].Name, "cluster-frontend")
-	assert.Equal(t, frontEnds["cluster-frontend"].HostedZoneID, canonicalHostedZoneNameID)
+	assert.Equal(t, "cluster-frontend", frontends[elbInternalScheme].Name)
+	assert.Equal(t, elbDNSName, frontends[elbInternalScheme].DNSName)
+	assert.Equal(t, canonicalHostedZoneNameID, frontends[elbInternalScheme].HostedZoneID)
+	assert.Equal(t, elbInternalScheme, frontends[elbInternalScheme].Scheme)
 }
 
-func TestAttachWithMultipleMatchingLoadBalancers(t *testing.T) {
+func TestAttachWithInternalAndInternetFacing(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
 	e.(*elb).expectedNumber = 2
 	instanceID := "cow"
-	clusterFrontEnd := "cluster-frontend"
-	clusterFrontEnd2 := "cluster-frontend2"
+	privateFrontend := "cluster-frontend"
+	publicFrontend := "cluster-frontend2"
 	mockInstanceMetadata(mockMetadata, instanceID)
-	mockLoadBalancers(mockElb, clusterFrontEnd, clusterFrontEnd2)
+	mockLoadBalancers(mockElb,
+		lb{name: privateFrontend, scheme: elbInternalScheme},
+		lb{name: publicFrontend, scheme: elbInternetFacingScheme})
 	mockClusterTags(mockElb,
-		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
-		lbTags{name: clusterFrontEnd2, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
+		lbTags{name: privateFrontend, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
+		lbTags{name: publicFrontend, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 	)
-	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
-	mockRegisterInstances(mockElb, clusterFrontEnd2, instanceID)
+	mockRegisterInstances(mockElb, privateFrontend, instanceID)
+	mockRegisterInstances(mockElb, publicFrontend, instanceID)
 
 	//when
 	err := e.Start()
@@ -250,7 +269,7 @@ func TestErrorDescribingTags(t *testing.T) {
 	e, mockElb, mockMetadata := setup()
 	instanceID := "cow"
 	mockInstanceMetadata(mockMetadata, instanceID)
-	mockLoadBalancers(mockElb, "one")
+	mockLoadBalancers(mockElb, lb{name: "one"})
 	mockElb.On("DescribeTags", mock.AnythingOfType("*elb.DescribeTagsInput")).Return(&aws_elb.DescribeTagsOutput{}, errors.New("oh dear oh dear"))
 
 	err := e.Start()
@@ -264,7 +283,7 @@ func TestNoMatchingElbs(t *testing.T) {
 	instanceID := "cow"
 	loadBalancerName := "i am not the loadbalancer you are looking for"
 	mockInstanceMetadata(mockMetadata, instanceID)
-	mockLoadBalancers(mockElb, loadBalancerName)
+	mockLoadBalancers(mockElb, lb{name: loadBalancerName, scheme: elbInternalScheme})
 	// No cluster tags
 	mockClusterTags(mockElb, lbTags{name: loadBalancerName, tags: []*aws_elb.Tag{}})
 
@@ -284,6 +303,7 @@ func TestGetLoadBalancerPages(t *testing.T) {
 	mockElb.On("DescribeLoadBalancers", &aws_elb.DescribeLoadBalancersInput{Marker: aws.String("Use me")}).Return(&aws_elb.DescribeLoadBalancersOutput{
 		LoadBalancerDescriptions: []*aws_elb.LoadBalancerDescription{&aws_elb.LoadBalancerDescription{
 			LoadBalancerName:          aws.String(loadBalancerName),
+			DNSName:                   aws.String(elbDNSName),
 			CanonicalHostedZoneNameID: aws.String(canonicalHostedZoneNameID),
 		}},
 	}, nil)
@@ -307,7 +327,9 @@ func TestTagCallsPage(t *testing.T) {
 	loadBalancerName1 := "lb1"
 	loadBalancerName2 := "lb2"
 	mockInstanceMetadata(mockMetadata, instanceID)
-	mockLoadBalancers(mockElb, loadBalancerName1, loadBalancerName2)
+	mockLoadBalancers(mockElb,
+		lb{name: loadBalancerName1, scheme: elbInternalScheme},
+		lb{name: loadBalancerName2, scheme: elbInternetFacingScheme})
 	mockClusterTags(mockElb,
 		lbTags{name: loadBalancerName1, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 		lbTags{name: loadBalancerName2, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
@@ -329,7 +351,10 @@ func TestDeregistersWithAttachedELBs(t *testing.T) {
 	mockInstanceMetadata(mockMetadata, instanceID)
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEnd2 := "cluster-frontend2"
-	mockLoadBalancers(mockElb, clusterFrontEnd, clusterFrontEnd2, "other")
+	mockLoadBalancers(mockElb,
+		lb{name: clusterFrontEnd, scheme: elbInternalScheme},
+		lb{name: clusterFrontEnd2, scheme: elbInternetFacingScheme},
+		lb{name: "other", scheme: elbInternalScheme})
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 		lbTags{name: clusterFrontEnd2, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
@@ -366,7 +391,7 @@ func TestRegisterInstanceError(t *testing.T) {
 	instanceID := "cow"
 	mockInstanceMetadata(mockMetadata, instanceID)
 	clusterFrontEnd := "cluster-frontend"
-	mockLoadBalancers(mockElb, clusterFrontEnd)
+	mockLoadBalancers(mockElb, lb{name: clusterFrontEnd, scheme: elbInternalScheme})
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 	)
@@ -385,7 +410,8 @@ func TestDeRegisterInstanceError(t *testing.T) {
 	instanceID := "cow"
 	mockInstanceMetadata(mockMetadata, instanceID)
 	clusterFrontEnd := "cluster-frontend"
-	mockLoadBalancers(mockElb, clusterFrontEnd)
+	mockLoadBalancers(mockElb,
+		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{&aws_elb.Tag{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 	)

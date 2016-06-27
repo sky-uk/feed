@@ -25,6 +25,8 @@ type IngressEntry struct {
 	ServicePort int32
 	// Allow are the ips or cidrs that are allowed to access the service.
 	Allow []string
+	// ElbScheme internet-facing or internal will dictate which kind of ELB to attach to
+	ELbScheme string
 }
 
 // validate returns error if entry has invalid fields.

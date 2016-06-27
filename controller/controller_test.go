@@ -340,6 +340,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Path:           ingressPath,
 				ServiceAddress: serviceIP,
 				ServicePort:    ingressSvcPort,
+				ELbScheme:      "internal",
 				Allow:          []string{},
 			}}},
 		},
@@ -385,6 +386,7 @@ func createLbEntriesFixture() IngressUpdate {
 		ServiceAddress: serviceIP,
 		ServicePort:    ingressSvcPort,
 		Allow:          strings.Split(ingressAllow, ","),
+		ELbScheme:      elbScheme,
 	}}}
 }
 
@@ -398,6 +400,7 @@ const (
 	ingressAllow        = "10.82.0.0/16,10.44.0.0/16"
 	ingressDefaultAllow = "10.50.0.0/16,10.1.0.0/16"
 	serviceIP           = "10.254.0.82"
+	elbScheme           = "internal"
 )
 
 func createDefaultIngresses() []k8s.Ingress {
@@ -416,6 +419,7 @@ func createIngressesFixture(host string, serviceName string, servicePort int, al
 	annotations := make(map[string]string)
 	if allow != "MISSING" {
 		annotations[ingressAllowAnnotation] = allow
+		annotations[frontendElbScheme] = elbScheme
 	}
 
 	return []k8s.Ingress{

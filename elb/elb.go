@@ -40,7 +40,9 @@ func New(region string, labelValue string, expectedNumber int) controller.Update
 // LoadBalancerDetails stores all the elb information we use.
 type LoadBalancerDetails struct {
 	Name         string
+	DNSName      string
 	HostedZoneID string
+	Scheme       string
 }
 
 type elb struct {
@@ -141,8 +143,10 @@ func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDet
 
 		for _, entry := range resp.LoadBalancerDescriptions {
 			allLbs[*entry.LoadBalancerName] = LoadBalancerDetails{
-				Name:         *entry.LoadBalancerName,
-				HostedZoneID: *entry.CanonicalHostedZoneNameID,
+				Name:         aws.StringValue(entry.LoadBalancerName),
+				DNSName:      aws.StringValue(entry.DNSName),
+				HostedZoneID: aws.StringValue(entry.CanonicalHostedZoneNameID),
+				Scheme:       aws.StringValue(entry.Scheme),
 			}
 			lbNames = append(lbNames, entry.LoadBalancerName)
 		}
@@ -172,11 +176,13 @@ func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDet
 			return nil, fmt.Errorf("unable to describe tags: %v", err)
 		}
 
+		// todo cb error out if we already have an internal or public facing elb
 		for _, description := range output.TagDescriptions {
 			for _, tag := range description.Tags {
 				if *tag.Key == ElbTag && *tag.Value == labelValue {
 					log.Infof("Found frontend elb %s", *description.LoadBalancerName)
-					clusterFrontEnds[*description.LoadBalancerName] = allLbs[*description.LoadBalancerName]
+					lb := allLbs[*description.LoadBalancerName]
+					clusterFrontEnds[lb.Scheme] = lb
 				}
 			}
 		}
