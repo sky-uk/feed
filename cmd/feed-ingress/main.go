@@ -17,7 +17,7 @@ import (
 
 var (
 	debug                        bool
-	apiServer                    string
+	apiserverURL                 string
 	caCertFile                   string
 	tokenFile                    string
 	clientCertFile               string
@@ -37,6 +37,8 @@ var (
 	elbLabelValue                string
 	elbRegion                    string
 	elbExpectedNumber            int
+	pushgatewayURL               string
+	pushgatewayIntervalSeconds   int
 )
 
 func init() {
@@ -61,11 +63,12 @@ func init() {
 		defaultElbLabelValue                = ""
 		defaultElbRegion                    = "eu-west-1"
 		defaultElbExpectedNumber            = 0
+		defaultPushgatewayIntervalSeconds   = 60
 	)
 
 	flag.BoolVar(&debug, "debug", false,
 		"Enable debug logging.")
-	flag.StringVar(&apiServer, "apiserver", defaultAPIServer,
+	flag.StringVar(&apiserverURL, "apiserver", defaultAPIServer,
 		"Kubernetes API server URL.")
 	flag.StringVar(&caCertFile, "cacertfile", defaultCaCertFile,
 		"File containing the Kubernetes API server certificate.")
@@ -110,13 +113,17 @@ func init() {
 			" otherwise it fails to start if it can't attach to this number.")
 	flag.StringVar(&elbRegion, "elb-region", defaultElbRegion,
 		"AWS region for ELBs.")
+	flag.StringVar(&pushgatewayURL, "pushgateway", "",
+		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
+	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
+		"Interval in seconds for pushing metrics.")
 }
 
 func main() {
 	flag.Parse()
 	cmd.ConfigureLogging(debug)
 
-	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer, clientCertFile, clientKeyFile)
+	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiserverURL, clientCertFile, clientKeyFile)
 	updaters := createIngressUpdaters()
 
 	controller := controller.New(controller.Config{
@@ -136,6 +143,7 @@ func main() {
 	log.Info("Controller started")
 
 	cmd.AddUnhealthyLogger(controller, time.Second*5)
+	cmd.AddMetricsPusher("feed-ingress", pushgatewayURL, time.Second*time.Duration(pushgatewayIntervalSeconds))
 
 	select {}
 }

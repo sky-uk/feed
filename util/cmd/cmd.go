@@ -95,3 +95,25 @@ func ConfigureLogging(debug bool) {
 		log.SetLevel(log.DebugLevel)
 	}
 }
+
+// AddMetricsPusher starts a periodic push of metrics to a prometheus pushgateway.
+func AddMetricsPusher(job, pushgatewayURL string, interval time.Duration) {
+	if pushgatewayURL == "" {
+		return
+	}
+
+	go func() {
+		tick := time.Tick(interval)
+		for range tick {
+			instance, err := os.Hostname()
+			if err != nil {
+				log.Warnf("Unable to lookup hostname for metrics: %v", err)
+				continue
+			}
+
+			if err := prometheus.Push(job, instance, pushgatewayURL); err != nil {
+				log.Warnf("Unable to push metrics: %v", err)
+			}
+		}
+	}()
+}
