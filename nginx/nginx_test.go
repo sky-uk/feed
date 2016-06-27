@@ -543,7 +543,7 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	lb, mockSignaller := newLb(tmpDir)
 	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Once()
 
-	lb.Start()
+	assert.NoError(lb.Start())
 
 	entries := []controller.IngressEntry{
 		{
@@ -554,17 +554,15 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 		},
 	}
 
-	err := lb.Update(controller.IngressUpdate{Entries: entries})
-	assert.NoError(err)
+	assert.NoError(lb.Update(controller.IngressUpdate{Entries: entries}))
 	config1, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
 	assert.NoError(err)
 
-	err = lb.Update(controller.IngressUpdate{Entries: entries})
-	assert.NoError(err)
+	assert.NoError(lb.Update(controller.IngressUpdate{Entries: entries}))
 	config2, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
 	assert.NoError(err)
 
-	lb.Stop()
+	assert.NoError(lb.Stop())
 
 	assert.Equal(string(config1), string(config2), "configs should be identical")
 	mockSignaller.AssertExpectations(t)
@@ -631,6 +629,29 @@ func gaugeValue(g prometheus.Gauge) float64 {
 	var metricVal dto.Metric
 	metric.Write(&metricVal)
 	return *metricVal.Gauge.Value
+}
+
+func TestFailsToUpdateIfConfigurationIsBroken(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+	lb, mockSignaller := newLbWithBinary(tmpDir, "./fake_nginx_failing_reload.sh")
+	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Once()
+
+	assert.NoError(lb.Start())
+
+	entries := []controller.IngressEntry{
+		{
+			Host:           "chris.com",
+			Path:           "/path",
+			ServiceAddress: "service",
+			ServicePort:    9090,
+		},
+	}
+
+	err := lb.Update(controller.IngressUpdate{Entries: entries})
+	assert.Contains(err.Error(), "Config check failed")
+	assert.Contains(err.Error(), "./fake_nginx_failing_reload.sh -t")
 }
 
 func setupWorkDir(t *testing.T) string {

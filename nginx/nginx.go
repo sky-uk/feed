@@ -200,6 +200,7 @@ func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
 	if err != nil {
 		return fmt.Errorf("unable to update nginx: %v", err)
 	}
+
 	if updated {
 		err = lb.signaller.sighup(lb.cmd.Process)
 		if err != nil {
@@ -207,25 +208,31 @@ func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
 		}
 		log.Info("Nginx updated")
 	}
-	return err
+
+	return nil
 }
 
 func (lb *nginxLoadBalancer) update(entries controller.IngressUpdate) (bool, error) {
 	log.Debugf("Updating loadbalancer %s", entries)
-	file, err := lb.createConfig(entries)
+	updatedConfig, err := lb.createConfig(entries)
 	if err != nil {
 		return false, err
 	}
-	existing, err := ioutil.ReadFile(lb.nginxConfFile())
+
+	existingConfig, err := ioutil.ReadFile(lb.nginxConfFile())
 	if err != nil {
 		log.Debugf("Error trying to read nginx.conf: %v", err)
 		log.Info("Creating nginx.conf for the first time")
-		return writeFile(lb.nginxConfFile(), file)
-
+		return writeFile(lb.nginxConfFile(), updatedConfig)
 	}
-	diffOutput, err := diff(existing, file)
+
+	return lb.diffAndUpdate(existingConfig, updatedConfig)
+}
+
+func (lb *nginxLoadBalancer) diffAndUpdate(existing, updated []byte) (bool, error) {
+	diffOutput, err := diff(existing, updated)
 	if err != nil {
-		log.Warn("Unable to diff nginx files", err)
+		log.Warnf("Unable to diff nginx files: %v", err)
 		return false, err
 	}
 
@@ -233,16 +240,33 @@ func (lb *nginxLoadBalancer) update(entries controller.IngressUpdate) (bool, err
 		log.Info("Configuration has not changed")
 		return false, nil
 	}
-	log.Infof("Diff output %s", string(diffOutput))
 
-	log.Info("Configuration is different. Updating configuration.")
-	_, err = writeFile(lb.nginxConfFile(), file)
+	log.Infof("Updating nginx config: %s", string(diffOutput))
+	_, err = writeFile(lb.nginxConfFile(), updated)
 
 	if err != nil {
-		log.Error("Unable to write new nginx configuration", err)
+		log.Errorf("Unable to write nginx configuration: %v", err)
 		return false, err
 	}
+
+	err = lb.checkNginxConfig()
+	if err != nil {
+		return false, err
+	}
+
 	return true, nil
+}
+
+func (lb *nginxLoadBalancer) checkNginxConfig() error {
+	cmd := exec.Command(lb.BinaryLocation, "-t", "-c", lb.nginxConfFile())
+	var out bytes.Buffer
+	cmd.Stderr = &out
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("invalid config: %v: %s", err, out.String())
+	}
+	return nil
 }
 
 func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]byte, error) {
