@@ -176,6 +176,55 @@ func TestCanSetLogLevel(t *testing.T) {
 	}
 }
 
+func TestTrustedFrontendsSetsUpClientIPCorrectly(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	multipleTrusted := newConf(tmpDir, fakeNginx)
+	multipleTrusted.TrustedFrontends = []string{"10.50.185.0/24", "10.82.0.0/16"}
+
+	var tests = []struct {
+		name           string
+		lbConf         Conf
+		expectedOutput string
+	}{
+		{
+			"multiple trusted frontends works",
+			multipleTrusted,
+			`    # Obtain client IP from frontend's X-Forward-For header
+    set_real_ip_from 10.50.185.0/24;
+    set_real_ip_from 10.82.0.0/16;
+
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;`,
+		},
+		{
+			"no trusted frontends works",
+			newConf(tmpDir, fakeNginx),
+			`    # Obtain client IP from frontend's X-Forward-For header
+
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;`,
+		},
+	}
+
+	for _, test := range tests {
+		lb, _ := newLbWithConf(test.lbConf)
+
+		assert.NoError(lb.Start())
+		err := lb.Update(controller.IngressUpdate{})
+		assert.NoError(err)
+
+		config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+		assert.NoError(err)
+		configContents := string(config)
+
+		assert.Contains(configContents, test.expectedOutput, test.name)
+
+	}
+}
+
 func TestNginxConfigUpdates(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
