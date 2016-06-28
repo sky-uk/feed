@@ -3,6 +3,8 @@ package dns
 import (
 	"testing"
 
+	"errors"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/sky-uk/feed/controller"
@@ -10,6 +12,39 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	r53Zone   = "fakeZone"
+	elbName   = "elbName"
+	awsRegion = "awsRegion"
+)
+
+func TestQueryFrontendsOnStartup(t *testing.T) {
+	expectedFrontEnds := map[string]elb.LoadBalancerDetails{
+		"internal": elb.LoadBalancerDetails{},
+	}
+	dnsUpdater := New(r53Zone, awsRegion, elbName).(*updater)
+	dnsUpdater.findElbs = func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error) {
+		return expectedFrontEnds, nil
+	}
+
+	err := dnsUpdater.Start()
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedFrontEnds, dnsUpdater.frontends)
+}
+
+func TestQueryFrontendsFails(t *testing.T) {
+	dnsUpdater := New(r53Zone, awsRegion, elbName).(*updater)
+	dnsUpdater.findElbs = func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error) {
+		return nil, errors.New("No elbs for you")
+	}
+
+	err := dnsUpdater.Start()
+
+	assert.EqualError(t, err, "unable to find front end load balancers: No elbs for you")
+}
+
+// calculateChanges tests with no external dependencies
 func TestEmptyIngressUpdateResultsInNoChange(t *testing.T) {
 	// given
 	frontEnds := map[string]elb.LoadBalancerDetails{

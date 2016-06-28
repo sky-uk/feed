@@ -13,22 +13,35 @@ import (
 	"github.com/sky-uk/feed/elb"
 )
 
+type findElbs func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error)
+
 type updater struct {
 	dns          r53.Route53Client
 	elb          elb.ELB
+	frontends    map[string]elb.LoadBalancerDetails
 	elbLabelName string
+	findElbs     findElbs
 }
 
 // New creates an updater for dns
-func New(r53HostedZone, elbRegion string, elbLabelName string, awsRegion string) controller.Updater {
+func New(r53HostedZone, elbRegion string, elbLabelName string) controller.Updater {
 	return &updater{
 		dns:          r53.New(elbRegion, r53HostedZone),
-		elb:          aws_elb.New(session.New(&aws.Config{Region: &awsRegion})),
+		elb:          aws_elb.New(session.New(&aws.Config{Region: &elbRegion})),
 		elbLabelName: elbLabelName,
+		findElbs:     elb.FindFrontEndElbs,
 	}
 }
 
 func (u *updater) Start() error {
+	log.Info("Starting dns updater")
+	frontEnds, err := u.findElbs(u.elb, u.elbLabelName)
+	if err != nil {
+		return fmt.Errorf("unable to find front end load balancers: %v", err)
+	}
+	u.frontends = frontEnds
+
+	log.Info("Dns updater started")
 	return nil
 }
 
@@ -41,19 +54,13 @@ func (u *updater) Health() error {
 }
 
 func (u *updater) Update(update controller.IngressUpdate) error {
-	frontEnds, err := elb.FindFrontEndElbs(u.elb, u.elbLabelName)
-	log.Infof("Front ends %v", frontEnds)
-	if err != nil {
-		return fmt.Errorf("unable to find front end load balancers: %v", err)
-	}
-
 	aRecords, err := u.dns.GetARecords()
 	if err != nil {
 		log.Warn("Unable to get A records from Route53. Not updating Route53.", err)
 		return err
 	}
 
-	changes, err := calculateChanges(frontEnds, aRecords, update)
+	changes, err := calculateChanges(u.frontends, aRecords, update)
 	if err != nil {
 		return err
 	}
