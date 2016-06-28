@@ -3,6 +3,8 @@ package dns
 import (
 	"fmt"
 
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -16,17 +18,18 @@ import (
 type findElbs func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error)
 
 type updater struct {
-	dns          r53.Route53Client
+	r53Sdk       r53.Route53Client
 	elb          elb.ELB
 	frontends    map[string]elb.LoadBalancerDetails
 	elbLabelName string
+	domain       string
 	findElbs     findElbs
 }
 
 // New creates an updater for dns
 func New(r53HostedZone, elbRegion string, elbLabelName string) controller.Updater {
 	return &updater{
-		dns:          r53.New(elbRegion, r53HostedZone),
+		r53Sdk:       r53.New(elbRegion, r53HostedZone),
 		elb:          aws_elb.New(session.New(&aws.Config{Region: &elbRegion})),
 		elbLabelName: elbLabelName,
 		findElbs:     elb.FindFrontEndElbs,
@@ -40,6 +43,11 @@ func (u *updater) Start() error {
 		return fmt.Errorf("unable to find front end load balancers: %v", err)
 	}
 	u.frontends = frontEnds
+	u.domain, err = u.r53Sdk.GetHostedZoneDomain()
+
+	if err != nil {
+		return fmt.Errorf("unable to get domain for hosted zone: %v", err)
+	}
 
 	log.Info("Dns updater started")
 	return nil
@@ -54,29 +62,48 @@ func (u *updater) Health() error {
 }
 
 func (u *updater) Update(update controller.IngressUpdate) error {
-	aRecords, err := u.dns.GetARecords()
+	aRecords, err := u.r53Sdk.GetARecords()
 	if err != nil {
 		log.Warn("Unable to get A records from Route53. Not updating Route53.", err)
 		return err
 	}
 
-	changes, err := calculateChanges(u.frontends, aRecords, update)
+	changes, err := calculateChanges(u.frontends, aRecords, update, u.domain)
 	if err != nil {
 		return err
 	}
 
-	u.dns.UpdateRecordSets(changes)
+	u.r53Sdk.UpdateRecordSets(changes)
 
 	return nil
 }
 
-func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails, aRecords []*route53.ResourceRecordSet, update controller.IngressUpdate) ([]*route53.Change, error) {
+// a private function rather than a method on updater to allow isolated testing, however...
+// todo make a private method and test through the public interface
+func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails,
+	aRecords []*route53.ResourceRecordSet,
+	update controller.IngressUpdate,
+	domain string) ([]*route53.Change, error) {
 	log.Info("Current a records: ", aRecords)
+	log.Info("Processing ingress update: ", update)
 	changes := []*route53.Change{}
 	hostToIngresEntry := make(map[string]controller.IngressEntry)
 	for _, ingressEntry := range update.Entries {
 		log.Infof("Processing entry %v", ingressEntry)
-		hostToIngresEntry[ingressEntry.Host+"."] = ingressEntry
+		// Ingress entries in k8s aren't allowed to have the . on the end
+		// AWS adds it regardless of whether you specify it
+		hostNameWithPeriod := ingressEntry.Host + "."
+		// Want to match blah.james.com not blahjames.com for domain james.com
+		domainWithLeadingPeriod := "." + domain
+
+		log.Infof("Checking if ingress entry has valid host name (%s, %s)", hostNameWithPeriod, domainWithLeadingPeriod)
+		// First we check if this host is actually in the hosted zone's domain
+		if !strings.HasSuffix(hostNameWithPeriod, domainWithLeadingPeriod) {
+			log.Warnf("Ingress entry does not have a valid hostname for the hosted zone (%s, %s)", hostNameWithPeriod, domainWithLeadingPeriod)
+			break
+		}
+
+		hostToIngresEntry[hostNameWithPeriod] = ingressEntry
 		frontEnd, exists := frontEnds[ingressEntry.ELbScheme]
 		if !exists {
 			return nil, fmt.Errorf("unable to find front end load balancer with scheme: %v", ingressEntry.ELbScheme)
