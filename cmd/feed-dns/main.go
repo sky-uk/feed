@@ -66,22 +66,23 @@ func main() {
 	validateConfig()
 
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer, clientCertFile, clientKeyFile)
-	updater := dns.New(r53HostedZone, elbRegion, elbLabelValue, elbRegion)
+	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue)
 
 	controller := controller.New(controller.Config{
 		KubernetesClient: client,
-		Updaters:         []controller.Updater{updater},
+		Updaters:         []controller.Updater{dnsUpdater},
 	})
 
-	cmd.AddHealthPort(updater, healthPort)
-	cmd.AddSignalHandler(updater)
+	cmd.AddHealthPort(dnsUpdater, healthPort)
+	cmd.AddSignalHandler(dnsUpdater)
 
 	err := controller.Start()
 	if err != nil {
 		log.Error("Error while starting controller: ", err)
+		os.Exit(-1)
 	}
 
-	err = updater.Start()
+	err = dnsUpdater.Start()
 	if err != nil {
 		log.Error("Error while starting updater: ", err)
 		os.Exit(-1)
