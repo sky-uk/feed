@@ -8,6 +8,7 @@ type Updater interface {
 	Stop() error
 	// Update the ingress updater configuration.
 	Update(IngressUpdate) error
-	// Health returns nil if healthy, otherwise an error.
+	// Health returns nil if healthy, otherwise an error. Should be fast to respond, as it
+	// may be called often. Any long running checks should be done separately.
 	Health() error
 }
