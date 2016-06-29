@@ -3,10 +3,13 @@ package r53
 import (
 	"fmt"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 )
+
+const maxRecordChanges = 100
 
 // Route53Client is the public interface
 type Route53Client interface {
@@ -24,15 +27,17 @@ type r53 interface {
 
 // Route53Client enables interaction with aws route53
 type client struct {
-	r53        r53
-	hostedZone string
+	r53              r53
+	hostedZone       string
+	maxRecordChanges int
 }
 
 // New creates a route53 client used to interact with aws
 func New(region string, hostedZone string) Route53Client {
 	return &client{
-		r53:        route53.New(session.New(), &aws.Config{Region: aws.String(region)}),
-		hostedZone: hostedZone,
+		r53:              route53.New(session.New(), &aws.Config{Region: aws.String(region)}),
+		hostedZone:       hostedZone,
+		maxRecordChanges: maxRecordChanges,
 	}
 }
 
@@ -47,22 +52,33 @@ func (dns *client) GetHostedZoneDomain() (string, error) {
 }
 
 // UpdateRecordSets updates records in aws based on the change list.
-// Todo add tests
 func (dns *client) UpdateRecordSets(changes []*route53.Change) error {
-	recordSetsInput := &route53.ChangeResourceRecordSetsInput{
-		HostedZoneId: aws.String(dns.hostedZone),
-		ChangeBatch: &route53.ChangeBatch{
-			Changes: changes,
-		},
-	}
+	for i := 0; i < len(changes); i += dns.maxRecordChanges {
+		upperBound := min(i+dns.maxRecordChanges, len(changes))
+		batch := changes[i:upperBound]
+		log.Debug("Doing batch ", batch)
+		recordSetsInput := &route53.ChangeResourceRecordSetsInput{
+			HostedZoneId: aws.String(dns.hostedZone),
+			ChangeBatch: &route53.ChangeBatch{
+				Changes: batch,
+			},
+		}
 
-	_, err := dns.r53.ChangeResourceRecordSets(recordSetsInput)
+		_, err := dns.r53.ChangeResourceRecordSets(recordSetsInput)
 
-	if err != nil {
-		return fmt.Errorf("failed to create A record: %v", err)
+		if err != nil {
+			return fmt.Errorf("failed to create A record: %v", err)
+		}
 	}
 
 	return nil
+}
+
+func min(x int, y int) int {
+	if x < y {
+		return x
+	}
+	return y
 }
 
 // GetARecords gets a list of A Records from aws.
