@@ -41,33 +41,47 @@ test :
 	@go test -race $(pkgs)
 
 # Docker build 
-
-ingress_binary := $(GOPATH)/bin/feed-ingress
+ingress_build_dir := build/ingress
 template := ./nginx/nginx.tmpl
-docker_repo := skycirrus/feed-ingress
 git_rev := $(shell git rev-parse --short HEAD)
-docker_tag := "$(docker_repo):$(git_rev)"
-docker_latest := "$(docker_repo):latest"
 
-clean:
+builds := ingress dns
+
+clean :
 	@echo "== cleaning"
 	rm -rf build
 
 copy : build
 	@echo "== copy docker files to build/"
-	@mkdir -p build
-	cp Dockerfile build/
-	cp $(ingress_binary) build/
-	cp $(template) build/
+	
+	@for build in $(builds) ; do \
+	  build_files=$${build}_files; \
+	  build_dir=build/$$build; \
+	  binary=$(GOPATH)/bin/feed-$$build; \
+	  docker_file=Dockerfile_$$build; \
+	  mkdir -p $$build_dir; \
+	  cp $$docker_file $${build_dir}/Dockerfile; \
+	  cp $$binary $$build_dir; \
+	done
+
+	cp ${template} ${ingress_build_dir}
 
 docker : copy
-	@echo "== build docker image"
-	docker build -t $(docker_tag) build/.
-	@echo "Built $(docker_tag)"
+	@echo "== build docker images"
+	@for build in $(builds) ; do \
+	  tag=skycirrus/feed-$$build:$(git_rev) ; \
+	  docker build -t $$tag build/$${build}/. ; \
+	  echo "Built $$tag" ; \
+	done
 
 release : docker
 	@echo "== release docker image"
 	@docker login -e $(DOCKER_EMAIL) -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
-	docker tag $(docker_tag) $(docker_latest)
-	docker push $(docker_tag)
-	docker push $(docker_latest)
+	@for build in $(builds) ; do \
+	  tag=skycirrus/feed-$$build:$(git_rev) ; \
+	  latest_tag=skycirrus/feed-$$build:latest ; \
+	  docker tag $$tag $$latest_tag ; \
+	  docker push $$tag ; \
+	  docker push $$latest_tag ; \
+	done
+
