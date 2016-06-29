@@ -84,6 +84,7 @@ func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails,
 	aRecords []*route53.ResourceRecordSet,
 	update controller.IngressUpdate,
 	domain string) ([]*route53.Change, error) {
+
 	log.Info("Current a records: ", aRecords)
 	log.Info("Processing ingress update: ", update)
 	changes := []*route53.Change{}
