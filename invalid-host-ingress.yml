@@ -1,0 +1,17 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: verification-app-invalid
+  annotations:
+    sky.uk/frontend-elb-scheme: internal
+spec:
+  rules:
+  - host: verification-app.google.com
+    http:
+      paths:
+      - backend:
+          serviceName: verification-app
+          servicePort: 8080
+        path: /commerce/verification-app/
+status:
+  loadBalancer: {}

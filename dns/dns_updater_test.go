@@ -5,36 +5,79 @@ import (
 
 	"errors"
 
+	"fmt"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 const (
-	r53Zone   = "fakeZone"
-	elbName   = "elbName"
-	awsRegion = "awsRegion"
+	r53Zone    = "1234"
+	domain     = "james.com."
+	elbName    = "elbName"
+	elbDNSName = "elbDnsName"
+	elbScheme  = "internal"
+	awsRegion  = "awsRegion"
 )
 
-func TestQueryFrontendsOnStartup(t *testing.T) {
-	expectedFrontEnds := map[string]elb.LoadBalancerDetails{
-		"internal": elb.LoadBalancerDetails{},
+var defaultFrontends = map[string]elb.LoadBalancerDetails{"internal": elb.LoadBalancerDetails{
+	Name:         elbName,
+	DNSName:      elbDNSName,
+	HostedZoneID: r53Zone,
+	Scheme:       elbScheme,
+}}
+
+type fakeR53Client struct {
+	mock.Mock
+}
+
+func (m *fakeR53Client) GetHostedZoneDomain() (string, error) {
+	args := m.Called()
+	return args.String(0), args.Error(1)
+}
+
+func (m *fakeR53Client) UpdateRecordSets(changes []*route53.Change) error {
+	args := m.Called(changes)
+	return args.Error(0)
+}
+
+func (m *fakeR53Client) GetARecords() ([]*route53.ResourceRecordSet, error) {
+	args := m.Called()
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
 	}
+
+	return args.Get(0).([]*route53.ResourceRecordSet), args.Error(1)
+}
+
+func createDNSUpdater() (*updater, *fakeR53Client) {
 	dnsUpdater := New(r53Zone, awsRegion, elbName).(*updater)
 	dnsUpdater.findElbs = func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error) {
-		return expectedFrontEnds, nil
+		return defaultFrontends, nil
 	}
+	fakeR53Client := new(fakeR53Client)
+	dnsUpdater.r53Sdk = fakeR53Client
+	fakeR53Client.On("GetHostedZoneDomain").Return(domain, nil)
+	fakeR53Client.On("GetARecords").Return([]*route53.ResourceRecordSet{}, nil)
+	//fakeR53Client.On("UpdateRecordSets", mock.Anything).Return(nil)
+	return dnsUpdater, fakeR53Client
+}
+
+func TestQueryFrontendsOnStartup(t *testing.T) {
+	dnsUpdater, _ := createDNSUpdater()
 
 	err := dnsUpdater.Start()
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedFrontEnds, dnsUpdater.frontends)
+	assert.Equal(t, defaultFrontends, dnsUpdater.frontends)
 }
 
 func TestQueryFrontendsFails(t *testing.T) {
-	dnsUpdater := New(r53Zone, awsRegion, elbName).(*updater)
+	dnsUpdater, _ := createDNSUpdater()
 	dnsUpdater.findElbs = func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error) {
 		return nil, errors.New("No elbs for you")
 	}
@@ -42,6 +85,70 @@ func TestQueryFrontendsFails(t *testing.T) {
 	err := dnsUpdater.Start()
 
 	assert.EqualError(t, err, "unable to find front end load balancers: No elbs for you")
+}
+
+func TestGetsDomainName(t *testing.T) {
+	dnsUpdater, fakeR53Client := createDNSUpdater()
+
+	fakeR53Client.On("GetHostedZoneDomain").Return(domain, nil)
+
+	err := dnsUpdater.Start()
+
+	assert.NoError(t, err)
+	assert.Equal(t, domain, dnsUpdater.domain)
+}
+
+func TestGetsDomainNameFails(t *testing.T) {
+	fakeR53Client := new(fakeR53Client)
+	dnsUpdater := New(domain, awsRegion, elbName).(*updater)
+	dnsUpdater.findElbs = func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error) {
+		return nil, nil
+	}
+	dnsUpdater.r53Sdk = fakeR53Client
+	fakeR53Client.On("GetHostedZoneDomain").Return("", errors.New("No domain for you"))
+
+	err := dnsUpdater.Start()
+
+	assert.EqualError(t, err, "unable to get domain for hosted zone: No domain for you")
+}
+
+func TestRemovesHostsWithInvalidHost(t *testing.T) {
+	// given
+	dnsUpdater, fakeR53 := createDNSUpdater()
+	validEntry := controller.IngressEntry{
+		Host:      fmt.Sprintf("verification.james.com"),
+		ELbScheme: "internal",
+	}
+	invalidEntry := controller.IngressEntry{
+		Host:      "notjames.com",
+		ELbScheme: "internal",
+	}
+	ingressUpdate := controller.IngressUpdate{
+		Entries: []controller.IngressEntry{validEntry, invalidEntry},
+	}
+	expectedRecordSetsInput := []*route53.Change{
+		{
+			Action: aws.String("UPSERT"),
+			ResourceRecordSet: &route53.ResourceRecordSet{
+				Name: aws.String("verification.james.com"),
+				Type: aws.String("A"),
+				AliasTarget: &route53.AliasTarget{
+					DNSName:              aws.String(elbDNSName),
+					HostedZoneId:         aws.String(r53Zone),
+					EvaluateTargetHealth: aws.Bool(true),
+				},
+			},
+		},
+	}
+	fakeR53.On("UpdateRecordSets", expectedRecordSetsInput).Return(nil)
+
+	// when
+	dnsUpdater.Start()
+	err := dnsUpdater.Update(ingressUpdate)
+
+	// then
+	assert.NoError(t, err)
+	fakeR53.AssertCalled(t, "UpdateRecordSets", expectedRecordSetsInput)
 }
 
 // calculateChanges tests with no external dependencies
@@ -62,7 +169,7 @@ func TestEmptyIngressUpdateResultsInNoChange(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update)
+	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{}
@@ -86,7 +193,7 @@ func TestUpdateAddsMissingRecordSet(t *testing.T) {
 		Entries: []controller.IngressEntry{
 			controller.IngressEntry{
 				Name:        "test-entry",
-				Host:        "foo.com",
+				Host:        "cats.james.com",
 				Path:        "/",
 				ELbScheme:   "internal",
 				ServicePort: 80,
@@ -95,14 +202,14 @@ func TestUpdateAddsMissingRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update)
+	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{
 		{
 			Action: aws.String("UPSERT"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("foo.com"),
+				Name: aws.String("cats.james.com"),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String("elb-dnsname"),
@@ -135,7 +242,7 @@ func TestUpdatingExistingRecordSet(t *testing.T) {
 
 	aRecords := []*route53.ResourceRecordSet{
 		{
-			Name: aws.String("foo.com."),
+			Name: aws.String("foo.james.com."),
 			AliasTarget: &route53.AliasTarget{
 				DNSName:              aws.String("elb-dnsname"),
 				HostedZoneId:         aws.String("elb-hosted-zone-id"),
@@ -148,7 +255,7 @@ func TestUpdatingExistingRecordSet(t *testing.T) {
 		Entries: []controller.IngressEntry{
 			controller.IngressEntry{
 				Name:        "test-entry",
-				Host:        "foo.com",
+				Host:        "foo.james.com",
 				Path:        "/",
 				ELbScheme:   "internet-facing",
 				ServicePort: 80,
@@ -157,14 +264,14 @@ func TestUpdatingExistingRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update)
+	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{
 		{
 			Action: aws.String("UPSERT"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("foo.com"),
+				Name: aws.String("foo.james.com"),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String("elb-dnsname-2"),
@@ -205,7 +312,7 @@ func TestDeletingExistingRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update)
+	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{
@@ -239,7 +346,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 
 	aRecords := []*route53.ResourceRecordSet{
 		{
-			Name: aws.String("bar.com"),
+			Name: aws.String("bar.james.com"),
 			AliasTarget: &route53.AliasTarget{
 				DNSName:              aws.String("elb-dnsname"),
 				HostedZoneId:         aws.String("elb-hosted-zone-id"),
@@ -252,7 +359,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 		Entries: []controller.IngressEntry{
 			controller.IngressEntry{
 				Name:        "test-entry",
-				Host:        "foo.com",
+				Host:        "foo.james.com",
 				Path:        "/",
 				ELbScheme:   "internal",
 				ServicePort: 80,
@@ -261,7 +368,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, err := calculateChanges(frontEnds, aRecords, update)
+	actualChanges, err := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	assert.NoError(t, err)
@@ -269,7 +376,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 		{
 			Action: aws.String("UPSERT"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("foo.com"),
+				Name: aws.String("foo.james.com"),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String("elb-dnsname"),
@@ -281,7 +388,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 		{
 			Action: aws.String("DELETE"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("bar.com"),
+				Name: aws.String("bar.james.com"),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String("elb-dnsname"),
@@ -305,7 +412,7 @@ func TestErrorResponseWhenElbNotFound(t *testing.T) {
 		Entries: []controller.IngressEntry{
 			controller.IngressEntry{
 				Name:        "test-entry",
-				Host:        "foo.com",
+				Host:        "foo.james.com",
 				Path:        "/",
 				ELbScheme:   "internal",
 				ServicePort: 80,
@@ -314,7 +421,7 @@ func TestErrorResponseWhenElbNotFound(t *testing.T) {
 	}
 
 	// when
-	_, err := calculateChanges(frontEnds, aRecords, update)
+	_, err := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	assert.Error(t, err, "Expecting an error when load balancer could not be found.")
@@ -338,7 +445,7 @@ func TestIngressWithNoFrontEndsAreIgnored(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update)
+	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	assert.Empty(t, actualChanges)
