@@ -151,6 +151,53 @@ func TestGetARecordPages(t *testing.T) {
 	assert.Equal(t, allRecords, records)
 }
 
+func TestUpdateRecordSetsFull(t *testing.T) {
+	// given
+	client, fake53 := createClient()
+	client.maxRecordChanges = 1
+	fake53.On("ChangeResourceRecordSets", mock.Anything).Return(&route53.ChangeResourceRecordSetsOutput{}, nil)
+	firstChange := &route53.Change{Action: aws.String("UPDATE")}
+	secondChange := &route53.Change{Action: aws.String("DELETE")}
+
+	// when
+	err := client.UpdateRecordSets([]*route53.Change{firstChange, secondChange})
+
+	// then
+	assert.NoError(t, err)
+	fake53.AssertCalled(t, "ChangeResourceRecordSets", &route53.ChangeResourceRecordSetsInput{
+		HostedZoneId: aws.String(hostedZone),
+		ChangeBatch:  &route53.ChangeBatch{Changes: []*route53.Change{firstChange}},
+	})
+	fake53.AssertCalled(t, "ChangeResourceRecordSets", &route53.ChangeResourceRecordSetsInput{
+		HostedZoneId: aws.String(hostedZone),
+		ChangeBatch:  &route53.ChangeBatch{Changes: []*route53.Change{secondChange}},
+	})
+}
+
+func TestUpdateRecordSetsPartial(t *testing.T) {
+	// given
+	client, fake53 := createClient()
+	client.maxRecordChanges = 2
+	fake53.On("ChangeResourceRecordSets", mock.Anything).Return(&route53.ChangeResourceRecordSetsOutput{}, nil)
+	firstChange := &route53.Change{Action: aws.String("UPDATE")}
+	secondChange := &route53.Change{Action: aws.String("DELETE")}
+	thirdChange := &route53.Change{Action: aws.String("EAT")}
+
+	// when
+	err := client.UpdateRecordSets([]*route53.Change{firstChange, secondChange, thirdChange})
+
+	// then
+	assert.NoError(t, err)
+	fake53.AssertCalled(t, "ChangeResourceRecordSets", &route53.ChangeResourceRecordSetsInput{
+		HostedZoneId: aws.String(hostedZone),
+		ChangeBatch:  &route53.ChangeBatch{Changes: []*route53.Change{firstChange, secondChange}},
+	})
+	fake53.AssertCalled(t, "ChangeResourceRecordSets", &route53.ChangeResourceRecordSetsInput{
+		HostedZoneId: aws.String(hostedZone),
+		ChangeBatch:  &route53.ChangeBatch{Changes: []*route53.Change{thirdChange}},
+	})
+}
+
 func createClient() (*client, *fake53) {
 	client := New("fake", hostedZone).(*client)
 	fake53 := new(fake53)
