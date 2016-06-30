@@ -5,6 +5,7 @@ RUN apt-get update && apt-get upgrade -y -o Dpkg::Options::="--force-confnew" \
 
 RUN apt-get update \
 	&& apt-get install --no-install-recommends --no-install-suggests -y \
+						ca-certificates \
 						curl \
 						dnsutils \
 						vim-tiny \
