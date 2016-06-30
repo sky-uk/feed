@@ -167,11 +167,9 @@ func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDet
 
 	log.Infof("Found %d loadbalancers. Checking for %s tag set to %s", len(lbNames), ElbTag, labelValue)
 	clusterFrontEnds := make(map[string]LoadBalancerDetails)
-	totalLbs := len(lbNames)
-	for i := 0; i < len(lbNames); i += maxTagQuery {
-		to := min(i+maxTagQuery, totalLbs)
-		log.Debugf("Querying tags from %d to %d", i, to)
-		names := lbNames[i:to]
+	partitions := util.Partition(len(lbNames), maxTagQuery)
+	for _, partition := range partitions {
+		names := lbNames[partition.Low:partition.High]
 		output, err := awsElb.DescribeTags(&aws_elb.DescribeTagsInput{
 			LoadBalancerNames: names,
 		})

@@ -3,10 +3,10 @@ package r53
 import (
 	"fmt"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/sky-uk/feed/util"
 )
 
 const maxRecordChanges = 100
@@ -53,10 +53,9 @@ func (dns *client) GetHostedZoneDomain() (string, error) {
 
 // UpdateRecordSets updates records in aws based on the change list.
 func (dns *client) UpdateRecordSets(changes []*route53.Change) error {
-	for i := 0; i < len(changes); i += dns.maxRecordChanges {
-		upperBound := min(i+dns.maxRecordChanges, len(changes))
-		batch := changes[i:upperBound]
-		log.Debug("Doing batch ", batch)
+	partitions := util.Partition(len(changes), dns.maxRecordChanges)
+	for _, partition := range partitions {
+		batch := changes[partition.Low:partition.High]
 		recordSetsInput := &route53.ChangeResourceRecordSetsInput{
 			HostedZoneId: aws.String(dns.hostedZone),
 			ChangeBatch: &route53.ChangeBatch{
@@ -72,13 +71,6 @@ func (dns *client) UpdateRecordSets(changes []*route53.Change) error {
 	}
 
 	return nil
-}
-
-func min(x int, y int) int {
-	if x < y {
-		return x
-	}
-	return y
 }
 
 // GetARecords gets a list of A Records from aws.
