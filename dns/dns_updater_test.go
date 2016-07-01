@@ -151,6 +151,25 @@ func TestRemovesHostsWithInvalidHost(t *testing.T) {
 	fakeR53.AssertCalled(t, "UpdateRecordSets", expectedRecordSetsInput)
 }
 
+func TestUpdateRecordSetFail(t *testing.T) {
+	// given
+	dnsUpdater, fakeR53 := createDNSUpdater()
+	validEntry := controller.IngressEntry{Host: fmt.Sprintf("verification.james.com"), ELbScheme: "internal"}
+	ingressUpdate := controller.IngressUpdate{
+		Entries: []controller.IngressEntry{validEntry},
+	}
+	fakeR53.On("UpdateRecordSets", mock.Anything).Return(
+		errors.New("No updates for you!"),
+	)
+
+	// when
+	dnsUpdater.Start()
+	err := dnsUpdater.Update(ingressUpdate)
+
+	//then
+	assert.EqualError(t, err, "unable to update record sets: No updates for you!")
+}
+
 // calculateChanges tests with no external dependencies
 func TestEmptyIngressUpdateResultsInNoChange(t *testing.T) {
 	// given

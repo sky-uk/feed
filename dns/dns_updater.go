@@ -73,7 +73,10 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 		return err
 	}
 
-	u.r53Sdk.UpdateRecordSets(changes)
+	err = u.r53Sdk.UpdateRecordSets(changes)
+	if err != nil {
+		return fmt.Errorf("unable to update record sets: %v", err)
+	}
 
 	return nil
 }
