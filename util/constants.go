@@ -5,4 +5,6 @@ const (
 	PrometheusNamespace = "feed"
 	// PrometheusIngressSubsystem is the metric subsystem for feed-ingress.
 	PrometheusIngressSubsystem = "ingress"
+	// PrometheusDNSSubsystem is the metric subsystem for feed-dns.
+	PrometheusDNSSubsystem = "dns"
 )

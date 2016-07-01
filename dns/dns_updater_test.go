@@ -188,7 +188,7 @@ func TestEmptyIngressUpdateResultsInNoChange(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{}
@@ -221,7 +221,7 @@ func TestUpdateAddsMissingRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{
@@ -283,7 +283,7 @@ func TestUpdatingExistingRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{
@@ -331,7 +331,7 @@ func TestDeletingExistingRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{
@@ -387,10 +387,9 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, err := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
-	assert.NoError(t, err)
 	expectedRecordSetsInput := []*route53.Change{
 		{
 			Action: aws.String("UPSERT"),
@@ -421,31 +420,6 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 	assert.Equal(t, expectedRecordSetsInput, actualChanges)
 }
 
-func TestErrorResponseWhenElbNotFound(t *testing.T) {
-	// given
-	frontEnds := map[string]elb.LoadBalancerDetails{}
-
-	aRecords := []*route53.ResourceRecordSet{}
-
-	update := controller.IngressUpdate{
-		Entries: []controller.IngressEntry{
-			controller.IngressEntry{
-				Name:        "test-entry",
-				Host:        "foo.james.com",
-				Path:        "/",
-				ELbScheme:   "internal",
-				ServicePort: 80,
-			},
-		},
-	}
-
-	// when
-	_, err := calculateChanges(frontEnds, aRecords, update, domain)
-
-	// then
-	assert.Error(t, err, "Expecting an error when load balancer could not be found.")
-}
-
 func TestIngressWithNoFrontEndsAreIgnored(t *testing.T) {
 	// given
 	frontEnds := map[string]elb.LoadBalancerDetails{}
@@ -464,7 +438,7 @@ func TestIngressWithNoFrontEndsAreIgnored(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	assert.Empty(t, actualChanges)

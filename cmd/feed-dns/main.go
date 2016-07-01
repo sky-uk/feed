@@ -5,6 +5,8 @@ import (
 
 	"os"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/dns"
@@ -13,29 +15,32 @@ import (
 )
 
 var (
-	apiServer      string
-	caCertFile     string
-	tokenFile      string
-	clientCertFile string
-	clientKeyFile  string
-	debug          bool
-	healthPort     int
-	elbLabelValue  string
-	elbRegion      string
-	r53HostedZone  string
+	apiServer                  string
+	caCertFile                 string
+	tokenFile                  string
+	clientCertFile             string
+	clientKeyFile              string
+	debug                      bool
+	healthPort                 int
+	elbLabelValue              string
+	elbRegion                  string
+	r53HostedZone              string
+	pushgatewayURL             string
+	pushgatewayIntervalSeconds int
 )
 
 func init() {
 	const (
-		defaultAPIServer      = "https://kubernetes:443"
-		defaultCaCertFile     = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-		defaultTokenFile      = "/run/secrets/kubernetes.io/serviceaccount/token"
-		defaultClientCertFile = ""
-		defaultClientKeyFile  = ""
-		defaultHealthPort     = 12082
-		defaultElbRegion      = "eu-west-1"
-		defaultElbLabelValue  = ""
-		defaultHostedZone     = ""
+		defaultAPIServer                  = "https://kubernetes:443"
+		defaultCaCertFile                 = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+		defaultTokenFile                  = "/run/secrets/kubernetes.io/serviceaccount/token"
+		defaultClientCertFile             = ""
+		defaultClientKeyFile              = ""
+		defaultHealthPort                 = 12082
+		defaultElbRegion                  = "eu-west-1"
+		defaultElbLabelValue              = ""
+		defaultHostedZone                 = ""
+		defaultPushgatewayIntervalSeconds = 60
 	)
 
 	flag.StringVar(&apiServer, "apiserver", defaultAPIServer,
@@ -58,6 +63,11 @@ func init() {
 		"Alias to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
 	flag.StringVar(&r53HostedZone, "r53-hosted-zone", defaultHostedZone,
 		"Route53 Hosted zone to manage.")
+	flag.StringVar(&pushgatewayURL, "pushgateway", "",
+		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
+	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
+		"Interval in seconds for pushing metrics.")
+
 }
 
 func main() {
@@ -87,6 +97,8 @@ func main() {
 		log.Error("Error while starting updater: ", err)
 		os.Exit(-1)
 	}
+
+	cmd.AddMetricsPusher("feed-dns", pushgatewayURL, time.Second*time.Duration(pushgatewayIntervalSeconds))
 
 	select {}
 }

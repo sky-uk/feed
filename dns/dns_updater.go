@@ -65,16 +65,18 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 	aRecords, err := u.r53Sdk.GetARecords()
 	if err != nil {
 		log.Warn("Unable to get A records from Route53. Not updating Route53.", err)
+		failedCount.Inc()
 		return err
 	}
+	recordsGauge.Set(float64(len(aRecords)))
 
-	changes, err := calculateChanges(u.frontends, aRecords, update, u.domain)
-	if err != nil {
-		return err
-	}
+	changes := calculateChanges(u.frontends, aRecords, update, u.domain)
+
+	updateCount.Add(float64(len(changes)))
 
 	err = u.r53Sdk.UpdateRecordSets(changes)
 	if err != nil {
+		failedCount.Inc()
 		return fmt.Errorf("unable to update record sets: %v", err)
 	}
 
@@ -86,7 +88,7 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails,
 	aRecords []*route53.ResourceRecordSet,
 	update controller.IngressUpdate,
-	domain string) ([]*route53.Change, error) {
+	domain string) []*route53.Change {
 
 	log.Info("Current a records: ", aRecords)
 	log.Info("Processing ingress update: ", update)
@@ -104,13 +106,16 @@ func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails,
 		// First we check if this host is actually in the hosted zone's domain
 		if !strings.HasSuffix(hostNameWithPeriod, domainWithLeadingPeriod) {
 			log.Warnf("Ingress entry does not have a valid hostname for the hosted zone (%s, %s)", hostNameWithPeriod, domainWithLeadingPeriod)
+			invalidIngressCount.Inc()
 			break
 		}
 
 		hostToIngresEntry[hostNameWithPeriod] = ingressEntry
 		frontEnd, exists := frontEnds[ingressEntry.ELbScheme]
 		if !exists {
-			return nil, fmt.Errorf("unable to find front end load balancer with scheme: %v", ingressEntry.ELbScheme)
+			log.Warnf("Unable to find front end load balancer with scheme: %s. %s entry will be excluded", ingressEntry.ELbScheme, ingressEntry.Host)
+			invalidIngressCount.Inc()
+			break
 		}
 		changes = append(changes,
 			newChange("UPSERT", ingressEntry.Host, frontEnd.DNSName, frontEnd.HostedZoneID))
@@ -129,7 +134,7 @@ func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails,
 	}
 
 	log.Infof("calculated changes to dns: %v", changes)
-	return changes, nil
+	return changes
 }
 
 func newChange(action string, host string, targetElbDNSName string, targetElbHostedZoneID string) *route53.Change {
