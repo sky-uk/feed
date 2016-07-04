@@ -36,6 +36,10 @@ func New(r53HostedZone, elbRegion string, elbLabelName string) controller.Update
 	}
 }
 
+func (u *updater) String() string {
+	return "route53 updater"
+}
+
 func (u *updater) Start() error {
 	log.Info("Starting dns updater")
 	frontEnds, err := u.findElbs(u.elb, u.elbLabelName)
@@ -65,61 +69,73 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 	aRecords, err := u.r53Sdk.GetARecords()
 	if err != nil {
 		log.Warn("Unable to get A records from Route53. Not updating Route53.", err)
+		failedCount.Inc()
 		return err
 	}
+	recordsGauge.Set(float64(len(aRecords)))
 
-	changes, err := calculateChanges(u.frontends, aRecords, update, u.domain)
-	if err != nil {
-		return err
-	}
+	changes := calculateChanges(u.frontends, aRecords, update, u.domain)
+
+	updateCount.Add(float64(len(changes)))
 
 	err = u.r53Sdk.UpdateRecordSets(changes)
 	if err != nil {
+		failedCount.Inc()
 		return fmt.Errorf("unable to update record sets: %v", err)
 	}
 
 	return nil
 }
 
-// a private function rather than a method on updater to allow isolated testing, however...
-// todo make a private method and test through the public interface
+// todo (chbatey) make a private method and test through the public interface
 func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails,
 	aRecords []*route53.ResourceRecordSet,
 	update controller.IngressUpdate,
-	domain string) ([]*route53.Change, error) {
+	domain string) []*route53.Change {
 
 	log.Info("Current a records: ", aRecords)
-	log.Info("Processing ingress update: ", update)
+	log.Debug("Processing ingress update: ", update)
 	changes := []*route53.Change{}
-	hostToIngresEntry := make(map[string]controller.IngressEntry)
+
+	var invalidIngresses []string
+	hostToIngressEntries := make(map[string]controller.IngressEntry)
+
 	for _, ingressEntry := range update.Entries {
-		log.Infof("Processing entry %v", ingressEntry)
+		log.Debugf("Processing entry %v", ingressEntry)
 		// Ingress entries in k8s aren't allowed to have the . on the end
 		// AWS adds it regardless of whether you specify it
 		hostNameWithPeriod := ingressEntry.Host + "."
 		// Want to match blah.james.com not blahjames.com for domain james.com
-		domainWithLeadingPeriod := "." + domain
 
-		log.Infof("Checking if ingress entry has valid host name (%s, %s)", hostNameWithPeriod, domainWithLeadingPeriod)
+		log.Debugf("Checking if ingress entry has valid host name (%s, %s)", hostNameWithPeriod, domain)
 		// First we check if this host is actually in the hosted zone's domain
-		if !strings.HasSuffix(hostNameWithPeriod, domainWithLeadingPeriod) {
-			log.Warnf("Ingress entry does not have a valid hostname for the hosted zone (%s, %s)", hostNameWithPeriod, domainWithLeadingPeriod)
-			break
+		if !strings.HasSuffix(hostNameWithPeriod, "."+domain) {
+			invalidIngresses = append(invalidIngresses, ingressEntry.Name+":host:"+hostNameWithPeriod)
+			invalidIngressCount.Inc()
+			continue
 		}
 
-		hostToIngresEntry[hostNameWithPeriod] = ingressEntry
+		hostToIngressEntries[hostNameWithPeriod] = ingressEntry
 		frontEnd, exists := frontEnds[ingressEntry.ELbScheme]
 		if !exists {
-			return nil, fmt.Errorf("unable to find front end load balancer with scheme: %v", ingressEntry.ELbScheme)
+			invalidIngresses = append(invalidIngresses, ingressEntry.Name+":scheme:"+ingressEntry.ELbScheme)
+			invalidIngressCount.Inc()
+			continue
 		}
+
 		changes = append(changes,
 			newChange("UPSERT", ingressEntry.Host, frontEnd.DNSName, frontEnd.HostedZoneID))
 	}
 
-	log.Info("Host to ingress entry: ", hostToIngresEntry)
+	if len(invalidIngresses) > 0 {
+		log.Warnf("%d invalid entries for zone '%s': %v",
+			len(invalidIngresses), domain, invalidIngresses)
+	}
+
+	log.Debug("Host to ingress entry: ", hostToIngressEntries)
 
 	for _, recordSet := range aRecords {
-		if _, contains := hostToIngresEntry[*recordSet.Name]; !contains {
+		if _, contains := hostToIngressEntries[*recordSet.Name]; !contains {
 			changes = append(changes, newChange(
 				"DELETE",
 				*recordSet.Name,
@@ -128,8 +144,8 @@ func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails,
 		}
 	}
 
-	log.Infof("calculated changes to dns: %v", changes)
-	return changes, nil
+	log.Infof("Calculated changes to dns: %v", changes)
+	return changes
 }
 
 func newChange(action string, host string, targetElbDNSName string, targetElbHostedZoneID string) *route53.Change {

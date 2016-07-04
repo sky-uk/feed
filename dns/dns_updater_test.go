@@ -24,7 +24,7 @@ const (
 	awsRegion  = "awsRegion"
 )
 
-var defaultFrontends = map[string]elb.LoadBalancerDetails{"internal": elb.LoadBalancerDetails{
+var defaultFrontends = map[string]elb.LoadBalancerDetails{"internal": {
 	Name:         elbName,
 	DNSName:      elbDNSName,
 	HostedZoneID: r53Zone,
@@ -174,7 +174,7 @@ func TestUpdateRecordSetFail(t *testing.T) {
 func TestEmptyIngressUpdateResultsInNoChange(t *testing.T) {
 	// given
 	frontEnds := map[string]elb.LoadBalancerDetails{
-		"elb-name": elb.LoadBalancerDetails{
+		"elb-name": {
 			Name:         "elb-name",
 			DNSName:      "elb-dnsname",
 			HostedZoneID: "elb-hosted-zone-id",
@@ -188,7 +188,7 @@ func TestEmptyIngressUpdateResultsInNoChange(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{}
@@ -198,7 +198,7 @@ func TestEmptyIngressUpdateResultsInNoChange(t *testing.T) {
 func TestUpdateAddsMissingRecordSet(t *testing.T) {
 	// given
 	frontEnds := map[string]elb.LoadBalancerDetails{
-		"internal": elb.LoadBalancerDetails{
+		"internal": {
 			Name:         "elb-name",
 			DNSName:      "elb-dnsname",
 			HostedZoneID: "elb-hosted-zone-id",
@@ -210,7 +210,7 @@ func TestUpdateAddsMissingRecordSet(t *testing.T) {
 
 	update := controller.IngressUpdate{
 		Entries: []controller.IngressEntry{
-			controller.IngressEntry{
+			{
 				Name:        "test-entry",
 				Host:        "cats.james.com",
 				Path:        "/",
@@ -221,7 +221,7 @@ func TestUpdateAddsMissingRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{
@@ -245,13 +245,13 @@ func TestUpdateAddsMissingRecordSet(t *testing.T) {
 func TestUpdatingExistingRecordSet(t *testing.T) {
 	// given
 	frontEnds := map[string]elb.LoadBalancerDetails{
-		"internal": elb.LoadBalancerDetails{
+		"internal": {
 			Name:         "elb-name",
 			DNSName:      "elb-dnsname",
 			HostedZoneID: "elb-hosted-zone-id",
 			Scheme:       "internal",
 		},
-		"internet-facing": elb.LoadBalancerDetails{
+		"internet-facing": {
 			Name:         "elb-name-2",
 			DNSName:      "elb-dnsname-2",
 			HostedZoneID: "elb-hosted-zone-id-2",
@@ -272,7 +272,7 @@ func TestUpdatingExistingRecordSet(t *testing.T) {
 
 	update := controller.IngressUpdate{
 		Entries: []controller.IngressEntry{
-			controller.IngressEntry{
+			{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
 				Path:        "/",
@@ -283,7 +283,7 @@ func TestUpdatingExistingRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{
@@ -307,7 +307,7 @@ func TestUpdatingExistingRecordSet(t *testing.T) {
 func TestDeletingExistingRecordSet(t *testing.T) {
 	// given
 	frontEnds := map[string]elb.LoadBalancerDetails{
-		"internal": elb.LoadBalancerDetails{
+		"internal": {
 			Name:         "elb-name",
 			DNSName:      "elb-dnsname",
 			HostedZoneID: "elb-hosted-zone-id",
@@ -331,7 +331,7 @@ func TestDeletingExistingRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
 	expectedRecordSetsInput := []*route53.Change{
@@ -355,7 +355,7 @@ func TestDeletingExistingRecordSet(t *testing.T) {
 func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 	// given
 	frontEnds := map[string]elb.LoadBalancerDetails{
-		"internal": elb.LoadBalancerDetails{
+		"internal": {
 			Name:         "elb-name",
 			DNSName:      "elb-dnsname",
 			HostedZoneID: "elb-hosted-zone-id",
@@ -376,7 +376,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 
 	update := controller.IngressUpdate{
 		Entries: []controller.IngressEntry{
-			controller.IngressEntry{
+			{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
 				Path:        "/",
@@ -387,10 +387,9 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 	}
 
 	// when
-	actualChanges, err := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
-	assert.NoError(t, err)
 	expectedRecordSetsInput := []*route53.Change{
 		{
 			Action: aws.String("UPSERT"),
@@ -421,51 +420,47 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 	assert.Equal(t, expectedRecordSetsInput, actualChanges)
 }
 
-func TestErrorResponseWhenElbNotFound(t *testing.T) {
+func TestIngressWithNoFrontEndsAreIgnored(t *testing.T) {
 	// given
-	frontEnds := map[string]elb.LoadBalancerDetails{}
+	frontEnds := map[string]elb.LoadBalancerDetails{
+		"internal": {
+			Name:         "elb-name",
+			DNSName:      "elb-dnsname",
+			HostedZoneID: "elb-hosted-zone-id",
+			Scheme:       "internal",
+		},
+	}
 
 	aRecords := []*route53.ResourceRecordSet{}
 
 	update := controller.IngressUpdate{
 		Entries: []controller.IngressEntry{
-			controller.IngressEntry{
+			{
+				Name:        "test-entry",
+				Host:        "foo.com",
+				Path:        "/",
+				ServicePort: 80,
+			},
+			{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
 				Path:        "/",
 				ELbScheme:   "internal",
 				ServicePort: 80,
 			},
-		},
-	}
-
-	// when
-	_, err := calculateChanges(frontEnds, aRecords, update, domain)
-
-	// then
-	assert.Error(t, err, "Expecting an error when load balancer could not be found.")
-}
-
-func TestIngressWithNoFrontEndsAreIgnored(t *testing.T) {
-	// given
-	frontEnds := map[string]elb.LoadBalancerDetails{}
-
-	aRecords := []*route53.ResourceRecordSet{}
-
-	update := controller.IngressUpdate{
-		Entries: []controller.IngressEntry{
-			controller.IngressEntry{
+			{
 				Name:        "test-entry",
-				Host:        "foo.com",
+				Host:        "foo.james.com",
 				Path:        "/",
+				ELbScheme:   "invalidscheme",
 				ServicePort: 80,
 			},
 		},
 	}
 
 	// when
-	actualChanges, _ := calculateChanges(frontEnds, aRecords, update, domain)
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
 
 	// then
-	assert.Empty(t, actualChanges)
+	assert.Len(t, actualChanges, 1, "Should have skipped 1")
 }
