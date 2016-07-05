@@ -13,24 +13,28 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
+	"github.com/sky-uk/feed/util/metrics"
 )
 
 // ElbTag is the tag key used for identifying ELBs to attach to.
 const ElbTag = "sky.uk/KubernetesClusterFrontend"
 
-var attachedFrontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Namespace: util.PrometheusNamespace,
-	Subsystem: util.PrometheusIngressSubsystem,
-	Name:      "frontends_attached",
-	Help:      "The total number of frontends attached",
-})
+var attachedFrontendGauge prometheus.Gauge
 
-func init() {
-	prometheus.MustRegister(attachedFrontendGauge)
+func initMetrics() {
+	attachedFrontendGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace:   metrics.PrometheusNamespace,
+			Subsystem:   metrics.PrometheusIngressSubsystem,
+			Name:        "frontends_attached",
+			Help:        "The total number of frontends attached",
+			ConstLabels: metrics.ConstLabels,
+		})).(prometheus.Gauge)
 }
 
 // New  creates a new ELB frontend
 func New(region string, labelValue string, expectedNumber int) controller.Updater {
+	initMetrics()
 	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, labelValue, expectedNumber)
 	metadata := ec2metadata.New(session.New())
 	return &elb{
@@ -198,7 +202,7 @@ func (e *elb) Stop() error {
 	for _, elb := range e.elbs {
 		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb.Name)
 		_, err := e.awsElb.DeregisterInstancesFromLoadBalancer(&aws_elb.DeregisterInstancesFromLoadBalancerInput{
-			Instances:        []*aws_elb.Instance{&aws_elb.Instance{InstanceId: aws.String(e.instanceID)}},
+			Instances:        []*aws_elb.Instance{{InstanceId: aws.String(e.instanceID)}},
 			LoadBalancerName: aws.String(elb.Name),
 		})
 

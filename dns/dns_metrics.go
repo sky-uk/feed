@@ -2,40 +2,46 @@ package dns
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sky-uk/feed/util"
+	"github.com/sky-uk/feed/util/metrics"
 )
 
-var recordsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Namespace: util.PrometheusNamespace,
-	Subsystem: util.PrometheusDNSSubsystem,
-	Name:      "route53_records",
-	Help:      "The current number of records",
-})
+var recordsGauge prometheus.Gauge
+var updateCount, failedCount, invalidIngressCount prometheus.Counter
 
-var updateCount = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: util.PrometheusNamespace,
-	Subsystem: util.PrometheusDNSSubsystem,
-	Name:      "route53_updates",
-	Help:      "The number of record updates to Route53",
-})
+func initMetrics() {
+	recordsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace:   metrics.PrometheusNamespace,
+			Subsystem:   metrics.PrometheusDNSSubsystem,
+			Name:        "route53_records",
+			Help:        "The current number of records",
+			ConstLabels: metrics.ConstLabels,
+		})).(prometheus.Gauge)
 
-var failedCount = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: util.PrometheusNamespace,
-	Subsystem: util.PrometheusDNSSubsystem,
-	Name:      "route53_failures",
-	Help:      "The number of failed updates to route53",
-})
+	updateCount = prometheus.MustRegisterOrGet(prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace:   metrics.PrometheusNamespace,
+			Subsystem:   metrics.PrometheusDNSSubsystem,
+			Name:        "route53_updates",
+			Help:        "The number of record updates to Route53",
+			ConstLabels: metrics.ConstLabels,
+		})).(prometheus.Counter)
 
-var invalidIngressCount = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: util.PrometheusNamespace,
-	Subsystem: util.PrometheusDNSSubsystem,
-	Name:      "invalid_ingress_entries",
-	Help:      "The number of invalid ingress entries",
-})
+	failedCount = prometheus.MustRegisterOrGet(prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace:   metrics.PrometheusNamespace,
+			Subsystem:   metrics.PrometheusDNSSubsystem,
+			Name:        "route53_failures",
+			Help:        "The number of failed updates to route53",
+			ConstLabels: metrics.ConstLabels,
+		})).(prometheus.Counter)
 
-func init() {
-	prometheus.MustRegister(recordsGauge)
-	prometheus.MustRegister(updateCount)
-	prometheus.MustRegister(failedCount)
-	prometheus.MustRegister(invalidIngressCount)
+	invalidIngressCount = prometheus.MustRegisterOrGet(prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace:   metrics.PrometheusNamespace,
+			Subsystem:   metrics.PrometheusDNSSubsystem,
+			Name:        "invalid_ingress_entries",
+			Help:        "The number of invalid ingress entries",
+			ConstLabels: metrics.ConstLabels,
+		})).(prometheus.Counter)
 }

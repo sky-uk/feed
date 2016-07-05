@@ -5,15 +5,12 @@ import (
 
 	"os"
 
-	"time"
-
 	log "github.com/Sirupsen/logrus"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/dns"
 	"github.com/sky-uk/feed/elb"
-	"github.com/sky-uk/feed/util"
 	"github.com/sky-uk/feed/util/cmd"
+	"github.com/sky-uk/feed/util/metrics"
 )
 
 var (
@@ -29,14 +26,8 @@ var (
 	r53HostedZone              string
 	pushgatewayURL             string
 	pushgatewayIntervalSeconds int
+	pushgatewayLabels          cmd.KeyValues
 )
-
-var unhealthyCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: util.PrometheusNamespace,
-	Subsystem: util.PrometheusDNSSubsystem,
-	Name:      "unhealthy_time",
-	Help:      "The number of seconds feed-dns has been unhealthy.",
-})
 
 func init() {
 	const (
@@ -77,14 +68,16 @@ func init() {
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
 	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
 		"Interval in seconds for pushing metrics.")
-
-	prometheus.MustRegister(unhealthyCounter)
+	flag.Var(&pushgatewayLabels, "pushgateway-label",
+		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
 }
 
 func main() {
 	flag.Parse()
-	cmd.ConfigureLogging(debug)
 	validateConfig()
+
+	cmd.ConfigureLogging(debug)
+	cmd.ConfigureMetrics("feed-dns", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)
 
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer, clientCertFile, clientKeyFile)
 	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue)
@@ -94,6 +87,7 @@ func main() {
 		Updaters:         []controller.Updater{dnsUpdater},
 	})
 
+	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
 	cmd.AddHealthPort(controller, healthPort)
 	cmd.AddSignalHandler(controller)
 
@@ -102,9 +96,6 @@ func main() {
 		log.Error("Error while starting controller: ", err)
 		os.Exit(-1)
 	}
-
-	cmd.AddUnhealthyLogger(controller, unhealthyCounter)
-	cmd.AddMetricsPusher("feed-dns", pushgatewayURL, time.Second*time.Duration(pushgatewayIntervalSeconds))
 
 	select {}
 }

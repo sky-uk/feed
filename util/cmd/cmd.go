@@ -14,6 +14,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sky-uk/feed/util/metrics"
 )
 
 // Pulse represents something alive whose health can be checked.
@@ -53,7 +54,7 @@ const pollInterval = time.Second
 
 // AddUnhealthyLogger adds a periodic poller which reports an unhealthy status.
 // The healthCounter is increased by pollInterval if unhealthy.
-func AddUnhealthyLogger(pulse Pulse, unhealthyCounter prometheus.Counter) {
+func addUnhealthyLogger(pulse Pulse, unhealthyCounter prometheus.Counter) {
 	go func() {
 		healthy := true
 		tickCh := time.Tick(pollInterval)
@@ -100,8 +101,38 @@ func ConfigureLogging(debug bool) {
 	}
 }
 
+// ConfigureMetrics sets up metrics pushing and default labels. This must be called before any metrics
+// are defined.
+func ConfigureMetrics(job string, prometheusLabels KeyValues, pushgatewayURL string, pushgatewayIntervalSeconds int) {
+	metrics.ConstLabels = make(prometheus.Labels)
+	for _, l := range prometheusLabels {
+		metrics.ConstLabels[l.key] = l.value
+	}
+	addMetricsPusher(job, pushgatewayURL, time.Second*time.Duration(pushgatewayIntervalSeconds))
+}
+
+// AddHealthMetrics adds a global health metric for the given pulse. This should only be called
+// a single time per binary.
+func AddHealthMetrics(pulse Pulse, prometheusSubsystem string) {
+	unhealthyCounter := createUnhealthyCounter(prometheusSubsystem)
+	addUnhealthyLogger(pulse, unhealthyCounter)
+}
+
+func createUnhealthyCounter(subsystem string) prometheus.Counter {
+	unhealthyCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: metrics.PrometheusNamespace,
+		Subsystem: subsystem,
+		Name:      "unhealthy_time",
+		Help: fmt.Sprintf("The number of seconds %s-%s has been unhealthy.",
+			metrics.PrometheusNamespace, subsystem),
+		ConstLabels: metrics.ConstLabels,
+	})
+	prometheus.MustRegister(unhealthyCounter)
+	return unhealthyCounter
+}
+
 // AddMetricsPusher starts a periodic push of metrics to a prometheus pushgateway.
-func AddMetricsPusher(job, pushgatewayURL string, interval time.Duration) {
+func addMetricsPusher(job, pushgatewayURL string, interval time.Duration) {
 	if pushgatewayURL == "" {
 		return
 	}

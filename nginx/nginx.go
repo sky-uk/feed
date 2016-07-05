@@ -89,6 +89,8 @@ func (lb *nginxLoadBalancer) nginxConfFile() string {
 
 // New creates an nginx proxy.
 func New(nginxConf Conf) controller.Updater {
+	initMetrics()
+
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
 	if nginxConf.LogLevel == "" {
 		nginxConf.LogLevel = "warn"
