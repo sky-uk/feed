@@ -5,9 +5,13 @@ import (
 
 	"sync"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
-	"github.com/sky-uk/feed/util"
 )
+
+// notWatchingTimeout is the duration before a watcher considers itself unhealthy
+var notWatchingTimeout = time.Second * 10
 
 // Watcher provides channels for receiving updates. It tries its best to run forever, retrying
 // if the underlying connection fails. Use the Health() method to check the state of watcher.
@@ -27,7 +31,8 @@ type baseWatcher struct {
 
 type watcher struct {
 	baseWatcher
-	health util.SafeError
+	sync.Mutex
+	notWatchingSince *time.Time
 }
 
 func newBaseWatcher() baseWatcher {
@@ -51,15 +56,29 @@ func (w *watcher) Done() chan<- struct{} {
 }
 
 func (w *watcher) Health() error {
-	return w.health.Get()
+	w.Lock()
+	defer w.Unlock()
+	if w.notWatchingSince != nil {
+		d := time.Now().Sub(*w.notWatchingSince)
+		if d > notWatchingTimeout {
+			return fmt.Errorf("not watching for %v", d)
+		}
+	}
+
+	return nil
 }
 
 func (w *watcher) watching() {
-	w.health.Set(nil)
+	w.Lock()
+	w.notWatchingSince = nil
+	w.Unlock()
 }
 
 func (w *watcher) notWatching() {
-	w.health.Set(fmt.Errorf("not watching"))
+	w.Lock()
+	n := time.Now()
+	w.notWatchingSince = &n
+	w.Unlock()
 }
 
 type combinedWatcher struct {
