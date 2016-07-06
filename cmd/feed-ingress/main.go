@@ -6,17 +6,14 @@ import (
 
 	_ "net/http/pprof"
 
-	"time"
-
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/nginx"
-	"github.com/sky-uk/feed/util"
 	"github.com/sky-uk/feed/util/cmd"
+	"github.com/sky-uk/feed/util/metrics"
 )
 
 var (
@@ -44,14 +41,8 @@ var (
 	elbExpectedNumber            int
 	pushgatewayURL               string
 	pushgatewayIntervalSeconds   int
+	pushgatewayLabels            cmd.KeyValues
 )
-
-var unhealthyCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: util.PrometheusNamespace,
-	Subsystem: util.PrometheusIngressSubsystem,
-	Name:      "unhealthy_time",
-	Help:      "The number of seconds feed-ingress has been unhealthy.",
-})
 
 func init() {
 	const (
@@ -133,13 +124,15 @@ func init() {
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
 	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
 		"Interval in seconds for pushing metrics.")
-
-	prometheus.MustRegister(unhealthyCounter)
+	flag.Var(&pushgatewayLabels, "pushgateway-label",
+		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
 }
 
 func main() {
 	flag.Parse()
+
 	cmd.ConfigureLogging(debug)
+	cmd.ConfigureMetrics("feed-ingress", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)
 
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiserverURL, clientCertFile, clientKeyFile)
 	updaters := createIngressUpdaters()
@@ -150,6 +143,7 @@ func main() {
 		DefaultAllow:     ingressAllow,
 	})
 
+	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
 	cmd.AddHealthPort(controller, healthPort)
 	cmd.AddSignalHandler(controller)
 
@@ -159,9 +153,6 @@ func main() {
 		os.Exit(-1)
 	}
 	log.Info("Controller started")
-
-	cmd.AddUnhealthyLogger(controller, unhealthyCounter)
-	cmd.AddMetricsPusher("feed-ingress", pushgatewayURL, time.Second*time.Duration(pushgatewayIntervalSeconds))
 
 	select {}
 }

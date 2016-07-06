@@ -28,6 +28,7 @@ type updater struct {
 
 // New creates an updater for dns
 func New(r53HostedZone, elbRegion string, elbLabelName string) controller.Updater {
+	initMetrics()
 	return &updater{
 		r53Sdk:       r53.New(elbRegion, r53HostedZone),
 		elb:          aws_elb.New(session.New(&aws.Config{Region: &elbRegion})),
