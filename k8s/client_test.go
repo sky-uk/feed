@@ -151,6 +151,7 @@ func TestErrorIfInvalidJson(t *testing.T) {
 
 func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 	assert := assert.New(t)
+	notWatchingTimeout = time.Millisecond * 200
 
 	var tests = []struct {
 		path        string
@@ -204,7 +205,8 @@ func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 
 		// send a disconnect event to terminate long poll and ensure that watcher reconnects
 		eventChan <- disconnectEvent
-		assertNotHealthy(t, watcher)
+		time.Sleep(smallWaitTime)
+		assert.NoError(watcher.Health(), "should be considered healthy for short disconnects")
 		eventChan <- okEvent
 		assert.Equal(1, countUpdates(updates), "received update for reconnect")
 		assert.NoError(watcher.Health())
@@ -224,6 +226,8 @@ func TestWatchesIngressUpdatesFromKubernetes(t *testing.T) {
 		eventChan <- disconnectEvent
 		eventChan <- badEvent
 		eventChan <- badEvent
+		// wait for watcher to go unhealthy
+		time.Sleep(notWatchingTimeout)
 		assertNotHealthy(t, watcher)
 		eventChan <- goneEvent
 		time.Sleep(smallWaitTime * 10)
