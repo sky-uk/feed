@@ -1,0 +1,18 @@
+# Example ingress yaml
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: test-ingress
+  annotations:
+    sky.uk/frontend-elb-scheme: internal
+    sky.uk/allow: 10.10.82.0/24
+spec:
+  rules:
+  - host: example.bskyb.com
+    http:
+      paths:
+      - backend:
+          serviceName: my-service
+          servicePort: 8080
+        path: /prefix/my-service/
