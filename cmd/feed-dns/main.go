@@ -87,7 +87,7 @@ func main() {
 		Updaters:         []controller.Updater{dnsUpdater},
 	})
 
-	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
+	cmd.AddHealthMetrics(controller, metrics.PrometheusDNSSubsystem)
 	cmd.AddHealthPort(controller, healthPort)
 	cmd.AddSignalHandler(controller)
 
