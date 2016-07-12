@@ -10,27 +10,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
-	"github.com/sky-uk/feed/util/metrics"
 )
 
 // ElbTag is the tag key used for identifying ELBs to attach to.
 const ElbTag = "sky.uk/KubernetesClusterFrontend"
-
-var attachedFrontendGauge prometheus.Gauge
-
-func initMetrics() {
-	attachedFrontendGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace:   metrics.PrometheusNamespace,
-			Subsystem:   metrics.PrometheusIngressSubsystem,
-			Name:        "frontends_attached",
-			Help:        "The total number of frontends attached",
-			ConstLabels: metrics.ConstLabels,
-		})).(prometheus.Gauge)
-}
 
 // New  creates a new ELB frontend
 func New(region string, labelValue string, expectedNumber int) controller.Updater {

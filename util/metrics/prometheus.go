@@ -1,6 +1,11 @@
 package metrics
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"sync"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 const (
 	// PrometheusNamespace is the metric namespace for feed binaries.
@@ -11,6 +16,30 @@ const (
 	PrometheusDNSSubsystem = "dns"
 )
 
-// ConstLabels should be used when creating a prometheus metric as a set of default labels.
+var labelsLock sync.Mutex
+var constLabels prometheus.Labels
+
+// ConstLabels should be used when creating a prometheus metric, as a set of default labels.
 // To ensure the correct const labels are used, make sure metrics are not created in init().
-var ConstLabels prometheus.Labels
+// SetConstLabels should have been called first.
+func ConstLabels() prometheus.Labels {
+	labelsLock.Lock()
+	defer labelsLock.Unlock()
+
+	if constLabels == nil {
+		log.Panic("Bug: ConstLabels() hasn't been set yet. Are you initialising metrics too early?")
+	}
+	return constLabels
+}
+
+// SetConstLabels sets default labels for prometheus metrics, that can be retrieved using
+// ConstLabels().
+func SetConstLabels(l prometheus.Labels) {
+	labelsLock.Lock()
+	defer labelsLock.Unlock()
+
+	if constLabels != nil {
+		log.Panic("Bug: ConstLabels() were already set, tried to set them multiple times.")
+	}
+	constLabels = l
+}

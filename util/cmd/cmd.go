@@ -104,10 +104,11 @@ func ConfigureLogging(debug bool) {
 // ConfigureMetrics sets up metrics pushing and default labels. This must be called before any metrics
 // are defined.
 func ConfigureMetrics(job string, prometheusLabels KeyValues, pushgatewayURL string, pushgatewayIntervalSeconds int) {
-	metrics.ConstLabels = make(prometheus.Labels)
+	labels := make(prometheus.Labels)
 	for _, l := range prometheusLabels {
-		metrics.ConstLabels[l.key] = l.value
+		labels[l.key] = l.value
 	}
+	metrics.SetConstLabels(labels)
 	addMetricsPusher(job, pushgatewayURL, time.Second*time.Duration(pushgatewayIntervalSeconds))
 }
 
@@ -125,7 +126,7 @@ func createUnhealthyCounter(subsystem string) prometheus.Counter {
 		Name:      "unhealthy_time",
 		Help: fmt.Sprintf("The number of seconds %s-%s has been unhealthy.",
 			metrics.PrometheusNamespace, subsystem),
-		ConstLabels: metrics.ConstLabels,
+		ConstLabels: metrics.ConstLabels(),
 	})
 	prometheus.MustRegister(unhealthyCounter)
 	return unhealthyCounter

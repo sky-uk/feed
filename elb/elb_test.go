@@ -8,10 +8,16 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
+	"github.com/sky-uk/feed/util/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+func init() {
+	metrics.SetConstLabels(make(prometheus.Labels))
+}
 
 const (
 	clusterName               = "cluster_name"

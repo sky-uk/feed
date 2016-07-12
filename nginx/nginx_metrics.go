@@ -9,78 +9,83 @@ import (
 
 	"strconv"
 
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/util/metrics"
 )
 
+var once sync.Once
 var connectionGauge, waitingConnectionsGauge, writingConnectionsGauge, readingConnectionsGauge,
 	acceptsGauge, handledGauge, requestsGauge prometheus.Gauge
 
 func initMetrics() {
-	connectionGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace:   metrics.PrometheusNamespace,
-			Subsystem:   metrics.PrometheusIngressSubsystem,
-			Name:        "nginx_connections",
-			Help:        "The active number of connections in use by nginx.",
-			ConstLabels: metrics.ConstLabels,
-		})).(prometheus.Gauge)
+	once.Do(func() {
+		connectionGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace:   metrics.PrometheusNamespace,
+				Subsystem:   metrics.PrometheusIngressSubsystem,
+				Name:        "nginx_connections",
+				Help:        "The active number of connections in use by nginx.",
+				ConstLabels: metrics.ConstLabels(),
+			})).(prometheus.Gauge)
 
-	waitingConnectionsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace:   metrics.PrometheusNamespace,
-			Subsystem:   metrics.PrometheusIngressSubsystem,
-			Name:        "nginx_connections_waiting",
-			Help:        "The number of idle connections.",
-			ConstLabels: metrics.ConstLabels,
-		})).(prometheus.Gauge)
+		waitingConnectionsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace:   metrics.PrometheusNamespace,
+				Subsystem:   metrics.PrometheusIngressSubsystem,
+				Name:        "nginx_connections_waiting",
+				Help:        "The number of idle connections.",
+				ConstLabels: metrics.ConstLabels(),
+			})).(prometheus.Gauge)
 
-	writingConnectionsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace:   metrics.PrometheusNamespace,
-			Subsystem:   metrics.PrometheusIngressSubsystem,
-			Name:        "nginx_connections_writing",
-			Help:        "The number of connections writing data.",
-			ConstLabels: metrics.ConstLabels,
-		})).(prometheus.Gauge)
+		writingConnectionsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace:   metrics.PrometheusNamespace,
+				Subsystem:   metrics.PrometheusIngressSubsystem,
+				Name:        "nginx_connections_writing",
+				Help:        "The number of connections writing data.",
+				ConstLabels: metrics.ConstLabels(),
+			})).(prometheus.Gauge)
 
-	readingConnectionsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace:   metrics.PrometheusNamespace,
-			Subsystem:   metrics.PrometheusIngressSubsystem,
-			Name:        "nginx_connections_reading",
-			Help:        "The number of connections reading data.",
-			ConstLabels: metrics.ConstLabels,
-		})).(prometheus.Gauge)
+		readingConnectionsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace:   metrics.PrometheusNamespace,
+				Subsystem:   metrics.PrometheusIngressSubsystem,
+				Name:        "nginx_connections_reading",
+				Help:        "The number of connections reading data.",
+				ConstLabels: metrics.ConstLabels(),
+			})).(prometheus.Gauge)
 
-	acceptsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace:   metrics.PrometheusNamespace,
-			Subsystem:   metrics.PrometheusIngressSubsystem,
-			Name:        "nginx_accepts",
-			Help:        "The number of client connections accepted by nginx.",
-			ConstLabels: metrics.ConstLabels,
-		})).(prometheus.Gauge)
+		acceptsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace:   metrics.PrometheusNamespace,
+				Subsystem:   metrics.PrometheusIngressSubsystem,
+				Name:        "nginx_accepts",
+				Help:        "The number of client connections accepted by nginx.",
+				ConstLabels: metrics.ConstLabels(),
+			})).(prometheus.Gauge)
 
-	handledGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: metrics.PrometheusNamespace,
-			Subsystem: metrics.PrometheusIngressSubsystem,
-			Name:      "nginx_handled",
-			Help: "The number of client connections handled by nginx. Can be less than accepts if connection limit " +
-				"reached.",
-			ConstLabels: metrics.ConstLabels,
-		})).(prometheus.Gauge)
+		handledGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: metrics.PrometheusNamespace,
+				Subsystem: metrics.PrometheusIngressSubsystem,
+				Name:      "nginx_handled",
+				Help: "The number of client connections handled by nginx. Can be less than accepts if connection limit " +
+					"reached.",
+				ConstLabels: metrics.ConstLabels(),
+			})).(prometheus.Gauge)
 
-	requestsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: metrics.PrometheusNamespace,
-			Subsystem: metrics.PrometheusIngressSubsystem,
-			Name:      "nginx_requests",
-			Help: "The number of client requests served by nginx. Will be larger than handled if using persistent " +
-				"connections.",
-			ConstLabels: metrics.ConstLabels,
-		})).(prometheus.Gauge)
+		requestsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: metrics.PrometheusNamespace,
+				Subsystem: metrics.PrometheusIngressSubsystem,
+				Name:      "nginx_requests",
+				Help: "The number of client requests served by nginx. Will be larger than handled if using persistent " +
+					"connections.",
+				ConstLabels: metrics.ConstLabels(),
+			})).(prometheus.Gauge)
+	})
 }
 
 type parsedMetrics struct {
