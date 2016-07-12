@@ -9,7 +9,7 @@ import (
 
 var once sync.Once
 var recordsGauge prometheus.Gauge
-var updateCount, failedCount, invalidIngressCount prometheus.Counter
+var updateCount, failedCount, skippedCount prometheus.Counter
 
 func initMetrics() {
 	once.Do(func() {
@@ -18,7 +18,7 @@ func initMetrics() {
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusDNSSubsystem,
 				Name:        "route53_records",
-				Help:        "The current number of records",
+				Help:        "The current number of records.",
 				ConstLabels: metrics.ConstLabels(),
 			})).(prometheus.Gauge)
 
@@ -27,7 +27,7 @@ func initMetrics() {
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusDNSSubsystem,
 				Name:        "route53_updates",
-				Help:        "The number of record updates to Route53",
+				Help:        "The number of record updates to Route53.",
 				ConstLabels: metrics.ConstLabels(),
 			})).(prometheus.Counter)
 
@@ -36,16 +36,17 @@ func initMetrics() {
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusDNSSubsystem,
 				Name:        "route53_failures",
-				Help:        "The number of failed updates to route53",
+				Help:        "The number of failed updates to route53.",
 				ConstLabels: metrics.ConstLabels(),
 			})).(prometheus.Counter)
 
-		invalidIngressCount = prometheus.MustRegisterOrGet(prometheus.NewCounter(
+		skippedCount = prometheus.MustRegisterOrGet(prometheus.NewCounter(
 			prometheus.CounterOpts{
-				Namespace:   metrics.PrometheusNamespace,
-				Subsystem:   metrics.PrometheusDNSSubsystem,
-				Name:        "invalid_ingress_entries",
-				Help:        "The number of invalid ingress entries",
+				Namespace: metrics.PrometheusNamespace,
+				Subsystem: metrics.PrometheusDNSSubsystem,
+				Name:      "skipped_ingress_entries",
+				Help: "The number of ingress entries skipped by feed-dns, such as being outside of the" +
+					" Route53 hosted zone.",
 				ConstLabels: metrics.ConstLabels(),
 			})).(prometheus.Counter)
 
