@@ -32,7 +32,7 @@ func init() {
 const (
 	port          = 9090
 	fakeNginx     = "./fake_nginx.sh"
-	smallWaitTime = time.Millisecond * 10
+	smallWaitTime = time.Millisecond * 20
 )
 
 type mockSignaller struct {
