@@ -51,12 +51,14 @@ func (m *mockSignaller) sighup(p *os.Process) error {
 
 func newConf(tmpDir string, binary string) Conf {
 	return Conf{
-		WorkingDir:              tmpDir,
-		BinaryLocation:          binary,
-		IngressPort:             port,
-		WorkerProcesses:         1,
-		BackendKeepalives:       1024,
-		BackendKeepaliveSeconds: 58,
+		WorkingDir:                tmpDir,
+		BinaryLocation:            binary,
+		IngressPort:               port,
+		WorkerProcesses:           1,
+		BackendKeepalives:         1024,
+		BackendKeepaliveSeconds:   58,
+		ServerNamesHashBucketSize: 54,
+		ServerNamesHashMaxSize:    128,
 	}
 }
 
@@ -211,6 +213,12 @@ func TestTrustedFrontendsSetsUpClientIPCorrectly(t *testing.T) {
 
     real_ip_header X-Forwarded-For;
     real_ip_recursive on;`,
+		},
+		{
+			"blash",
+			newConf(tmpDir, fakeNginx),
+			`    server_names_hash_bucket_size 54;
+    server_names_hash_max_size 128;`,
 		},
 	}
 
