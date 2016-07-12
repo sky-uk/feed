@@ -15,12 +15,14 @@ import (
 	"github.com/sky-uk/feed/elb"
 )
 
+type frontends map[string]elb.LoadBalancerDetails
+type hostToIngress map[string]controller.IngressEntry
 type findElbs func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error)
 
 type updater struct {
 	r53Sdk       r53.Route53Client
 	elb          elb.ELB
-	frontends    map[string]elb.LoadBalancerDetails
+	frontends    frontends
 	elbLabelName string
 	domain       string
 	findElbs     findElbs
@@ -43,14 +45,13 @@ func (u *updater) String() string {
 
 func (u *updater) Start() error {
 	log.Info("Starting dns updater")
-	frontEnds, err := u.findElbs(u.elb, u.elbLabelName)
+	frontends, err := u.findElbs(u.elb, u.elbLabelName)
 	if err != nil {
 		return fmt.Errorf("unable to find front end load balancers: %v", err)
 	}
-	u.frontends = frontEnds
-	u.domain, err = u.r53Sdk.GetHostedZoneDomain()
+	u.frontends = frontends
 
-	if err != nil {
+	if u.domain, err = u.r53Sdk.GetHostedZoneDomain(); err != nil {
 		return fmt.Errorf("unable to get domain for hosted zone: %v", err)
 	}
 
@@ -89,54 +90,76 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 }
 
 // todo (chbatey) make a private method and test through the public interface
-func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails,
-	aRecords []*route53.ResourceRecordSet,
-	update controller.IngressUpdate,
-	domain string) []*route53.Change {
+func calculateChanges(frontEnds frontends, originalRecords []*route53.ResourceRecordSet,
+	update controller.IngressUpdate, domain string) []*route53.Change {
 
-	log.Info("Current a records: ", aRecords)
+	log.Infof("Current %s records: %v", domain, originalRecords)
 	log.Debug("Processing ingress update: ", update)
+
+	hostToIngress, skipped := indexByHost(update.Entries, domain)
+	changes, skipped2 := createChanges(hostToIngress, originalRecords, frontEnds)
+
+	skipped = append(skipped, skipped2...)
+
+	if len(skipped) > 0 {
+		log.Warnf("%d skipped entries for zone '%s': %v",
+			len(skipped), domain, skipped)
+	}
+
+	log.Debug("Host to ingress entry: ", hostToIngress)
+	log.Infof("Calculated changes to dns: %v", changes)
+	return changes
+}
+
+func indexByHost(entries []controller.IngressEntry, domain string) (hostToIngress, []string) {
+	var skipped []string
+	mapping := make(hostToIngress)
+
+	for _, entry := range entries {
+		log.Debugf("Processing entry %v", entry)
+		// Ingress entries in k8s aren't allowed to have the . on the end.
+		// AWS adds it regardless of whether you specify it.
+		hostNameWithPeriod := entry.Host + "."
+
+		log.Debugf("Checking if ingress entry hostname %s is in domain %s", hostNameWithPeriod, domain)
+		if !strings.HasSuffix(hostNameWithPeriod, "."+domain) {
+			skipped = append(skipped, entry.Name+":host:"+hostNameWithPeriod)
+			skippedCount.Inc()
+			continue
+		}
+
+		if previous, exists := mapping[hostNameWithPeriod]; exists {
+			if previous.ELbScheme != entry.ELbScheme {
+				skipped = append(skipped, entry.Name+":conflicting-scheme:"+entry.ELbScheme)
+				skippedCount.Inc()
+			}
+		} else {
+			mapping[hostNameWithPeriod] = entry
+		}
+	}
+
+	return mapping, skipped
+}
+
+func createChanges(hostToIngress hostToIngress, originalRecords []*route53.ResourceRecordSet,
+	frontEnds frontends) ([]*route53.Change, []string) {
+
+	var skipped []string
 	changes := []*route53.Change{}
 
-	var invalidIngresses []string
-	hostToIngressEntries := make(map[string]controller.IngressEntry)
-
-	for _, ingressEntry := range update.Entries {
-		log.Debugf("Processing entry %v", ingressEntry)
-		// Ingress entries in k8s aren't allowed to have the . on the end
-		// AWS adds it regardless of whether you specify it
-		hostNameWithPeriod := ingressEntry.Host + "."
-		// Want to match blah.james.com not blahjames.com for domain james.com
-
-		log.Debugf("Checking if ingress entry has valid host name (%s, %s)", hostNameWithPeriod, domain)
-		// First we check if this host is actually in the hosted zone's domain
-		if !strings.HasSuffix(hostNameWithPeriod, "."+domain) {
-			invalidIngresses = append(invalidIngresses, ingressEntry.Name+":host:"+hostNameWithPeriod)
-			invalidIngressCount.Inc()
-			continue
-		}
-
-		hostToIngressEntries[hostNameWithPeriod] = ingressEntry
-		frontEnd, exists := frontEnds[ingressEntry.ELbScheme]
+	for host, entry := range hostToIngress {
+		frontEnd, exists := frontEnds[entry.ELbScheme]
 		if !exists {
-			invalidIngresses = append(invalidIngresses, ingressEntry.Name+":scheme:"+ingressEntry.ELbScheme)
-			invalidIngressCount.Inc()
+			skipped = append(skipped, entry.Name+":scheme:"+entry.ELbScheme)
+			skippedCount.Inc()
 			continue
 		}
 
-		changes = append(changes,
-			newChange("UPSERT", ingressEntry.Host, frontEnd.DNSName, frontEnd.HostedZoneID))
+		changes = append(changes, newChange("UPSERT", host, frontEnd.DNSName, frontEnd.HostedZoneID))
 	}
 
-	if len(invalidIngresses) > 0 {
-		log.Warnf("%d invalid entries for zone '%s': %v",
-			len(invalidIngresses), domain, invalidIngresses)
-	}
-
-	log.Debug("Host to ingress entry: ", hostToIngressEntries)
-
-	for _, recordSet := range aRecords {
-		if _, contains := hostToIngressEntries[*recordSet.Name]; !contains {
+	for _, recordSet := range originalRecords {
+		if _, contains := hostToIngress[*recordSet.Name]; !contains {
 			changes = append(changes, newChange(
 				"DELETE",
 				*recordSet.Name,
@@ -145,8 +168,7 @@ func calculateChanges(frontEnds map[string]elb.LoadBalancerDetails,
 		}
 	}
 
-	log.Infof("Calculated changes to dns: %v", changes)
-	return changes
+	return changes, skipped
 }
 
 func newChange(action string, host string, targetElbDNSName string, targetElbHostedZoneID string) *route53.Change {

@@ -19,6 +19,7 @@ import (
 
 func init() {
 	metrics.SetConstLabels(make(prometheus.Labels))
+	initMetrics()
 }
 
 const (
@@ -30,7 +31,7 @@ const (
 	awsRegion  = "awsRegion"
 )
 
-var defaultFrontends = map[string]elb.LoadBalancerDetails{"internal": {
+var defaultFrontends = frontends{"internal": {
 	Name:         elbName,
 	DNSName:      elbDNSName,
 	HostedZoneID: r53Zone,
@@ -136,7 +137,7 @@ func TestRemovesHostsWithInvalidHost(t *testing.T) {
 		{
 			Action: aws.String("UPSERT"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("verification.james.com"),
+				Name: aws.String("verification.james.com."),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String(elbDNSName),
@@ -234,7 +235,7 @@ func TestUpdateAddsMissingRecordSet(t *testing.T) {
 		{
 			Action: aws.String("UPSERT"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("cats.james.com"),
+				Name: aws.String("cats.james.com."),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String("elb-dnsname"),
@@ -296,7 +297,7 @@ func TestUpdatingExistingRecordSet(t *testing.T) {
 		{
 			Action: aws.String("UPSERT"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("foo.james.com"),
+				Name: aws.String("foo.james.com."),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String("elb-dnsname-2"),
@@ -323,7 +324,7 @@ func TestDeletingExistingRecordSet(t *testing.T) {
 
 	aRecords := []*route53.ResourceRecordSet{
 		{
-			Name: aws.String("foo.com"),
+			Name: aws.String("foo.com."),
 			AliasTarget: &route53.AliasTarget{
 				DNSName:              aws.String("elb-dnsname"),
 				HostedZoneId:         aws.String("elb-hosted-zone-id"),
@@ -344,7 +345,7 @@ func TestDeletingExistingRecordSet(t *testing.T) {
 		{
 			Action: aws.String("DELETE"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("foo.com"),
+				Name: aws.String("foo.com."),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String("elb-dnsname"),
@@ -371,7 +372,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 
 	aRecords := []*route53.ResourceRecordSet{
 		{
-			Name: aws.String("bar.james.com"),
+			Name: aws.String("bar.james.com."),
 			AliasTarget: &route53.AliasTarget{
 				DNSName:              aws.String("elb-dnsname"),
 				HostedZoneId:         aws.String("elb-hosted-zone-id"),
@@ -400,7 +401,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 		{
 			Action: aws.String("UPSERT"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("foo.james.com"),
+				Name: aws.String("foo.james.com."),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String("elb-dnsname"),
@@ -412,7 +413,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 		{
 			Action: aws.String("DELETE"),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String("bar.james.com"),
+				Name: aws.String("bar.james.com."),
 				Type: aws.String("A"),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String("elb-dnsname"),
@@ -426,7 +427,7 @@ func TestDeletingAndAddingADifferentRecordSet(t *testing.T) {
 	assert.Equal(t, expectedRecordSetsInput, actualChanges)
 }
 
-func TestIngressWithNoFrontEndsAreIgnored(t *testing.T) {
+func TestIngressWithNoMatchingFrontEndsAreIgnored(t *testing.T) {
 	// given
 	frontEnds := map[string]elb.LoadBalancerDetails{
 		"internal": {
@@ -441,19 +442,22 @@ func TestIngressWithNoFrontEndsAreIgnored(t *testing.T) {
 
 	update := controller.IngressUpdate{
 		Entries: []controller.IngressEntry{
+			// host doesn't match james.com.
 			{
 				Name:        "test-entry",
 				Host:        "foo.com",
 				Path:        "/",
+				ELbScheme:   "internal",
 				ServicePort: 80,
 			},
 			{
 				Name:        "test-entry",
-				Host:        "foo.james.com",
+				Host:        "bar.james.com",
 				Path:        "/",
 				ELbScheme:   "internal",
 				ServicePort: 80,
 			},
+			// scheme doesn't match internal
 			{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -469,4 +473,108 @@ func TestIngressWithNoFrontEndsAreIgnored(t *testing.T) {
 
 	// then
 	assert.Len(t, actualChanges, 1, "Should have skipped 1")
+}
+
+func TestIngressWithDuplicateHostsAreNotDuplicatedInRoute53ChangeSet(t *testing.T) {
+	frontEnds := map[string]elb.LoadBalancerDetails{
+		"internal": {
+			Name:         "elb-name",
+			DNSName:      "elb-dnsname",
+			HostedZoneID: "elb-hosted-zone-id",
+			Scheme:       "internal",
+		},
+	}
+
+	aRecords := []*route53.ResourceRecordSet{}
+
+	update := controller.IngressUpdate{
+		Entries: []controller.IngressEntry{
+			{
+				Name:        "test-entry",
+				Host:        "foo.james.com",
+				Path:        "/",
+				ELbScheme:   "internal",
+				ServicePort: 80,
+			},
+			{
+				Name:        "test-entry-blah",
+				Host:        "foo.james.com",
+				Path:        "/blah/",
+				ELbScheme:   "internal",
+				ServicePort: 80,
+			},
+			{
+				Name:        "test-entry-lala",
+				Host:        "foo.james.com",
+				Path:        "/lala/",
+				ELbScheme:   "internal",
+				ServicePort: 80,
+			},
+		},
+	}
+
+	// when
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
+
+	// then
+	assert.Len(t, actualChanges, 1, "Should have eliminated duplicates")
+}
+
+func TestDuplicateIngressWithConflictingSchemesChoosesTheFirstOne(t *testing.T) {
+	// given
+	frontEnds := map[string]elb.LoadBalancerDetails{
+		"public-facing": {
+			Name:         "elb-public-name",
+			DNSName:      "elb-public-dnsname",
+			HostedZoneID: "elb-public-hosted-zone-id",
+			Scheme:       "public-facing",
+		},
+		"internal": {
+			Name:         "elb-internal-name",
+			DNSName:      "elb-internal-dnsname",
+			HostedZoneID: "elb-internal-hosted-zone-id",
+			Scheme:       "internal",
+		},
+	}
+
+	aRecords := []*route53.ResourceRecordSet{}
+
+	update := controller.IngressUpdate{
+		Entries: []controller.IngressEntry{
+			{
+				Name:        "test-entry",
+				Host:        "bar.james.com",
+				Path:        "/",
+				ELbScheme:   "internal",
+				ServicePort: 80,
+			},
+			{
+				Name:        "test-entry",
+				Host:        "bar.james.com",
+				Path:        "/",
+				ELbScheme:   "public-facing",
+				ServicePort: 80,
+			},
+		},
+	}
+
+	// when
+	actualChanges := calculateChanges(frontEnds, aRecords, update, domain)
+
+	// then
+	expected := []*route53.Change{
+		{
+			Action: aws.String("UPSERT"),
+			ResourceRecordSet: &route53.ResourceRecordSet{
+				Name: aws.String("bar.james.com."),
+				Type: aws.String("A"),
+				AliasTarget: &route53.AliasTarget{
+					DNSName:              aws.String("elb-internal-dnsname"),
+					HostedZoneId:         aws.String("elb-internal-hosted-zone-id"),
+					EvaluateTargetHealth: aws.Bool(true),
+				},
+			},
+		},
+	}
+	assert.Equal(t, expected, actualChanges)
 }
