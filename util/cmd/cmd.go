@@ -29,6 +29,7 @@ type Pulse interface {
 func AddHealthPort(pulse Pulse, healthPort int) {
 	http.HandleFunc("/health", healthHandler(pulse))
 	http.Handle("/metrics", prometheus.Handler())
+	http.HandleFunc("/alive", okHandler)
 
 	go func() {
 		log.Error(http.ListenAndServe(":"+strconv.Itoa(healthPort), nil))
@@ -48,6 +49,11 @@ func healthHandler(pulse Pulse) func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		io.WriteString(w, "ok\n")
 	}
+}
+
+func okHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	io.WriteString(w, "ok\n")
 }
 
 const pollInterval = time.Second
