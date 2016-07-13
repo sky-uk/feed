@@ -1,9 +1,11 @@
 FROM debian:jessie
 
-RUN apt-get update && apt-get upgrade -y -o Dpkg::Options::="--force-confnew" \
+RUN apt-get clean \
+    && apt-get update && apt-get upgrade -y -o Dpkg::Options::="--force-confnew" \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*  # 2016-06-01
 
-RUN apt-get update \
+RUN apt-get clean \
+	&& apt-get update \
 	&& apt-get install --no-install-recommends --no-install-suggests -y \
 						ca-certificates \
 						curl \
