@@ -21,8 +21,8 @@ http {
     # If a large number of server names are defined, or unusually long server names are defined,
     # tuning the server_names_hash_max_size and server_names_hash_bucket_size directives at the http
     # level may become necessary.
-    server_names_hash_bucket_size {{ .ServerNamesHashBucketSize }};
-    server_names_hash_max_size {{ .ServerNamesHashMaxSize }};
+    {{ if .ServerNamesHashBucketSize }}server_names_hash_bucket_size {{ .ServerNamesHashBucketSize }};{{ end }}
+    {{ if .ServerNamesHashMaxSize }}server_names_hash_max_size {{ .ServerNamesHashMaxSize }};{{ end }}
 
     # Keep alive time for client connections. Don't limit by number of requests.
     keepalive_timeout {{ .KeepaliveSeconds }}s;
