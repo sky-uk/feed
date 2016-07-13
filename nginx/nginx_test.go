@@ -51,12 +51,14 @@ func (m *mockSignaller) sighup(p *os.Process) error {
 
 func newConf(tmpDir string, binary string) Conf {
 	return Conf{
-		WorkingDir:              tmpDir,
-		BinaryLocation:          binary,
-		IngressPort:             port,
-		WorkerProcesses:         1,
-		BackendKeepalives:       1024,
-		BackendKeepaliveSeconds: 58,
+		WorkingDir:                tmpDir,
+		BinaryLocation:            binary,
+		IngressPort:               port,
+		WorkerProcesses:           1,
+		BackendKeepalives:         1024,
+		BackendKeepaliveSeconds:   58,
+		ServerNamesHashMaxSize:    -1,
+		ServerNamesHashBucketSize: -1,
 	}
 }
 

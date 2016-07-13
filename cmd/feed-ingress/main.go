@@ -65,8 +65,8 @@ func init() {
 		defaultNginxBackendKeepalives         = 512
 		defaultNginxBackendKeepaliveSeconds   = 60
 		defaultNginxLogLevel                  = "info"
-		defaultNginxServerNamesHashBucketSize = 128
-		defaultNginxServerNamesHashMaxSize    = 512
+		defaultNginxServerNamesHashBucketSize = -1
+		defaultNginxServerNamesHashMaxSize    = -1
 		defaultElbLabelValue                  = ""
 		defaultElbRegion                      = "eu-west-1"
 		defaultElbExpectedNumber              = 0
@@ -114,10 +114,12 @@ func init() {
 	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 	flag.IntVar(&nginxServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,
-		"Sets the bucket size for the server names hash tables. The details of setting up hash tables are provided "+
+		"Sets the bucket size for the server names hash tables. Setting this to 0 or less will exclude this "+
+			"config from the nginx conf file. The details of setting up hash tables are provided "+
 			"in a separate document. http://nginx.org/en/docs/hash.html")
 	flag.IntVar(&nginxServerNamesHashMaxSize, "nginx-server-names-hash-max-size", defaultNginxServerNamesHashMaxSize,
-		"Sets the maximum size of the server names hash tables. The details of setting up hash tables are provided "+
+		"Sets the maximum size of the server names hash tables. Setting this to 0 or less will exclude this "+
+			"config from the nginx conf file. The details of setting up hash tables are provided "+
 			"in a separate document. http://nginx.org/en/docs/hash.html")
 	flag.StringVar(&nginxTrustedFrontends, "nginx-trusted-frontends", "",
 		"Comma separated list of CIDRs to trust when determining the client's real IP from the "+
