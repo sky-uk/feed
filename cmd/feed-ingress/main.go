@@ -17,56 +17,60 @@ import (
 )
 
 var (
-	debug                        bool
-	apiserverURL                 string
-	caCertFile                   string
-	tokenFile                    string
-	clientCertFile               string
-	clientKeyFile                string
-	ingressPort                  int
-	ingressAllow                 string
-	ingressHealthPort            int
-	healthPort                   int
-	nginxBinary                  string
-	nginxWorkDir                 string
-	nginxWorkerProcesses         int
-	nginxWorkerConnections       int
-	nginxKeepAliveSeconds        int
-	nginxBackendKeepalives       int
-	nginxBackendKeepaliveSeconds int
-	nginxLogLevel                string
-	nginxTrustedFrontends        string
-	elbLabelValue                string
-	elbRegion                    string
-	elbExpectedNumber            int
-	pushgatewayURL               string
-	pushgatewayIntervalSeconds   int
-	pushgatewayLabels            cmd.KeyValues
+	debug                          bool
+	apiserverURL                   string
+	caCertFile                     string
+	tokenFile                      string
+	clientCertFile                 string
+	clientKeyFile                  string
+	ingressPort                    int
+	ingressAllow                   string
+	ingressHealthPort              int
+	healthPort                     int
+	nginxBinary                    string
+	nginxWorkDir                   string
+	nginxWorkerProcesses           int
+	nginxWorkerConnections         int
+	nginxKeepAliveSeconds          int
+	nginxBackendKeepalives         int
+	nginxBackendKeepaliveSeconds   int
+	nginxLogLevel                  string
+	nginxTrustedFrontends          string
+	nginxServerNamesHashBucketSize int
+	nginxServerNamesHashMaxSize    int
+	elbLabelValue                  string
+	elbRegion                      string
+	elbExpectedNumber              int
+	pushgatewayURL                 string
+	pushgatewayIntervalSeconds     int
+	pushgatewayLabels              cmd.KeyValues
 )
 
 func init() {
 	const (
-		defaultAPIServer                    = "https://kubernetes:443"
-		defaultCaCertFile                   = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-		defaultTokenFile                    = ""
-		defaultClientCertFile               = ""
-		defaultClientKeyFile                = ""
-		defaultIngressPort                  = 8080
-		defaultIngressAllow                 = ""
-		defaultIngressHealthPort            = 8081
-		defaultHealthPort                   = 12082
-		defaultNginxBinary                  = "/usr/sbin/nginx"
-		defaultNginxWorkingDir              = "/nginx"
-		defaultNginxWorkers                 = 1
-		defaultNginxWorkerConnections       = 1024
-		defaultNginxKeepAliveSeconds        = 60
-		defaultNginxBackendKeepalives       = 512
-		defaultNginxBackendKeepaliveSeconds = 60
-		defaultNginxLogLevel                = "info"
-		defaultElbLabelValue                = ""
-		defaultElbRegion                    = "eu-west-1"
-		defaultElbExpectedNumber            = 0
-		defaultPushgatewayIntervalSeconds   = 60
+		defaultAPIServer                      = "https://kubernetes:443"
+		defaultCaCertFile                     = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+		defaultTokenFile                      = ""
+		defaultClientCertFile                 = ""
+		defaultClientKeyFile                  = ""
+		defaultIngressPort                    = 8080
+		defaultIngressAllow                   = ""
+		defaultIngressHealthPort              = 8081
+		defaultHealthPort                     = 12082
+		defaultNginxBinary                    = "/usr/sbin/nginx"
+		defaultNginxWorkingDir                = "/nginx"
+		defaultNginxWorkers                   = 1
+		defaultNginxWorkerConnections         = 1024
+		defaultNginxKeepAliveSeconds          = 60
+		defaultNginxBackendKeepalives         = 512
+		defaultNginxBackendKeepaliveSeconds   = 60
+		defaultNginxLogLevel                  = "info"
+		defaultNginxServerNamesHashBucketSize = 128
+		defaultNginxServerNamesHashMaxSize    = 512
+		defaultElbLabelValue                  = ""
+		defaultElbRegion                      = "eu-west-1"
+		defaultElbExpectedNumber              = 0
+		defaultPushgatewayIntervalSeconds     = 60
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -109,6 +113,12 @@ func init() {
 			"times to prevent stale connections.")
 	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
+	flag.IntVar(&nginxServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,
+		"Sets the bucket size for the server names hash tables. The details of setting up hash tables are provided "+
+			"in a separate document. http://nginx.org/en/docs/hash.html")
+	flag.IntVar(&nginxServerNamesHashMaxSize, "nginx-server-names-hash-max-size", defaultNginxServerNamesHashMaxSize,
+		"Sets the maximum size of the server names hash tables. The details of setting up hash tables are provided "+
+			"in a separate document. http://nginx.org/en/docs/hash.html")
 	flag.StringVar(&nginxTrustedFrontends, "nginx-trusted-frontends", "",
 		"Comma separated list of CIDRs to trust when determining the client's real IP from the "+
 			"X-Forwarded-For header. The client IP is used for allowing or denying ingress access. "+
@@ -164,16 +174,18 @@ func createIngressUpdaters() []controller.Updater {
 		trustedFrontends = strings.Split(nginxTrustedFrontends, ",")
 	}
 	proxy := nginx.New(nginx.Conf{
-		BinaryLocation:          nginxBinary,
-		IngressPort:             ingressPort,
-		WorkingDir:              nginxWorkDir,
-		WorkerProcesses:         nginxWorkerProcesses,
-		WorkerConnections:       nginxWorkerConnections,
-		KeepaliveSeconds:        nginxKeepAliveSeconds,
-		BackendKeepalives:       nginxBackendKeepalives,
-		BackendKeepaliveSeconds: nginxBackendKeepaliveSeconds,
-		HealthPort:              ingressHealthPort,
-		TrustedFrontends:        trustedFrontends,
+		BinaryLocation:            nginxBinary,
+		IngressPort:               ingressPort,
+		WorkingDir:                nginxWorkDir,
+		WorkerProcesses:           nginxWorkerProcesses,
+		WorkerConnections:         nginxWorkerConnections,
+		KeepaliveSeconds:          nginxKeepAliveSeconds,
+		BackendKeepalives:         nginxBackendKeepalives,
+		BackendKeepaliveSeconds:   nginxBackendKeepaliveSeconds,
+		ServerNamesHashBucketSize: nginxServerNamesHashBucketSize,
+		ServerNamesHashMaxSize:    nginxServerNamesHashMaxSize,
+		HealthPort:                ingressHealthPort,
+		TrustedFrontends:          trustedFrontends,
 	})
 	return []controller.Updater{frontend, proxy}
 }

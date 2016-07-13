@@ -230,6 +230,50 @@ func TestTrustedFrontendsSetsUpClientIPCorrectly(t *testing.T) {
 	}
 }
 
+func TestServerNamesHashSettingsSetCorrectly(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	conf := newConf(tmpDir, fakeNginx)
+	conf.ServerNamesHashMaxSize = 128
+	conf.ServerNamesHashBucketSize = 58
+
+	lb, _ := newLbWithConf(conf)
+
+	assert.NoError(lb.Start())
+	err := lb.Update(controller.IngressUpdate{})
+	assert.NoError(err)
+
+	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+	assert.NoError(err)
+	configContents := string(config)
+
+	assert.Contains(configContents, "    server_names_hash_max_size 128;", "server_names_hash_max_size is set")
+	assert.Contains(configContents, "    server_names_hash_bucket_size 58;", "server_names_hash_max_size is set")
+}
+
+func TestServerNamesHashSettingsNotSetByDefault(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	conf := newConf(tmpDir, fakeNginx)
+
+	lb, _ := newLbWithConf(conf)
+
+	assert.NoError(lb.Start())
+	err := lb.Update(controller.IngressUpdate{})
+	assert.NoError(err)
+
+	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+	assert.NoError(err)
+	configContents := string(config)
+
+	assert.NotContains(configContents, "    server_names_hash_max_size", "server_names_hash_max_size is set")
+	assert.NotContains(configContents, "    server_names_hash_bucket_size", "server_names_hash_max_size is set")
+}
+
 func TestNginxConfigUpdates(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)

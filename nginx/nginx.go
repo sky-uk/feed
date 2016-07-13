@@ -27,17 +27,19 @@ const (
 
 // Conf configuration for nginx
 type Conf struct {
-	BinaryLocation          string
-	WorkingDir              string
-	WorkerProcesses         int
-	WorkerConnections       int
-	KeepaliveSeconds        int
-	BackendKeepalives       int
-	BackendKeepaliveSeconds int
-	HealthPort              int
-	TrustedFrontends        []string
-	IngressPort             int
-	LogLevel                string
+	BinaryLocation            string
+	WorkingDir                string
+	WorkerProcesses           int
+	WorkerConnections         int
+	KeepaliveSeconds          int
+	BackendKeepalives         int
+	BackendKeepaliveSeconds   int
+	ServerNamesHashBucketSize int
+	ServerNamesHashMaxSize    int
+	HealthPort                int
+	TrustedFrontends          []string
+	IngressPort               int
+	LogLevel                  string
 }
 
 // Signaller interface around signalling the loadbalancer process
