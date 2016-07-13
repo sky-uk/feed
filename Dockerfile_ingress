@@ -1,14 +1,12 @@
-FROM debian:jessie
+FROM phusion/baseimage:0.9.19
 
-RUN apt-get clean \
-    && apt-get update && apt-get upgrade -y -o Dpkg::Options::="--force-confnew" \
-    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*  # 2016-06-01
+ENV NGINX_VERSION 1.10.1-1~xenial
 
-ENV NGINX_VERSION 1.10.1-1~jessie
-
-RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
-	&& echo "deb http://nginx.org/packages/debian/ jessie nginx" >> /etc/apt/sources.list \
-	&& apt-get clean \
+RUN curl http://nginx.org/keys/nginx_signing.key > /tmp/nginx_signing.key \
+    && apt-key add /tmp/nginx_signing.key \
+    && rm -f /tmp/nginx_signing.key \
+	&& echo "deb http://nginx.org/packages/ubuntu/ xenial nginx" >> /etc/apt/sources.list \
+	&& apt-get upgrade -y -o Dpkg::Options::="--force-confnew" \
 	&& apt-get update \
 	&& apt-get install --no-install-recommends --no-install-suggests -y \
 						ca-certificates \
@@ -18,7 +16,7 @@ RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC64107
 						dnsutils \
 						vim-tiny \
 						lsof \
-	&& rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+	&& rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* # 2016-07-13
 
 WORKDIR /
 COPY feed-ingress /
@@ -27,6 +25,5 @@ RUN mkdir /nginx
 COPY nginx.tmpl /nginx/
 RUN chown -R nginx:nginx /nginx
 
-USER nginx
-
-ENTRYPOINT ["/feed-ingress", "-nginx-workdir", "/nginx"]
+ENTRYPOINT ["/sbin/my_init", "--quiet", "--", "/sbin/setuser", "nginx", \
+    "/feed-ingress", "-nginx-workdir", "/nginx"]
