@@ -114,7 +114,7 @@ func init() {
 	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 	flag.IntVar(&nginxServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,
-		"Sets the bucket size for the server names hash tables.The details of setting up hash tables are provided "+
+		"Sets the bucket size for the server names hash tables. The details of setting up hash tables are provided "+
 			"in a separate document. http://nginx.org/en/docs/hash.html")
 	flag.IntVar(&nginxServerNamesHashMaxSize, "nginx-server-names-hash-max-size", defaultNginxServerNamesHashMaxSize,
 		"Sets the maximum size of the server names hash tables. The details of setting up hash tables are provided "+
