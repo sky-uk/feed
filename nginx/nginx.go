@@ -77,12 +77,25 @@ type nginxLoadBalancer struct {
 // Used for generating nginx config
 type loadBalancerTemplate struct {
 	Conf
-	Entries []nginxEntry
+	Entries []*nginxEntry
 }
 
 type nginxEntry struct {
-	controller.IngressEntry
+	Name       string
+	ServerName string
+	Upstreams  []upstream
+	Locations  []location
+}
+
+type upstream struct {
+	ID     string
+	Server string
+}
+
+type location struct {
+	Path       string
 	UpstreamID string
+	Allow      []string
 }
 
 func (lb *nginxLoadBalancer) nginxConfFile() string {
@@ -279,32 +292,55 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 		return nil, err
 	}
 
-	sortedIngressEntries := update.SortedByName().Entries
-
-	var entries []nginxEntry
-	for idx, ingressEntry := range sortedIngressEntries {
-		trimmedPath := strings.TrimSuffix(strings.TrimPrefix(ingressEntry.Path, "/"), "/")
-		if len(trimmedPath) == 0 {
-			ingressEntry.Path = "/"
-		} else {
-			ingressEntry.Path = fmt.Sprintf("/%s/", trimmedPath)
-		}
-
-		entry := nginxEntry{
-			IngressEntry: ingressEntry,
-			UpstreamID:   fmt.Sprintf("upstream%03d", idx),
-		}
-		entries = append(entries, entry)
-	}
+	entries := createNginxEntries(update)
 
 	var output bytes.Buffer
 	err = tmpl.Execute(&output, loadBalancerTemplate{Conf: lb.Conf, Entries: entries})
 
 	if err != nil {
-		return []byte{}, fmt.Errorf("Unable to execute nginx config duration. It will be out of date: %v", err)
+		return []byte{}, fmt.Errorf("unable to create nginx config from template: %v", err)
 	}
 
 	return output.Bytes(), nil
+}
+
+func createNginxEntries(update controller.IngressUpdate) []*nginxEntry {
+	sortedIngressEntries := update.SortedByName().Entries
+	indexedEntries := make(map[string]*nginxEntry)
+	var entries []*nginxEntry
+
+	for idx, ingressEntry := range sortedIngressEntries {
+		nginxPath := strings.TrimSuffix(strings.TrimPrefix(ingressEntry.Path, "/"), "/")
+		if len(nginxPath) == 0 {
+			nginxPath = "/"
+		} else {
+			nginxPath = fmt.Sprintf("/%s/", nginxPath)
+		}
+
+		upstream := upstream{
+			ID:     fmt.Sprintf("upstream%03d", idx),
+			Server: fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
+		}
+
+		location := location{
+			Path:       nginxPath,
+			UpstreamID: upstream.ID,
+			Allow:      ingressEntry.Allow,
+		}
+
+		entry, exists := indexedEntries[ingressEntry.Host]
+		if !exists {
+			entry = &nginxEntry{ServerName: ingressEntry.Host}
+			indexedEntries[ingressEntry.Host] = entry
+			entries = append(entries, entry)
+		}
+
+		entry.Name += " " + ingressEntry.Name
+		entry.Upstreams = append(entry.Upstreams, upstream)
+		entry.Locations = append(entry.Locations, location)
+	}
+
+	return entries
 }
 
 func (lb *nginxLoadBalancer) Health() error {

@@ -54,25 +54,29 @@ http {
     {{ $keepaliveSeconds := .BackendKeepaliveSeconds }}
     {{ range $entry := .Entries }}
     # Start entry
-    # {{ $entry.Name }}
-    upstream {{ $entry.UpstreamID }} {
-        server {{ $entry.ServiceAddress }}:{{ $entry.ServicePort }};
+    #{{ $entry.Name }}
+{{- range $upstream := $entry.Upstreams }}
+    upstream {{ $upstream.ID }} {
+        server {{ $upstream.Server }};
         keepalive {{ $keepalive }};
     }
-
+{{ end }}
     server {
         listen {{ $port }};
-        server_name {{ $entry.Host }};
+        server_name {{ $entry.ServerName }};
+        {{- range $location := $entry.Locations }}
 
-        # Restrict clients
-        allow 127.0.0.1;
-        {{ range $entry.Allow }}allow {{ . }};
-        {{ end }}
-        deny all;
-
-        location {{ if $entry.Path }}{{ $entry.Path }}{{ end }} {
+        location {{ if $location.Path }}{{ $location.Path }}{{ end }} {
             # Strip location path when proxying.
-            proxy_pass http://{{ $entry.UpstreamID }}/;
+            proxy_pass http://{{ $location.UpstreamID }}/;
+
+            # Allow localhost for debugging
+            allow 127.0.0.1;
+
+            # Restrict clients
+            {{ range $location.Allow }}allow {{ . }};
+            {{ end }}
+            deny all;
 
             # Enable keepalive to backend.
             proxy_http_version 1.1;
@@ -95,6 +99,7 @@ http {
             proxy_buffering off;
             proxy_request_buffering off;
         }
+        {{- end }}
     }
     # End entry
     {{ end }}
