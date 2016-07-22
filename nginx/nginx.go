@@ -15,6 +15,8 @@ import (
 
 	"syscall"
 
+	"errors"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
@@ -142,7 +144,7 @@ func (lb *nginxLoadBalancer) Start() error {
 
 	time.Sleep(nginxStartDelay)
 	if !lb.running.Get() {
-		return fmt.Errorf("nginx died shortly after starting")
+		return errors.New("nginx died shortly after starting")
 	}
 
 	go lb.periodicallyUpdateMetrics()
@@ -304,51 +306,67 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 	return output.Bytes(), nil
 }
 
+type pathSet map[string]struct{}
+
 func createNginxEntries(update controller.IngressUpdate) []*nginxEntry {
 	sortedIngressEntries := update.SortedByName().Entries
-	indexedEntries := make(map[string]*nginxEntry)
-	var entries []*nginxEntry
+	hostToNginxEntry := make(map[string]*nginxEntry)
+	hostToPaths := make(map[string]pathSet)
+	var nginxEntries []*nginxEntry
+	var upstreamIndex int
 
-	for idx, ingressEntry := range sortedIngressEntries {
-		nginxPath := strings.TrimSuffix(strings.TrimPrefix(ingressEntry.Path, "/"), "/")
-		if len(nginxPath) == 0 {
-			nginxPath = "/"
-		} else {
-			nginxPath = fmt.Sprintf("/%s/", nginxPath)
-		}
-
+	for _, ingressEntry := range sortedIngressEntries {
+		nginxPath := createNginxPath(ingressEntry.Path)
 		upstream := upstream{
-			ID:     fmt.Sprintf("upstream%03d", idx),
+			ID:     fmt.Sprintf("upstream%03d", upstreamIndex),
 			Server: fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
 		}
-
 		location := location{
 			Path:       nginxPath,
 			UpstreamID: upstream.ID,
 			Allow:      ingressEntry.Allow,
 		}
 
-		entry, exists := indexedEntries[ingressEntry.Host]
+		entry, exists := hostToNginxEntry[ingressEntry.Host]
 		if !exists {
 			entry = &nginxEntry{ServerName: ingressEntry.Host}
-			indexedEntries[ingressEntry.Host] = entry
-			entries = append(entries, entry)
+			hostToNginxEntry[ingressEntry.Host] = entry
+			nginxEntries = append(nginxEntries, entry)
+			hostToPaths[ingressEntry.Host] = make(map[string]struct{})
 		}
+
+		paths := hostToPaths[ingressEntry.Host]
+		if _, exists := paths[location.Path]; exists {
+			log.Infof("Ignoring '%s' because it duplicates the host/path of a previous entry", ingressEntry.Name)
+			continue
+		}
+		paths[location.Path] = struct{}{}
 
 		entry.Name += " " + ingressEntry.Name
 		entry.Upstreams = append(entry.Upstreams, upstream)
 		entry.Locations = append(entry.Locations, location)
+		upstreamIndex++
 	}
 
-	return entries
+	return nginxEntries
+}
+
+func createNginxPath(rawPath string) string {
+	nginxPath := strings.TrimSuffix(strings.TrimPrefix(rawPath, "/"), "/")
+	if len(nginxPath) == 0 {
+		nginxPath = "/"
+	} else {
+		nginxPath = fmt.Sprintf("/%s/", nginxPath)
+	}
+	return nginxPath
 }
 
 func (lb *nginxLoadBalancer) Health() error {
 	if !lb.running.Get() {
-		return fmt.Errorf("nginx is not running")
+		return errors.New("nginx is not running")
 	}
 	if lb.metricsUnhealthy.Get() {
-		return fmt.Errorf("nginx metrics are failing to update")
+		return errors.New("nginx metrics are failing to update")
 	}
 	return nil
 }

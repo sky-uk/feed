@@ -579,6 +579,52 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"            deny all;\n",
 			},
 		},
+		{
+			"Duplicate host and paths will only keep the first one",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/my-path",
+					ServiceAddress: "service1",
+					ServicePort:    9090,
+				},
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/my-path",
+					ServiceAddress: "service2",
+					ServicePort:    9090,
+				},
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/my-path",
+					ServiceAddress: "service3",
+					ServicePort:    9090,
+				},
+				{
+					Host:           "chris-again.com",
+					Name:           "chris-ingress",
+					Path:           "/my-path",
+					ServiceAddress: "service4",
+					ServicePort:    9090,
+				},
+			},
+			[]string{
+				"    upstream upstream000 {\n" +
+					"        server service1:9090;\n" +
+					"        keepalive 1024;\n" +
+					"    }\n" +
+					"\n" +
+					"    server {\n",
+				"    upstream upstream001 {\n" +
+					"        server service4:9090;\n" +
+					"        keepalive 1024;\n" +
+					"    }\n",
+			},
+		},
 	}
 
 	for _, test := range tests {
