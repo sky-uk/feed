@@ -1,3 +1,6 @@
+/*
+Package elb provides an updater for an ELB frontend to attach nginx to.
+*/
 package elb
 
 import (
