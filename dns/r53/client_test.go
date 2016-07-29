@@ -199,7 +199,7 @@ func TestUpdateRecordSetsPartial(t *testing.T) {
 }
 
 func createClient() (*client, *fake53) {
-	client := New("fake", hostedZone).(*client)
+	client := New("fake", hostedZone, 1).(*client)
 	fake53 := new(fake53)
 	client.r53 = fake53
 	return client, fake53

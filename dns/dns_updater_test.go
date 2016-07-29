@@ -62,7 +62,7 @@ func (m *fakeR53Client) GetARecords() ([]*route53.ResourceRecordSet, error) {
 }
 
 func createDNSUpdater() (*updater, *fakeR53Client) {
-	dnsUpdater := New(r53Zone, awsRegion, elbName).(*updater)
+	dnsUpdater := New(r53Zone, awsRegion, elbName, 1).(*updater)
 	dnsUpdater.findElbs = func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error) {
 		return defaultFrontends, nil
 	}
@@ -107,7 +107,7 @@ func TestGetsDomainName(t *testing.T) {
 
 func TestGetsDomainNameFails(t *testing.T) {
 	fakeR53Client := new(fakeR53Client)
-	dnsUpdater := New(domain, awsRegion, elbName).(*updater)
+	dnsUpdater := New(domain, awsRegion, elbName, 1).(*updater)
 	dnsUpdater.findElbs = func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error) {
 		return nil, nil
 	}

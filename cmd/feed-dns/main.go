@@ -27,6 +27,7 @@ var (
 	pushgatewayURL             string
 	pushgatewayIntervalSeconds int
 	pushgatewayLabels          cmd.KeyValues
+	awsAPIRetries              int
 )
 
 func init() {
@@ -41,6 +42,7 @@ func init() {
 		defaultElbLabelValue              = ""
 		defaultHostedZone                 = ""
 		defaultPushgatewayIntervalSeconds = 60
+		defaultAwsAPIRetries              = 5
 	)
 
 	flag.StringVar(&apiServer, "apiserver", defaultAPIServer,
@@ -70,6 +72,7 @@ func init() {
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
+	flag.IntVar(&awsAPIRetries, "aws-api-retries", defaultAwsAPIRetries, "Number of times a request to the AWS API is retries")
 }
 
 func main() {
@@ -80,7 +83,7 @@ func main() {
 	cmd.ConfigureMetrics("feed-dns", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)
 
 	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer, clientCertFile, clientKeyFile)
-	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue)
+	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue, awsAPIRetries)
 
 	controller := controller.New(controller.Config{
 		KubernetesClient: client,
