@@ -83,6 +83,7 @@ http {
     # Configure ingresses
     {{ $port := .IngressPort }}
     {{ $keepalive := .BackendKeepalives }}
+    {{ $stripPath := .StripIngressPath }}
     {{ range $entry := .Entries }}
     # Start entry
     #{{ $entry.Name }}
@@ -98,8 +99,14 @@ http {
         {{- range $location := $entry.Locations }}
 
         location {{ if $location.Path }}{{ $location.Path }}{{ end }} {
+{{- if $stripPath }}
             # Strip location path when proxying.
+            # Beware this can cause issues with url encoded characters.
             proxy_pass http://{{ $location.UpstreamID }}/;
+{{- else }}
+            # Keep original path when proxying.
+            proxy_pass http://{{ $location.UpstreamID }};
+{{- end }}
 
             # Allow localhost for debugging
             allow 127.0.0.1;

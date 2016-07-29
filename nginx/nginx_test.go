@@ -59,6 +59,7 @@ func newConf(tmpDir string, binary string) Conf {
 		BackendKeepaliveSeconds:   58,
 		ServerNamesHashMaxSize:    -1,
 		ServerNamesHashBucketSize: -1,
+		StripIngressPath:          true,
 	}
 }
 
@@ -282,6 +283,8 @@ func TestNginxConfigUpdates(t *testing.T) {
 	defer os.Remove(tmpDir)
 
 	defaultConf := newConf(tmpDir, fakeNginx)
+	disablePathStrippingConf := defaultConf
+	disablePathStrippingConf.StripIngressPath = false
 
 	var tests = []struct {
 		name          string
@@ -328,6 +331,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"\n" +
 					"        location /path/ {\n" +
 					"            # Strip location path when proxying.\n" +
+					"            # Beware this can cause issues with url encoded characters.\n" +
 					"            proxy_pass http://upstream000/;\n" +
 					"\n" +
 					"            # Allow localhost for debugging\n" +
@@ -341,6 +345,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"\n" +
 					"        location /anotherpath/ {\n" +
 					"            # Strip location path when proxying.\n" +
+					"            # Beware this can cause issues with url encoded characters.\n" +
 					"            proxy_pass http://upstream001/;\n" +
 					"\n" +
 					"            # Allow localhost for debugging\n" +
@@ -583,6 +588,22 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        server service4:9090;\n" +
 					"        keepalive 1024;\n" +
 					"    }\n",
+			},
+		},
+		{
+			"Disabled path stripping should not put a trailing slash on proxy_pass",
+			disablePathStrippingConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+			},
+			[]string{
+				"    proxy_pass http://upstream000;\n",
 			},
 		},
 	}

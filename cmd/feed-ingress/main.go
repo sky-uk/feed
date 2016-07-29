@@ -26,6 +26,7 @@ var (
 	ingressPort                    int
 	ingressAllow                   string
 	ingressHealthPort              int
+	ingressStripPath               bool
 	healthPort                     int
 	nginxBinary                    string
 	nginxWorkDir                   string
@@ -56,6 +57,7 @@ func init() {
 		defaultIngressPort                    = 8080
 		defaultIngressAllow                   = ""
 		defaultIngressHealthPort              = 8081
+		defaultIngressStripPath               = false
 		defaultHealthPort                     = 12082
 		defaultNginxBinary                    = "/usr/sbin/nginx"
 		defaultNginxWorkingDir                = "/nginx"
@@ -92,6 +94,12 @@ func init() {
 	flag.StringVar(&ingressAllow, "ingress-allow", defaultIngressAllow,
 		"Source IP or CIDR to allow ingress access by default. This is overridden by the sky.uk/allow "+
 			"annotation on ingress resources. Leave empty to deny all access by default.")
+	flag.BoolVar(&ingressStripPath, "ingress-strip-path", defaultIngressStripPath,
+		"Whether to strip the ingress path from the URL before passing to backend services. For example, "+
+			"if enabled 'myhost/myapp/health' would be passed as '/health' to the backend service. If disabled, "+
+			"it would be passed as '/myapp/health'. Enabling this requires nginx to process the URL, which has some "+
+			"limitations. URL encoded characters will not work correctly in some cases, and backend services will "+
+			"need to take care to properly construct URLs, such as by using the 'X-Original-URI' header.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
 	flag.StringVar(&nginxBinary, "nginx-binary", defaultNginxBinary,
@@ -189,6 +197,7 @@ func createIngressUpdaters() []controller.Updater {
 		ServerNamesHashMaxSize:    nginxServerNamesHashMaxSize,
 		HealthPort:                ingressHealthPort,
 		TrustedFrontends:          trustedFrontends,
+		StripIngressPath:          ingressStripPath,
 	})
 	return []controller.Updater{frontend, proxy}
 }
