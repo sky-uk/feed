@@ -337,26 +337,6 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"            allow 10.82.0.0/16;\n" +
 					"            \n" +
 					"            deny all;\n" +
-					"\n" +
-					"            # Enable keepalive to backend.\n" +
-					"            proxy_http_version 1.1;\n" +
-					"            proxy_set_header Connection \"\";\n" +
-					"\n" +
-					"            # Add X-Forwarded-For and X-Original-URI for proxy information.\n" +
-					"            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n" +
-					"            proxy_set_header X-Original-URI $request_uri;\n" +
-					"\n            # Timeout faster than the default 60s on initial connect.\n" +
-					"            proxy_connect_timeout 10s;\n" +
-					"\n" +
-					"            # Close proxy connections after backend keepalive time.\n" +
-					"            proxy_read_timeout 58s;\n" +
-					"            proxy_send_timeout 58s;\n" +
-					"\n" +
-					"            # Disable buffering, as we'll be interacting with ELBs with http listeners, which we assume will\n" +
-					"            # quickly consume and generate responses and requests.\n" +
-					"            # This should be enabled if nginx will directly serve traffic externally to unknown clients.\n" +
-					"            proxy_buffering off;\n" +
-					"            proxy_request_buffering off;\n" +
 					"        }\n" +
 					"\n" +
 					"        location /anotherpath/ {\n" +
@@ -370,26 +350,6 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"            allow 10.86.0.0/16;\n" +
 					"            \n" +
 					"            deny all;\n" +
-					"\n" +
-					"            # Enable keepalive to backend.\n" +
-					"            proxy_http_version 1.1;\n" +
-					"            proxy_set_header Connection \"\";\n" +
-					"\n" +
-					"            # Add X-Forwarded-For and X-Original-URI for proxy information.\n" +
-					"            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n" +
-					"            proxy_set_header X-Original-URI $request_uri;\n" +
-					"\n            # Timeout faster than the default 60s on initial connect.\n" +
-					"            proxy_connect_timeout 10s;\n" +
-					"\n" +
-					"            # Close proxy connections after backend keepalive time.\n" +
-					"            proxy_read_timeout 58s;\n" +
-					"            proxy_send_timeout 58s;\n" +
-					"\n" +
-					"            # Disable buffering, as we'll be interacting with ELBs with http listeners, which we assume will\n" +
-					"            # quickly consume and generate responses and requests.\n" +
-					"            # This should be enabled if nginx will directly serve traffic externally to unknown clients.\n" +
-					"            proxy_buffering off;\n" +
-					"            proxy_request_buffering off;\n" +
 					"        }\n" +
 					"    }\n",
 			},
