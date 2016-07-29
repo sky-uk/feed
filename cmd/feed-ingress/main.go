@@ -64,7 +64,7 @@ func init() {
 		defaultNginxKeepAliveSeconds          = 60
 		defaultNginxBackendKeepalives         = 512
 		defaultNginxBackendKeepaliveSeconds   = 60
-		defaultNginxLogLevel                  = "info"
+		defaultNginxLogLevel                  = "warn"
 		defaultNginxServerNamesHashBucketSize = -1
 		defaultNginxServerNamesHashMaxSize    = -1
 		defaultElbLabelValue                  = ""
@@ -184,6 +184,7 @@ func createIngressUpdaters() []controller.Updater {
 		KeepaliveSeconds:          nginxKeepAliveSeconds,
 		BackendKeepalives:         nginxBackendKeepalives,
 		BackendKeepaliveSeconds:   nginxBackendKeepaliveSeconds,
+		LogLevel:                  nginxLogLevel,
 		ServerNamesHashBucketSize: nginxServerNamesHashBucketSize,
 		ServerNamesHashMaxSize:    nginxServerNamesHashMaxSize,
 		HealthPort:                ingressHealthPort,
