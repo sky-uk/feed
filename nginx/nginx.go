@@ -42,6 +42,7 @@ type Conf struct {
 	TrustedFrontends          []string
 	IngressPort               int
 	LogLevel                  string
+	StripIngressPath          bool
 }
 
 // Signaller interface around signalling the loadbalancer process
