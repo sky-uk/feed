@@ -295,19 +295,19 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with missing host name",
-			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow),
+			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow, stripPath),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with missing service name",
-			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow),
+			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow, stripPath),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with missing service port",
-			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow),
+			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow, stripPath),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
@@ -319,7 +319,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING"),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING", stripPath),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
 				Name:           ingressNamespace + "/" + ingressName,
@@ -332,7 +332,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with empty allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ""),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", stripPath),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
 				Name:           ingressNamespace + "/" + ingressName,
@@ -342,6 +342,36 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServicePort:    ingressSvcPort,
 				ELbScheme:      "internal",
 				Allow:          []string{},
+			}}},
+		},
+		{
+			"ingress with strip paths set to true",
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "true"),
+			createDefaultServices(),
+			IngressUpdate{Entries: []IngressEntry{{
+				Name:           ingressNamespace + "/" + ingressName,
+				Host:           ingressHost,
+				Path:           ingressPath,
+				ServiceAddress: serviceIP,
+				ServicePort:    ingressSvcPort,
+				ELbScheme:      "internal",
+				Allow:          []string{},
+				StripPaths:     true,
+			}}},
+		},
+		{
+			"ingress with strip paths set to false",
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false"),
+			createDefaultServices(),
+			IngressUpdate{Entries: []IngressEntry{{
+				Name:           ingressNamespace + "/" + ingressName,
+				Host:           ingressHost,
+				Path:           ingressPath,
+				ServiceAddress: serviceIP,
+				ServicePort:    ingressSvcPort,
+				ELbScheme:      "internal",
+				Allow:          []string{},
+				StripPaths:     false,
 			}}},
 		},
 	}
@@ -401,13 +431,14 @@ const (
 	ingressDefaultAllow = "10.50.0.0/16,10.1.0.0/16"
 	serviceIP           = "10.254.0.82"
 	elbScheme           = "internal"
+	stripPath           = "MISSING"
 )
 
 func createDefaultIngresses() []k8s.Ingress {
-	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow)
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath)
 }
 
-func createIngressesFixture(host string, serviceName string, servicePort int, allow string) []k8s.Ingress {
+func createIngressesFixture(host string, serviceName string, servicePort int, allow string, stripPath string) []k8s.Ingress {
 	paths := []k8s.HTTPIngressPath{{
 		Path: ingressPath,
 		Backend: k8s.IngressBackend{
@@ -419,7 +450,10 @@ func createIngressesFixture(host string, serviceName string, servicePort int, al
 	annotations := make(map[string]string)
 	if allow != "MISSING" {
 		annotations[ingressAllowAnnotation] = allow
-		annotations[frontendElbScheme] = elbScheme
+		annotations[frontendElbSchemeAnnotation] = elbScheme
+	}
+	if stripPath != "MISSING" {
+		annotations[stripPathAnnotation] = stripPath
 	}
 
 	return []k8s.Ingress{

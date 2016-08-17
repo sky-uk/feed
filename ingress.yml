@@ -7,6 +7,7 @@ metadata:
   annotations:
     sky.uk/frontend-elb-scheme: internal
     sky.uk/allow: 10.10.82.0/24
+    sky.uk/strip-path: true
 spec:
   rules:
   - host: example.bskyb.com

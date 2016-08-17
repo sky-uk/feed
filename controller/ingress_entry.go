@@ -27,6 +27,8 @@ type IngressEntry struct {
 	Allow []string
 	// ElbScheme internet-facing or internal will dictate which kind of ELB to attach to
 	ELbScheme string
+	// StripPaths before forwarding to the backend
+	StripPaths bool
 }
 
 // validate returns error if entry has invalid fields.
