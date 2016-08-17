@@ -17,7 +17,8 @@ import (
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
-const frontendElbScheme = "sky.uk/frontend-elb-scheme"
+const frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
+const stripPathAnnotation = "sky.uk/strip-path"
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
 type Controller interface {
@@ -30,13 +31,14 @@ type Controller interface {
 }
 
 type controller struct {
-	client        k8s.Client
-	updaters      []Updater
-	defaultAllow  []string
-	watcher       k8s.Watcher
-	watcherDone   sync.WaitGroup
-	started       bool
-	updatesHealth util.SafeError
+	client           k8s.Client
+	updaters         []Updater
+	defaultAllow     []string
+	defaultStripPath bool
+	watcher          k8s.Watcher
+	watcherDone      sync.WaitGroup
+	started          bool
+	updatesHealth    util.SafeError
 	sync.Mutex
 }
 
@@ -45,14 +47,16 @@ type Config struct {
 	KubernetesClient k8s.Client
 	Updaters         []Updater
 	DefaultAllow     string
+	DefaultStripPath bool
 }
 
 // New creates an ingress controller.
 func New(conf Config) Controller {
 	return &controller{
-		client:       conf.KubernetesClient,
-		updaters:     conf.Updaters,
-		defaultAllow: strings.Split(conf.DefaultAllow, ","),
+		client:           conf.KubernetesClient,
+		updaters:         conf.Updaters,
+		defaultAllow:     strings.Split(conf.DefaultAllow, ","),
+		defaultStripPath: conf.DefaultStripPath,
 	}
 }
 
@@ -133,7 +137,8 @@ func (c *controller) updateIngresses() error {
 						ServiceAddress: address,
 						ServicePort:    int32(path.Backend.ServicePort.IntValue()),
 						Allow:          c.defaultAllow,
-						ELbScheme:      ingress.Annotations[frontendElbScheme],
+						ELbScheme:      ingress.Annotations[frontendElbSchemeAnnotation],
+						StripPaths:     c.defaultStripPath,
 					}
 
 					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
@@ -144,14 +149,26 @@ func (c *controller) updateIngresses() error {
 						}
 					}
 
+					if stripPath, ok := ingress.Annotations[stripPathAnnotation]; ok {
+						if stripPath == "true" {
+							entry.StripPaths = true
+						} else if stripPath == "false" {
+							entry.StripPaths = false
+						} else {
+							log.Warnf("Ingress %s has an invalid strip path annotation: %s. Uing default", ingress.Name, stripPath)
+						}
+					}
+
 					if err := entry.validate(); err == nil {
 						entries = append(entries, entry)
 					} else {
 						log.Debugf("Skipping entry: %v", err)
 						skipped++
 					}
+				} else {
+					log.Debugf("Skipping ingress as service doesn't exist: %s", serviceName)
+					skipped++
 				}
-
 			}
 		}
 	}

@@ -57,7 +57,7 @@ func init() {
 		defaultIngressPort                    = 8080
 		defaultIngressAllow                   = ""
 		defaultIngressHealthPort              = 8081
-		defaultIngressStripPath               = false
+		defaultIngressStripPath               = true
 		defaultHealthPort                     = 12082
 		defaultNginxBinary                    = "/usr/sbin/nginx"
 		defaultNginxWorkingDir                = "/nginx"
@@ -99,7 +99,8 @@ func init() {
 			"if enabled 'myhost/myapp/health' would be passed as '/health' to the backend service. If disabled, "+
 			"it would be passed as '/myapp/health'. Enabling this requires nginx to process the URL, which has some "+
 			"limitations. URL encoded characters will not work correctly in some cases, and backend services will "+
-			"need to take care to properly construct URLs, such as by using the 'X-Original-URI' header.")
+			"need to take care to properly construct URLs, such as by using the 'X-Original-URI' header."+
+			"Can be overridden with the sky.uk/strip-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
 	flag.StringVar(&nginxBinary, "nginx-binary", defaultNginxBinary,
@@ -161,6 +162,7 @@ func main() {
 		KubernetesClient: client,
 		Updaters:         updaters,
 		DefaultAllow:     ingressAllow,
+		DefaultStripPath: ingressStripPath,
 	})
 
 	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
@@ -197,7 +199,6 @@ func createIngressUpdaters() []controller.Updater {
 		ServerNamesHashMaxSize:    nginxServerNamesHashMaxSize,
 		HealthPort:                ingressHealthPort,
 		TrustedFrontends:          trustedFrontends,
-		StripIngressPath:          ingressStripPath,
 	})
 	return []controller.Updater{frontend, proxy}
 }

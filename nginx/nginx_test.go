@@ -59,7 +59,6 @@ func newConf(tmpDir string, binary string) Conf {
 		BackendKeepaliveSeconds:   58,
 		ServerNamesHashMaxSize:    -1,
 		ServerNamesHashBucketSize: -1,
-		StripIngressPath:          true,
 	}
 }
 
@@ -284,7 +283,6 @@ func TestNginxConfigUpdates(t *testing.T) {
 
 	defaultConf := newConf(tmpDir, fakeNginx)
 	disablePathStrippingConf := defaultConf
-	disablePathStrippingConf.StripIngressPath = false
 
 	var tests = []struct {
 		name          string
@@ -303,6 +301,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					ServiceAddress: "service",
 					ServicePort:    8080,
 					Allow:          []string{"10.82.0.0/16"},
+					StripPaths:     true,
 				},
 				{
 					Host:           "chris.com",
@@ -311,6 +310,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					ServiceAddress: "anotherservice",
 					ServicePort:    6060,
 					Allow:          []string{"10.86.0.0/16"},
+					StripPaths:     false,
 				},
 			},
 			[]string{
@@ -344,9 +344,8 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        }\n" +
 					"\n" +
 					"        location /anotherpath/ {\n" +
-					"            # Strip location path when proxying.\n" +
-					"            # Beware this can cause issues with url encoded characters.\n" +
-					"            proxy_pass http://upstream001/;\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://upstream001;\n" +
 					"\n" +
 					"            # Allow localhost for debugging\n" +
 					"            allow 127.0.0.1;\n" +
@@ -446,6 +445,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					ServiceAddress: "foo",
 					ServicePort:    8080,
 					Allow:          []string{"10.82.0.0/16"},
+					StripPaths:     true,
 				},
 				{
 					Name:           "0-first-ingress",
@@ -454,6 +454,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					ServiceAddress: "foo",
 					ServicePort:    8080,
 					Allow:          []string{"10.82.0.0/16"},
+					StripPaths:     true,
 				},
 				{
 					Name:           "1-next-ingress",
@@ -462,6 +463,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 					ServiceAddress: "foo",
 					ServicePort:    8080,
 					Allow:          []string{"10.82.0.0/16"},
+					StripPaths:     true,
 				},
 			},
 			[]string{

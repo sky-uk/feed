@@ -42,7 +42,6 @@ type Conf struct {
 	TrustedFrontends          []string
 	IngressPort               int
 	LogLevel                  string
-	StripIngressPath          bool
 }
 
 // Signaller interface around signalling the loadbalancer process
@@ -99,6 +98,7 @@ type location struct {
 	Path       string
 	UpstreamID string
 	Allow      []string
+	StripPath  bool
 }
 
 func (lb *nginxLoadBalancer) nginxConfFile() string {
@@ -326,6 +326,7 @@ func createNginxEntries(update controller.IngressUpdate) []*nginxEntry {
 			Path:       nginxPath,
 			UpstreamID: upstream.ID,
 			Allow:      ingressEntry.Allow,
+			StripPath:  ingressEntry.StripPaths,
 		}
 
 		entry, exists := hostToNginxEntry[ingressEntry.Host]
