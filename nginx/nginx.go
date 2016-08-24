@@ -35,7 +35,6 @@ type Conf struct {
 	WorkerConnections         int
 	KeepaliveSeconds          int
 	BackendKeepalives         int
-	BackendKeepaliveSeconds   int
 	ServerNamesHashBucketSize int
 	ServerNamesHashMaxSize    int
 	HealthPort                int
@@ -95,10 +94,11 @@ type upstream struct {
 }
 
 type location struct {
-	Path       string
-	UpstreamID string
-	Allow      []string
-	StripPath  bool
+	Path                    string
+	UpstreamID              string
+	Allow                   []string
+	StripPath               bool
+	BackendKeepaliveSeconds int
 }
 
 func (lb *nginxLoadBalancer) nginxConfFile() string {
@@ -323,10 +323,11 @@ func createNginxEntries(update controller.IngressUpdate) []*nginxEntry {
 			Server: fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
 		}
 		location := location{
-			Path:       nginxPath,
-			UpstreamID: upstream.ID,
-			Allow:      ingressEntry.Allow,
-			StripPath:  ingressEntry.StripPaths,
+			Path:                    nginxPath,
+			UpstreamID:              upstream.ID,
+			Allow:                   ingressEntry.Allow,
+			StripPath:               ingressEntry.StripPaths,
+			BackendKeepaliveSeconds: ingressEntry.BackendKeepAliveSeconds,
 		}
 
 		entry, exists := hostToNginxEntry[ingressEntry.Host]

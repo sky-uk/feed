@@ -71,10 +71,6 @@ http {
     # Timeout faster than the default 60s on initial connect.
     proxy_connect_timeout 10s;
 
-    # Close proxy connections after backend keepalive time.
-    proxy_read_timeout {{ .BackendKeepaliveSeconds }}s;
-    proxy_send_timeout {{ .BackendKeepaliveSeconds }}s;
-
     # Disable buffering, as we'll be interacting with ELBs with http listeners, which we assume will
     # quickly consume and generate responses and requests.
     # This should be enabled if nginx will directly serve traffic externally to unknown clients.
@@ -106,6 +102,10 @@ http {
             # Keep original path when proxying.
             proxy_pass http://{{ $location.UpstreamID }};
 {{- end }}
+
+            # Close proxy connections after backend keepalive time.
+            proxy_read_timeout {{ $location.BackendKeepaliveSeconds }}s;
+            proxy_send_timeout {{ $location.BackendKeepaliveSeconds }}s;
 
             # Allow localhost for debugging
             allow 127.0.0.1;

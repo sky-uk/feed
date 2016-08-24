@@ -11,6 +11,8 @@ import (
 
 	"strings"
 
+	"strconv"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util"
@@ -19,6 +21,7 @@ import (
 const ingressAllowAnnotation = "sky.uk/allow"
 const frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
 const stripPathAnnotation = "sky.uk/strip-path"
+const backendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
 type Controller interface {
@@ -31,32 +34,35 @@ type Controller interface {
 }
 
 type controller struct {
-	client           k8s.Client
-	updaters         []Updater
-	defaultAllow     []string
-	defaultStripPath bool
-	watcher          k8s.Watcher
-	watcherDone      sync.WaitGroup
-	started          bool
-	updatesHealth    util.SafeError
+	client                k8s.Client
+	updaters              []Updater
+	defaultAllow          []string
+	defaultStripPath      bool
+	defaultBackendTimeout int
+	watcher               k8s.Watcher
+	watcherDone           sync.WaitGroup
+	started               bool
+	updatesHealth         util.SafeError
 	sync.Mutex
 }
 
 // Config for creating a new ingress controller.
 type Config struct {
-	KubernetesClient k8s.Client
-	Updaters         []Updater
-	DefaultAllow     string
-	DefaultStripPath bool
+	KubernetesClient        k8s.Client
+	Updaters                []Updater
+	DefaultAllow            string
+	DefaultStripPath        bool
+	DefaultBackendKeepAlive int
 }
 
 // New creates an ingress controller.
 func New(conf Config) Controller {
 	return &controller{
-		client:           conf.KubernetesClient,
-		updaters:         conf.Updaters,
-		defaultAllow:     strings.Split(conf.DefaultAllow, ","),
-		defaultStripPath: conf.DefaultStripPath,
+		client:                conf.KubernetesClient,
+		updaters:              conf.Updaters,
+		defaultAllow:          strings.Split(conf.DefaultAllow, ","),
+		defaultStripPath:      conf.DefaultStripPath,
+		defaultBackendTimeout: conf.DefaultBackendKeepAlive,
 	}
 }
 
@@ -131,14 +137,15 @@ func (c *controller) updateIngresses() error {
 
 				if address := serviceMap[serviceName]; address != "" {
 					entry := IngressEntry{
-						Name:           ingress.Namespace + "/" + ingress.Name,
-						Host:           rule.Host,
-						Path:           path.Path,
-						ServiceAddress: address,
-						ServicePort:    int32(path.Backend.ServicePort.IntValue()),
-						Allow:          c.defaultAllow,
-						ELbScheme:      ingress.Annotations[frontendElbSchemeAnnotation],
-						StripPaths:     c.defaultStripPath,
+						Name:                    ingress.Namespace + "/" + ingress.Name,
+						Host:                    rule.Host,
+						Path:                    path.Path,
+						ServiceAddress:          address,
+						ServicePort:             int32(path.Backend.ServicePort.IntValue()),
+						Allow:                   c.defaultAllow,
+						ELbScheme:               ingress.Annotations[frontendElbSchemeAnnotation],
+						StripPaths:              c.defaultStripPath,
+						BackendKeepAliveSeconds: c.defaultBackendTimeout,
 					}
 
 					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
@@ -157,6 +164,11 @@ func (c *controller) updateIngresses() error {
 						} else {
 							log.Warnf("Ingress %s has an invalid strip path annotation: %s. Uing default", ingress.Name, stripPath)
 						}
+					}
+
+					if backendKeepAlive, ok := ingress.Annotations[backendKeepAliveSeconds]; ok {
+						tmp, _ := strconv.Atoi(backendKeepAlive)
+						entry.BackendKeepAliveSeconds = tmp
 					}
 
 					if err := entry.validate(); err == nil {

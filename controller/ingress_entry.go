@@ -29,6 +29,8 @@ type IngressEntry struct {
 	ELbScheme string
 	// StripPaths before forwarding to the backend
 	StripPaths bool
+	// BackendKeepAliveSeconds backend timeout
+	BackendKeepAliveSeconds int
 }
 
 // validate returns error if entry has invalid fields.

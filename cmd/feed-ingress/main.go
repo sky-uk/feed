@@ -117,9 +117,9 @@ func init() {
 	flag.IntVar(&nginxBackendKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
 		"Maximum number of keepalive connections per backend service. Keepalive connections count against"+
 			" nginx-worker-connections limit, and will be restricted by that global limit as well.")
-	flag.IntVar(&nginxBackendKeepaliveSeconds, "nginx-backend-keepalive-seconds", defaultNginxBackendKeepaliveSeconds,
+	flag.IntVar(&nginxBackendKeepaliveSeconds, "nginx-default-backend-keepalive-seconds", defaultNginxBackendKeepaliveSeconds,
 		"Time to keep backend keepalive connections open. This should generally be set smaller than backend service keepalive "+
-			"times to prevent stale connections.")
+			"times to prevent stale connections. Can be overridden per ingress the sky.uk/backend-keepalive-seconds annotation")
 	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 	flag.IntVar(&nginxServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,
@@ -159,10 +159,11 @@ func main() {
 	updaters := createIngressUpdaters()
 
 	controller := controller.New(controller.Config{
-		KubernetesClient: client,
-		Updaters:         updaters,
-		DefaultAllow:     ingressAllow,
-		DefaultStripPath: ingressStripPath,
+		KubernetesClient:        client,
+		Updaters:                updaters,
+		DefaultAllow:            ingressAllow,
+		DefaultStripPath:        ingressStripPath,
+		DefaultBackendKeepAlive: nginxBackendKeepaliveSeconds,
 	})
 
 	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
@@ -193,7 +194,6 @@ func createIngressUpdaters() []controller.Updater {
 		WorkerConnections:         nginxWorkerConnections,
 		KeepaliveSeconds:          nginxKeepAliveSeconds,
 		BackendKeepalives:         nginxBackendKeepalives,
-		BackendKeepaliveSeconds:   nginxBackendKeepaliveSeconds,
 		LogLevel:                  nginxLogLevel,
 		ServerNamesHashBucketSize: nginxServerNamesHashBucketSize,
 		ServerNamesHashMaxSize:    nginxServerNamesHashMaxSize,
