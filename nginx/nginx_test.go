@@ -56,7 +56,6 @@ func newConf(tmpDir string, binary string) Conf {
 		IngressPort:               port,
 		WorkerProcesses:           1,
 		BackendKeepalives:         1024,
-		BackendKeepaliveSeconds:   58,
 		ServerNamesHashMaxSize:    -1,
 		ServerNamesHashBucketSize: -1,
 	}
@@ -295,22 +294,24 @@ func TestNginxConfigUpdates(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris.com",
-					Name:           "chris-ingress",
-					Path:           "/path",
-					ServiceAddress: "service",
-					ServicePort:    8080,
-					Allow:          []string{"10.82.0.0/16"},
-					StripPaths:     true,
+					Host:                    "chris.com",
+					Name:                    "chris-ingress",
+					Path:                    "/path",
+					ServiceAddress:          "service",
+					ServicePort:             8080,
+					Allow:                   []string{"10.82.0.0/16"},
+					StripPaths:              true,
+					BackendKeepAliveSeconds: 1,
 				},
 				{
-					Host:           "chris.com",
-					Name:           "chris-ingress-another",
-					Path:           "/anotherpath",
-					ServiceAddress: "anotherservice",
-					ServicePort:    6060,
-					Allow:          []string{"10.86.0.0/16"},
-					StripPaths:     false,
+					Host:                    "chris.com",
+					Name:                    "chris-ingress-another",
+					Path:                    "/anotherpath",
+					ServiceAddress:          "anotherservice",
+					ServicePort:             6060,
+					Allow:                   []string{"10.86.0.0/16"},
+					StripPaths:              false,
+					BackendKeepAliveSeconds: 10,
 				},
 			},
 			[]string{
@@ -334,6 +335,10 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"            # Beware this can cause issues with url encoded characters.\n" +
 					"            proxy_pass http://upstream000/;\n" +
 					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 1s;\n" +
+					"            proxy_send_timeout 1s;\n" +
+					"\n" +
 					"            # Allow localhost for debugging\n" +
 					"            allow 127.0.0.1;\n" +
 					"\n" +
@@ -346,6 +351,10 @@ func TestNginxConfigUpdates(t *testing.T) {
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
 					"            proxy_pass http://upstream001;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 10s;\n" +
+					"            proxy_send_timeout 10s;\n" +
 					"\n" +
 					"            # Allow localhost for debugging\n" +
 					"            allow 127.0.0.1;\n" +
