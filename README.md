@@ -2,7 +2,18 @@
 
 # Feed
 
-Kubernetes controllers for managing external ingress with AWS.
+Kubernetes controllers for managing external ingress with AWS. There are two controllers provided, `feed-ingress` which runs an nginx instance, and `feed-dns` which manages route53 entries.
+
+Feed is not yet production ready. It's actively used and should be stable enough for development environments. New docker images are produced on every PR merge and pushed to https://hub.docker.com/r/skycirrus.
+
+## Ingress annotations
+
+The controllers support several annotations on ingress resources:
+
+- `sky.uk/allow: 10.10.10.10/32` - Restrict access to the specified CIDR block or IP.
+- `sky.uk/frontend-elb-scheme: internal` - Use the ELB with matching scheme. Can be either `internal` or `internet-facing`.
+- `sky.uk/strip-path: true` - Strip the ingress path when sending the request to the backend service. Can be either `true` or `false`. Note that nginx may break some url encoded values when enabled.
+- `sky.uk/backend-keepalive-seconds: 28` - Idle seconds for keepalive connections to the backend service. Usually this should be less than the idle timeout in the service itself.
 
 ## feed-ingress
 
