@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"fmt"
+	"errors"
 	"sort"
 )
 
@@ -36,13 +36,13 @@ type IngressEntry struct {
 // validate returns error if entry has invalid fields.
 func (entry IngressEntry) validate() error {
 	if entry.Host == "" {
-		return fmt.Errorf("%s had empty Host", entry.Name)
+		return errors.New("missing host")
 	}
 	if entry.ServiceAddress == "" {
-		return fmt.Errorf("%s had empty ServiceAddress", entry.Name)
+		return errors.New("missing service address")
 	}
 	if entry.ServicePort == 0 {
-		return fmt.Errorf("%s had 0 ServicePort", entry.Name)
+		return errors.New("missing service port")
 	}
 	return nil
 }
