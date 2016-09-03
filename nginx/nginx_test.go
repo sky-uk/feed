@@ -147,76 +147,96 @@ func TestFailsIfNginxDiesEarly(t *testing.T) {
 	assert.Error(lb.Health())
 }
 
-func TestCanSetLogLevel(t *testing.T) {
+func TestNginxConfig(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
-	defaultLogLevel := newConf(tmpDir, fakeNginx)
-	customLogLevel := newConf(tmpDir, fakeNginx)
+	defaultConf := newConf(tmpDir, fakeNginx)
+
+	trustedFrontends := defaultConf
+	trustedFrontends.TrustedFrontends = []string{"10.50.185.0/24", "10.82.0.0/16"}
+
+	customLogLevel := defaultConf
 	customLogLevel.LogLevel = "info"
 
+	serverNameHashes := defaultConf
+	serverNameHashes.ServerNamesHashMaxSize = 128
+	serverNameHashes.ServerNamesHashBucketSize = 58
+
+	proxyProtocol := defaultConf
+	proxyProtocol.ProxyProtocol = true
+
 	var tests = []struct {
-		nginxConf Conf
-		logLine   string
+		name             string
+		conf             Conf
+		expectedSettings []string
 	}{
 		{
-			defaultLogLevel,
-			"error_log stderr warn;",
+			"can set trusted frontends for real_ip",
+			trustedFrontends,
+			[]string{
+				"set_real_ip_from 10.50.185.0/24;",
+				"set_real_ip_from 10.82.0.0/16;",
+				"real_ip_recursive on;",
+			},
 		},
 		{
+			"can exclude trusted frontends for real_ip",
+			defaultConf,
+			[]string{
+				"!set_real_ip_from",
+			},
+		},
+		{
+			"can set log level",
 			customLogLevel,
-			"error_log stderr info;",
+			[]string{
+				"error_log stderr info;",
+			},
+		},
+		{
+			"default log level is warn",
+			defaultConf,
+			[]string{
+				"error_log stderr warn;",
+			},
+		},
+		{
+			"server names hashes are set",
+			serverNameHashes,
+			[]string{
+				"server_names_hash_max_size 128;",
+				"server_names_hash_bucket_size 58;",
+			},
+		},
+		{
+			"server names hashes not set by default",
+			defaultConf,
+			[]string{
+				"!server_names_hash_max_size",
+				"!server_names_hash_bucket_size",
+			},
+		},
+		{
+			"PROXY protocol sets real_ip",
+			proxyProtocol,
+			[]string{
+				"real_ip_header proxy_protocol;",
+			},
+		},
+		{
+			"PROXY protocol disabled uses X-Forwarded-For header for real_ip",
+			defaultConf,
+			[]string{
+				"real_ip_header X-Forwarded-For;",
+			},
 		},
 	}
 
 	for _, test := range tests {
-		lb, _ := newLbWithConf(test.nginxConf)
-		assert.NoError(lb.Start())
-
-		confBytes, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
-		assert.NoError(err)
-		conf := string(confBytes)
-
-		assert.Contains(conf, test.logLine)
-	}
-}
-
-func TestTrustedFrontendsSetsUpClientIPCorrectly(t *testing.T) {
-	assert := assert.New(t)
-	tmpDir := setupWorkDir(t)
-	defer os.Remove(tmpDir)
-
-	multipleTrusted := newConf(tmpDir, fakeNginx)
-	multipleTrusted.TrustedFrontends = []string{"10.50.185.0/24", "10.82.0.0/16"}
-
-	var tests = []struct {
-		name           string
-		lbConf         Conf
-		expectedOutput string
-	}{
-		{
-			"multiple trusted frontends works",
-			multipleTrusted,
-			`    # Obtain client IP from frontend's X-Forward-For header
-    set_real_ip_from 10.50.185.0/24;
-    set_real_ip_from 10.82.0.0/16;
-
-    real_ip_header X-Forwarded-For;
-    real_ip_recursive on;`,
-		},
-		{
-			"no trusted frontends works",
-			newConf(tmpDir, fakeNginx),
-			`    # Obtain client IP from frontend's X-Forward-For header
-
-    real_ip_header X-Forwarded-For;
-    real_ip_recursive on;`,
-		},
-	}
-
-	for _, test := range tests {
-		lb, _ := newLbWithConf(test.lbConf)
+		fmt.Println(test.name)
+		lb, _ := newLbWithConf(test.conf)
 
 		assert.NoError(lb.Start())
 		err := lb.Update(controller.IngressUpdate{})
@@ -226,62 +246,24 @@ func TestTrustedFrontendsSetsUpClientIPCorrectly(t *testing.T) {
 		assert.NoError(err)
 		configContents := string(config)
 
-		assert.Contains(configContents, test.expectedOutput, test.name)
-
+		for _, expected := range test.expectedSettings {
+			if strings.HasPrefix(expected, "!") {
+				assert.NotContains(configContents, expected, "%s\nshould not contain setting", test.name)
+			} else {
+				assert.Contains(configContents, expected, "%sshould contain setting", test.name)
+			}
+		}
 	}
 }
 
-func TestServerNamesHashSettingsSetCorrectly(t *testing.T) {
-	assert := assert.New(t)
-	tmpDir := setupWorkDir(t)
-	defer os.Remove(tmpDir)
-
-	conf := newConf(tmpDir, fakeNginx)
-	conf.ServerNamesHashMaxSize = 128
-	conf.ServerNamesHashBucketSize = 58
-
-	lb, _ := newLbWithConf(conf)
-
-	assert.NoError(lb.Start())
-	err := lb.Update(controller.IngressUpdate{})
-	assert.NoError(err)
-
-	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
-	assert.NoError(err)
-	configContents := string(config)
-
-	assert.Contains(configContents, "    server_names_hash_max_size 128;", "server_names_hash_max_size is set")
-	assert.Contains(configContents, "    server_names_hash_bucket_size 58;", "server_names_hash_max_size is set")
-}
-
-func TestServerNamesHashSettingsNotSetByDefault(t *testing.T) {
-	assert := assert.New(t)
-	tmpDir := setupWorkDir(t)
-	defer os.Remove(tmpDir)
-
-	conf := newConf(tmpDir, fakeNginx)
-
-	lb, _ := newLbWithConf(conf)
-
-	assert.NoError(lb.Start())
-	err := lb.Update(controller.IngressUpdate{})
-	assert.NoError(err)
-
-	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
-	assert.NoError(err)
-	configContents := string(config)
-
-	assert.NotContains(configContents, "    server_names_hash_max_size", "server_names_hash_max_size is set")
-	assert.NotContains(configContents, "    server_names_hash_bucket_size", "server_names_hash_max_size is set")
-}
-
-func TestNginxConfigUpdates(t *testing.T) {
+func TestNginxIngressEntries(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
 	defaultConf := newConf(tmpDir, fakeNginx)
-	disablePathStrippingConf := defaultConf
+	enableProxyProtocolConf := defaultConf
+	enableProxyProtocolConf.ProxyProtocol = true
 
 	var tests = []struct {
 		name          string
@@ -603,7 +585,7 @@ func TestNginxConfigUpdates(t *testing.T) {
 		},
 		{
 			"Disabled path stripping should not put a trailing slash on proxy_pass",
-			disablePathStrippingConf,
+			defaultConf,
 			[]controller.IngressEntry{
 				{
 					Host:           "chris.com",
@@ -615,6 +597,22 @@ func TestNginxConfigUpdates(t *testing.T) {
 			},
 			[]string{
 				"    proxy_pass http://upstream000;\n",
+			},
+		},
+		{
+			"PROXY protocol enables proxy_protocol listeners",
+			enableProxyProtocolConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Name:           "chris-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+			},
+			[]string{
+				"listen 9090 proxy_protocol;",
 			},
 		},
 	}
