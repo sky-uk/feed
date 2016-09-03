@@ -13,6 +13,8 @@ import (
 
 	"strconv"
 
+	"errors"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util"
@@ -71,11 +73,11 @@ func (c *controller) Start() error {
 	defer c.Unlock()
 
 	if c.started {
-		return fmt.Errorf("controller is already started")
+		return errors.New("controller is already started")
 	}
 
 	if c.watcher != nil {
-		return fmt.Errorf("can't restart controller")
+		return errors.New("can't restart controller")
 	}
 
 	for _, u := range c.updaters {
@@ -127,7 +129,7 @@ func (c *controller) updateIngresses() error {
 
 	serviceMap := mapNamesToAddresses(services)
 
-	var skipped int
+	var skipped []string
 	entries := []IngressEntry{}
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
@@ -174,18 +176,20 @@ func (c *controller) updateIngresses() error {
 					if err := entry.validate(); err == nil {
 						entries = append(entries, entry)
 					} else {
-						log.Debugf("Skipping entry: %v", err)
-						skipped++
+						skipped = append(skipped, fmt.Sprintf("%s (%v)", entry.Name, err))
 					}
 				} else {
-					log.Debugf("Skipping ingress as service doesn't exist: %s", serviceName)
-					skipped++
+					skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
 				}
 			}
 		}
 	}
 
-	log.Infof("Updating with %d entries, skipping %d invalid", len(entries), skipped)
+	log.Infof("Updating with %d entries", len(entries))
+	if len(skipped) > 0 {
+		log.Infof("Skipped %d invalid: %s", len(skipped), strings.Join(skipped, ", "))
+	}
+
 	update := IngressUpdate{Entries: entries}
 	for _, u := range c.updaters {
 		if err := u.Update(update); err != nil {
@@ -217,7 +221,7 @@ func (c *controller) Stop() error {
 	defer c.Unlock()
 
 	if !c.started {
-		return fmt.Errorf("cannot stop, not started")
+		return errors.New("cannot stop, not started")
 	}
 
 	log.Info("Stopping controller")
@@ -241,7 +245,7 @@ func (c *controller) Health() error {
 	defer c.Unlock()
 
 	if !c.started {
-		return fmt.Errorf("controller has not started")
+		return errors.New("controller has not started")
 	}
 
 	for _, u := range c.updaters {
