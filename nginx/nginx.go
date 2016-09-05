@@ -41,6 +41,7 @@ type Conf struct {
 	TrustedFrontends          []string
 	IngressPort               int
 	LogLevel                  string
+	ProxyProtocol             bool
 }
 
 // Signaller interface around signalling the loadbalancer process

@@ -39,6 +39,7 @@ var (
 	nginxTrustedFrontends          string
 	nginxServerNamesHashBucketSize int
 	nginxServerNamesHashMaxSize    int
+	nginxProxyProtocol             bool
 	elbLabelValue                  string
 	elbRegion                      string
 	elbExpectedNumber              int
@@ -69,6 +70,7 @@ func init() {
 		defaultNginxLogLevel                  = "warn"
 		defaultNginxServerNamesHashBucketSize = -1
 		defaultNginxServerNamesHashMaxSize    = -1
+		defaultNginxProxyProtocol             = false
 		defaultElbLabelValue                  = ""
 		defaultElbRegion                      = "eu-west-1"
 		defaultElbExpectedNumber              = 0
@@ -131,9 +133,11 @@ func init() {
 			"config from the nginx conf file. The details of setting up hash tables are provided "+
 			"in a separate document. http://nginx.org/en/docs/hash.html")
 	flag.StringVar(&nginxTrustedFrontends, "nginx-trusted-frontends", "",
-		"Comma separated list of CIDRs to trust when determining the client's real IP from the "+
-			"X-Forwarded-For header. The client IP is used for allowing or denying ingress access. "+
+		"Comma separated list of CIDRs to trust when determining the client's real IP from "+
+			"frontends. The client IP is used for allowing or denying ingress access. "+
 			"This will typically be the ELB subnet.")
+	flag.BoolVar(&nginxProxyProtocol, "nginx-proxy-protocol", defaultNginxProxyProtocol,
+		"Enable PROXY protocol for nginx listeners.")
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
@@ -199,6 +203,7 @@ func createIngressUpdaters() []controller.Updater {
 		ServerNamesHashMaxSize:    nginxServerNamesHashMaxSize,
 		HealthPort:                ingressHealthPort,
 		TrustedFrontends:          trustedFrontends,
+		ProxyProtocol:             nginxProxyProtocol,
 	})
 	return []controller.Updater{frontend, proxy}
 }
