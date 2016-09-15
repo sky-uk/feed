@@ -312,6 +312,9 @@ func TestNginxIngressEntries(t *testing.T) {
 					"        listen 9090;\n" +
 					"        server_name chris.com;\n" +
 					"\n" +
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
 					"        location /path/ {\n" +
 					"            # Strip location path when proxying.\n" +
 					"            # Beware this can cause issues with url encoded characters.\n" +
