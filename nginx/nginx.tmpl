@@ -92,6 +92,10 @@ http {
     server {
         listen {{ $port }}{{ if $proxyprotocol }} proxy_protocol{{ end }};
         server_name {{ $entry.ServerName }};
+
+        # disable any limits to avoid HTTP 413 for large uploads
+        client_max_body_size 0; 
+
         {{- range $location := $entry.Locations }}
 
         location {{ if $location.Path }}{{ $location.Path }}{{ end }} {
