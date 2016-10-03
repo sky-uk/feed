@@ -18,9 +18,10 @@ events {
 http {
     default_type text/html;
 
-    # If a large number of server names are defined, or unusually long server names are defined,
-    # tuning the server_names_hash_max_size and server_names_hash_bucket_size directives at the http
-    # level may become necessary.
+    # Track extended virtual host stats.
+    vhost_traffic_status_zone;
+
+    # Server names hash bucket sizes. Set based on nginx log messages.
     {{ if gt .ServerNamesHashBucketSize 0 }}server_names_hash_bucket_size {{ .ServerNamesHashBucketSize }};{{ end }}
     {{ if gt .ServerNamesHashMaxSize 0 }}server_names_hash_max_size {{ .ServerNamesHashMaxSize }};{{ end }}
 
@@ -40,18 +41,15 @@ http {
     real_ip_header {{ if .ProxyProtocol }}proxy_protocol{{ else }}X-Forwarded-For{{ end }};
     real_ip_recursive on;
 
-    # Put all data into the working directory.
+    # Disable access log
     access_log             off;
-    client_body_temp_path  {{ .WorkingDir }}/tmp_client_body 1 2;
-    proxy_temp_path        {{ .WorkingDir }}/tmp_proxy 1 2;
-    fastcgi_temp_path      {{ .WorkingDir }}/tmp_fastcgi 1 2;
-    uwsgi_temp_path        {{ .WorkingDir }}/tmp_uwsgi 1 2;
-    scgi_temp_path         {{ .WorkingDir }}/tmp_scgi 1 2;
 
-    # Configure proxying
     # Enable keepalive to backend.
     proxy_http_version 1.1;
     proxy_set_header Connection "";
+
+    # Mitigate httpoxy vulnerability.
+    proxy_set_header Proxy "";
 
     # Add headers for proxy information.
     map $http_x_forwarded_proto $frontend_scheme {
@@ -69,13 +67,16 @@ http {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header Host $host;
 
-    # Timeout faster than the default 60s on initial connect.
-    proxy_connect_timeout 10s;
+    # Timeout to backend services on initial connect.
+    proxy_connect_timeout {{ .BackendConnectTimeoutSeconds }}s;
 
     # Disable buffering, as we'll be interacting with ELBs with http listeners, which we assume will
     # quickly consume and generate responses and requests.
     # This should be enabled if nginx will directly serve traffic externally to unknown clients.
     proxy_buffering off;
+
+    # Don't mess with redirects.
+    proxy_redirect off;
 
     # Configure ingresses
     {{- $port := .IngressPort }}
@@ -109,6 +110,9 @@ http {
             proxy_pass http://{{ $location.UpstreamID }};
 {{- end }}
 
+            # Set display name for vhost stats.
+            vhost_traffic_status_filter_by_set_key {{ $location.Path }}::$proxy_host $server_name;
+
             # Close proxy connections after backend keepalive time.
             proxy_read_timeout {{ $location.BackendKeepaliveSeconds }}s;
             proxy_send_timeout {{ $location.BackendKeepaliveSeconds }}s;
@@ -139,15 +143,22 @@ http {
     # Status port. This should be firewalled to only allow internal access.
     server {
         listen {{ .HealthPort }} default_server reuseport;
+        vhost_traffic_status off;
 
         location /health {
             access_log off;
             return 200;
         }
 
-        location /status {
+        location /basic_status {
             access_log off;
             stub_status;
+        }
+
+        location /status {
+            access_log off;
+            vhost_traffic_status_display;
+            vhost_traffic_status_display_format html;
         }
 
         location / {

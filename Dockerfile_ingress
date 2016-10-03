@@ -1,29 +1,27 @@
 FROM phusion/baseimage:0.9.19
 
-ENV NGINX_VERSION 1.10.1-1~xenial
+RUN apt-get update \
+    && apt-get dist-upgrade -y \
+    && apt-get install --no-install-suggests --no-install-recommends -y \
+        curl \
+        dnsutils \
+        vim-tiny \
+        lsof \
+    && apt-get clean -y \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* /tmp/*
 
-RUN curl http://nginx.org/keys/nginx_signing.key > /tmp/nginx_signing.key \
-    && apt-key add /tmp/nginx_signing.key \
-    && rm -f /tmp/nginx_signing.key \
-	&& echo "deb http://nginx.org/packages/ubuntu/ xenial nginx" >> /etc/apt/sources.list \
-	&& apt-get upgrade -y -o Dpkg::Options::="--force-confnew" \
-	&& apt-get update \
-	&& apt-get install --no-install-recommends --no-install-suggests -y \
-						ca-certificates \
-						nginx=${NGINX_VERSION} \
-						gettext-base \
-						curl \
-						dnsutils \
-						vim-tiny \
-						lsof \
-	&& rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* # 2016-07-13
+ENV NGINX_VERSION 1.10.1
+ENV NGINX_SHA256 1fd35846566485e03c0e318989561c135c598323ff349c503a6c14826487a801
+ENV VTS_VERSION 0.1.10
+ENV VTS_SHA256 c6f3733e9ff84bfcdc6bfb07e1baf59e72c4e272f06964dd0ed3a1bdc93fa0ca
 
-WORKDIR /
+COPY build-nginx.sh /tmp
+RUN /bin/bash /tmp/build-nginx.sh
+
 COPY feed-ingress /
-
-RUN mkdir /nginx
 COPY nginx.tmpl /nginx/
-RUN chown -R nginx:nginx /nginx
+RUN chown nginx:nginx /nginx/nginx.tmpl
 
 ENTRYPOINT ["/sbin/my_init", "--quiet", "--", "/sbin/setuser", "nginx", \
     "/feed-ingress", "-nginx-workdir", "/nginx"]

@@ -57,6 +57,7 @@ copy : build
 	  set -e; \
 	  build_dir="build/$$build"; \
 	  mkdir -p $$build_dir; \
+	  cp build-nginx.sh $$build_dir; \
 	  cp Dockerfile_$$build $${build_dir}/Dockerfile; \
 	  cp $(GOPATH)/bin/feed-$$build $$build_dir; \
 	done

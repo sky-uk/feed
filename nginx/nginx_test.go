@@ -51,13 +51,14 @@ func (m *mockSignaller) sighup(p *os.Process) error {
 
 func newConf(tmpDir string, binary string) Conf {
 	return Conf{
-		WorkingDir:                tmpDir,
-		BinaryLocation:            binary,
-		IngressPort:               port,
-		WorkerProcesses:           1,
-		BackendKeepalives:         1024,
-		ServerNamesHashMaxSize:    -1,
-		ServerNamesHashBucketSize: -1,
+		WorkingDir:                   tmpDir,
+		BinaryLocation:               binary,
+		IngressPort:                  port,
+		WorkerProcesses:              1,
+		BackendKeepalives:            1024,
+		BackendConnectTimeoutSeconds: 1,
+		ServerNamesHashMaxSize:       -1,
+		ServerNamesHashBucketSize:    -1,
 	}
 }
 
@@ -167,6 +168,9 @@ func TestNginxConfig(t *testing.T) {
 	proxyProtocol := defaultConf
 	proxyProtocol.ProxyProtocol = true
 
+	connectTimeout := defaultConf
+	connectTimeout.BackendConnectTimeoutSeconds = 3
+
 	var tests = []struct {
 		name             string
 		conf             Conf
@@ -230,6 +234,13 @@ func TestNginxConfig(t *testing.T) {
 			defaultConf,
 			[]string{
 				"real_ip_header X-Forwarded-For;",
+			},
+		},
+		{
+			"Proxy connect timeout can be changed",
+			connectTimeout,
+			[]string{
+				"proxy_connect_timeout 3s;",
 			},
 		},
 	}
@@ -320,6 +331,9 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            # Beware this can cause issues with url encoded characters.\n" +
 					"            proxy_pass http://upstream000/;\n" +
 					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
+					"\n" +
 					"            # Close proxy connections after backend keepalive time.\n" +
 					"            proxy_read_timeout 1s;\n" +
 					"            proxy_send_timeout 1s;\n" +
@@ -336,6 +350,9 @@ func TestNginxIngressEntries(t *testing.T) {
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
 					"            proxy_pass http://upstream001;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
 					"\n" +
 					"            # Close proxy connections after backend keepalive time.\n" +
 					"            proxy_read_timeout 10s;\n" +
@@ -720,7 +737,7 @@ server accepts handled requests
 Reading: 2 Writing: 1 Waiting: 8
 `
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/status" {
+		if r.URL.Path == "/basic_status" {
 			fmt.Fprintln(w, statusBody)
 		} else {
 			w.WriteHeader(http.StatusNotFound)
