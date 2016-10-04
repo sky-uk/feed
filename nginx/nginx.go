@@ -29,19 +29,20 @@ const (
 
 // Conf configuration for nginx
 type Conf struct {
-	BinaryLocation            string
-	WorkingDir                string
-	WorkerProcesses           int
-	WorkerConnections         int
-	KeepaliveSeconds          int
-	BackendKeepalives         int
-	ServerNamesHashBucketSize int
-	ServerNamesHashMaxSize    int
-	HealthPort                int
-	TrustedFrontends          []string
-	IngressPort               int
-	LogLevel                  string
-	ProxyProtocol             bool
+	BinaryLocation               string
+	WorkingDir                   string
+	WorkerProcesses              int
+	WorkerConnections            int
+	KeepaliveSeconds             int
+	BackendKeepalives            int
+	BackendConnectTimeoutSeconds int
+	ServerNamesHashBucketSize    int
+	ServerNamesHashMaxSize       int
+	HealthPort                   int
+	TrustedFrontends             []string
+	IngressPort                  int
+	LogLevel                     string
+	ProxyProtocol                bool
 }
 
 // Signaller interface around signalling the loadbalancer process
@@ -198,7 +199,7 @@ func (lb *nginxLoadBalancer) periodicallyUpdateMetrics() {
 }
 
 func (lb *nginxLoadBalancer) updateMetrics() {
-	if err := parseAndSetNginxMetrics(lb.HealthPort, "/status"); err != nil {
+	if err := parseAndSetNginxMetrics(lb.HealthPort, "/basic_status"); err != nil {
 		log.Warnf("Unable to update nginx metrics: %v", err)
 		lb.metricsUnhealthy.Set(true)
 	} else {
