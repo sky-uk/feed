@@ -41,8 +41,15 @@ http {
     real_ip_header {{ if .ProxyProtocol }}proxy_protocol{{ else }}X-Forwarded-For{{ end }};
     real_ip_recursive on;
 
-    # Disable access log
-    access_log             off;
+    # Log format tracking timings
+    log_format upstream_time '$remote_addr - $remote_user [$time_local] '
+                             '"$request" $status $body_bytes_sent '
+                             '"$http_referer" "$http_user_agent" '
+                             '"$host" uip="$upstream_addr" ust="$upstream_status" '
+                             'rt=$request_time uct="$upstream_connect_time" uht="$upstream_header_time" urt="$upstream_response_time"';
+
+    # Access logs
+    access_log {{ if .AccessLog }}{{ .AccessLogDir }}/access.log upstream_time buffer=32k flush=1m{{ else }}off{{ end }};
 
     # Enable keepalive to backend.
     proxy_http_version 1.1;

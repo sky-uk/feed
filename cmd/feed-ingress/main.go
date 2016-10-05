@@ -47,6 +47,8 @@ var (
 	pushgatewayURL                    string
 	pushgatewayIntervalSeconds        int
 	pushgatewayLabels                 cmd.KeyValues
+	accessLog                         bool
+	accessLogDir                      string
 )
 
 func init() {
@@ -77,6 +79,7 @@ func init() {
 		defaultElbRegion                         = "eu-west-1"
 		defaultElbExpectedNumber                 = 0
 		defaultPushgatewayIntervalSeconds        = 60
+		defaultAccessLogDir                      = "/var/log/nginx"
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -156,6 +159,8 @@ func init() {
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
+	flag.StringVar(&accessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
+	flag.BoolVar(&accessLog, "access-log", false, "Enable access logs directive.")
 }
 
 func main() {
@@ -210,6 +215,8 @@ func createIngressUpdaters() []controller.Updater {
 		HealthPort:                   ingressHealthPort,
 		TrustedFrontends:             trustedFrontends,
 		ProxyProtocol:                nginxProxyProtocol,
+		AccessLog:                    accessLog,
+		AccessLogDir:                 accessLogDir,
 	})
 	return []controller.Updater{frontend, proxy}
 }

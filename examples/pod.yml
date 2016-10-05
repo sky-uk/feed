@@ -74,6 +74,10 @@ containers:
   # needs to be greater than 64 to support our very large domain names
   - -nginx-server-names-hash-bucket-size=128
 
+  # access logs are turned on, remove the "-access-log" flag to turn them off
+  - -access-log
+  - -access-log-dir=/var/log/nginx
+
   # controller health determines readiness
   readinessProbe:
     httpGet:
@@ -102,3 +106,11 @@ containers:
      value: http://proxy
    - name: NO_PROXY
      value: ignore
+
+  volumeMounts:
+  - name: nginx-log
+    mountPath: /var/log/nginx
+
+volumes:
+- name: nginx-log
+  emptyDir: {}

@@ -789,6 +789,26 @@ func TestFailsToUpdateIfConfigurationIsBroken(t *testing.T) {
 	assert.Contains(err.Error(), "./fake_nginx_failing_reload.sh -t")
 }
 
+func TestNginxAccessLogDirIsCreatedWhenAccessLogsEnabled(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	defaultConf := newConf(tmpDir, fakeNginx)
+	enabledAccessLogConf := defaultConf
+	enabledAccessLogConf.AccessLog = true
+	enabledAccessLogConf.AccessLogDir = tmpDir + "/nginx-access-log"
+
+	lb, _ := newLbWithConf(enabledAccessLogConf)
+
+	assert.NoError(lb.Start())
+	err := lb.Update(controller.IngressUpdate{})
+	assert.NoError(err)
+
+	_, statsErr := os.Stat(tmpDir + "/nginx-access-log")
+	assert.NoError(statsErr)
+}
+
 func setupWorkDir(t *testing.T) string {
 	tmpDir, err := ioutil.TempDir(os.TempDir(), "ingress_lb_test")
 	assert.NoError(t, err)

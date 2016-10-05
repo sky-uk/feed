@@ -43,6 +43,8 @@ type Conf struct {
 	IngressPort                  int
 	LogLevel                     string
 	ProxyProtocol                bool
+	AccessLog                    bool
+	AccessLogDir                 string
 }
 
 // Signaller interface around signalling the loadbalancer process
@@ -236,6 +238,15 @@ func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
 
 func (lb *nginxLoadBalancer) update(entries controller.IngressUpdate) (bool, error) {
 	log.Debugf("Updating loadbalancer %s", entries)
+
+	if lb.Conf.AccessLog {
+		log.Infof("Access log directive enabled. Log files will be written in: %s", lb.Conf.AccessLogDir)
+		if err := os.MkdirAll(lb.Conf.AccessLogDir, 0755); err != nil {
+			log.Errorf("Could not create access log dir. Error: %v", err)
+			return false, err
+		}
+	}
+
 	updatedConfig, err := lb.createConfig(entries)
 	if err != nil {
 		return false, err
