@@ -171,6 +171,10 @@ func TestNginxConfig(t *testing.T) {
 	connectTimeout := defaultConf
 	connectTimeout.BackendConnectTimeoutSeconds = 3
 
+	enabledAccessLogConf := defaultConf
+	enabledAccessLogConf.AccessLog = true
+	enabledAccessLogConf.AccessLogDir = "/nginx-access-log"
+
 	var tests = []struct {
 		name             string
 		conf             Conf
@@ -241,6 +245,27 @@ func TestNginxConfig(t *testing.T) {
 			connectTimeout,
 			[]string{
 				"proxy_connect_timeout 3s;",
+			},
+		},
+		{
+			"Custom log format is used for access logs",
+			defaultConf,
+			[]string{
+				"log_format upstream_info",
+			},
+		},
+		{
+			"Access logs are turned off by default",
+			defaultConf,
+			[]string{
+				"access_log off;",
+			},
+		},
+		{
+			"Access logs use custom format when enabled",
+			enabledAccessLogConf,
+			[]string{
+				"access_log /nginx-access-log/access.log upstream_info buffer=32k flush=1m;",
 			},
 		},
 	}
@@ -787,26 +812,6 @@ func TestFailsToUpdateIfConfigurationIsBroken(t *testing.T) {
 	err := lb.Update(controller.IngressUpdate{Entries: entries})
 	assert.Contains(err.Error(), "Config check failed")
 	assert.Contains(err.Error(), "./fake_nginx_failing_reload.sh -t")
-}
-
-func TestNginxAccessLogDirIsCreatedWhenAccessLogsEnabled(t *testing.T) {
-	assert := assert.New(t)
-	tmpDir := setupWorkDir(t)
-	defer os.Remove(tmpDir)
-
-	defaultConf := newConf(tmpDir, fakeNginx)
-	enabledAccessLogConf := defaultConf
-	enabledAccessLogConf.AccessLog = true
-	enabledAccessLogConf.AccessLogDir = tmpDir + "/nginx-access-log"
-
-	lb, _ := newLbWithConf(enabledAccessLogConf)
-
-	assert.NoError(lb.Start())
-	err := lb.Update(controller.IngressUpdate{})
-	assert.NoError(err)
-
-	_, statsErr := os.Stat(tmpDir + "/nginx-access-log")
-	assert.NoError(statsErr)
 }
 
 func setupWorkDir(t *testing.T) string {
