@@ -171,6 +171,10 @@ func TestNginxConfig(t *testing.T) {
 	connectTimeout := defaultConf
 	connectTimeout.BackendConnectTimeoutSeconds = 3
 
+	enabledAccessLogConf := defaultConf
+	enabledAccessLogConf.AccessLog = true
+	enabledAccessLogConf.AccessLogDir = "/nginx-access-log"
+
 	var tests = []struct {
 		name             string
 		conf             Conf
@@ -241,6 +245,27 @@ func TestNginxConfig(t *testing.T) {
 			connectTimeout,
 			[]string{
 				"proxy_connect_timeout 3s;",
+			},
+		},
+		{
+			"Custom log format is used for access logs",
+			defaultConf,
+			[]string{
+				"log_format upstream_info",
+			},
+		},
+		{
+			"Access logs are turned off by default",
+			defaultConf,
+			[]string{
+				"access_log off;",
+			},
+		},
+		{
+			"Access logs use custom format when enabled",
+			enabledAccessLogConf,
+			[]string{
+				"access_log /nginx-access-log/access.log upstream_info buffer=32k flush=1m;",
 			},
 		},
 	}

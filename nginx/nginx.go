@@ -43,6 +43,8 @@ type Conf struct {
 	IngressPort                  int
 	LogLevel                     string
 	ProxyProtocol                bool
+	AccessLog                    bool
+	AccessLogDir                 string
 }
 
 // Signaller interface around signalling the loadbalancer process
