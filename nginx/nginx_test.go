@@ -175,6 +175,9 @@ func TestNginxConfig(t *testing.T) {
 	enabledAccessLogConf.AccessLog = true
 	enabledAccessLogConf.AccessLogDir = "/nginx-access-log"
 
+	logHeadersConf := defaultConf
+	logHeadersConf.NginxLogHeaders = []string{"Content-Type", "Authorization"}
+
 	var tests = []struct {
 		name             string
 		conf             Conf
@@ -266,6 +269,13 @@ func TestNginxConfig(t *testing.T) {
 			enabledAccessLogConf,
 			[]string{
 				"access_log /nginx-access-log/access.log upstream_info buffer=32k flush=1m;",
+			},
+		},
+		{
+			"Access logs use custom headers when enabled",
+			logHeadersConf,
+			[]string{
+				"\"$request\" $status $http_Content-Type $http_Authorization $body_bytes_sent",
 			},
 		},
 	}

@@ -49,6 +49,7 @@ var (
 	pushgatewayLabels                 cmd.KeyValues
 	accessLog                         bool
 	accessLogDir                      string
+	nginxLogHeaders                   string
 )
 
 func init() {
@@ -161,6 +162,7 @@ func init() {
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
 	flag.StringVar(&accessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
 	flag.BoolVar(&accessLog, "access-log", false, "Enable access logs directive.")
+	flag.StringVar(&nginxLogHeaders, "nginx-log-headers", "", "Comma separated list of headers to be logged in access logs")
 }
 
 func main() {
@@ -200,6 +202,12 @@ func createIngressUpdaters() []controller.Updater {
 	if nginxTrustedFrontends != "" {
 		trustedFrontends = strings.Split(nginxTrustedFrontends, ",")
 	}
+
+	logHeaders := []string{}
+	if nginxLogHeaders != "" {
+		logHeaders = strings.Split(nginxLogHeaders, ",")
+	}
+
 	proxy := nginx.New(nginx.Conf{
 		BinaryLocation:               nginxBinary,
 		IngressPort:                  ingressPort,
@@ -217,6 +225,7 @@ func createIngressUpdaters() []controller.Updater {
 		ProxyProtocol:                nginxProxyProtocol,
 		AccessLog:                    accessLog,
 		AccessLogDir:                 accessLogDir,
+		NginxLogHeaders:              logHeaders,
 	})
 	return []controller.Updater{frontend, proxy}
 }
