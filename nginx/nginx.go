@@ -45,6 +45,8 @@ type Conf struct {
 	ProxyProtocol                bool
 	AccessLog                    bool
 	AccessLogDir                 string
+	NginxLogHeaders              []string
+	AccessLogHeaders             string
 }
 
 // Signaller interface around signalling the loadbalancer process
@@ -300,7 +302,7 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 	}
 
 	entries := createNginxEntries(update)
-
+	lb.AccessLogHeaders = lb.getNginxLogHeaders()
 	var output bytes.Buffer
 	err = tmpl.Execute(&output, loadBalancerTemplate{Conf: lb.Conf, Entries: entries})
 
@@ -309,6 +311,15 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 	}
 
 	return output.Bytes(), nil
+}
+
+func (lb *nginxLoadBalancer) getNginxLogHeaders() string {
+	headersString := ""
+	for _, nginxLogHeader := range lb.NginxLogHeaders {
+		headersString = headersString + " $http_" + nginxLogHeader
+	}
+
+	return headersString
 }
 
 type pathSet map[string]struct{}

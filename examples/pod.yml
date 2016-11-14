@@ -78,6 +78,9 @@ containers:
   - -access-log
   - -access-log-dir=/var/log/nginx
 
+  # headers to output in access logs
+  - -nginx-log-headers=Authorization,Content-Type
+
   # controller health determines readiness
   readinessProbe:
     httpGet:
