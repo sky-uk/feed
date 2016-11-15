@@ -316,7 +316,7 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 func (lb *nginxLoadBalancer) getNginxLogHeaders() string {
 	headersString := ""
 	for _, nginxLogHeader := range lb.NginxLogHeaders {
-		headersString = headersString + " $http_" + nginxLogHeader
+		headersString = headersString + " " + nginxLogHeader + "=$http_" + strings.Replace(nginxLogHeader, "-", "_", -1)
 	}
 
 	return headersString

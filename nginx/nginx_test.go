@@ -275,7 +275,7 @@ func TestNginxConfig(t *testing.T) {
 			"Access logs use custom headers when enabled",
 			logHeadersConf,
 			[]string{
-				"\"$request\" $status $http_Content-Type $http_Authorization $body_bytes_sent",
+				"\"$request\" $status Content-Type=$http_Content_Type Authorization=$http_Authorization $body_bytes_sent",
 			},
 		},
 	}
