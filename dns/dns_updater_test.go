@@ -166,7 +166,7 @@ func TestUpdateRecordSetFail(t *testing.T) {
 		Entries: []controller.IngressEntry{validEntry},
 	}
 	fakeR53.On("UpdateRecordSets", mock.Anything).Return(
-		errors.New("No updates for you!"),
+		errors.New("no updates for you"),
 	)
 
 	// when
@@ -174,7 +174,7 @@ func TestUpdateRecordSetFail(t *testing.T) {
 	err := dnsUpdater.Update(ingressUpdate)
 
 	//then
-	assert.EqualError(t, err, "unable to update record sets: No updates for you!")
+	assert.EqualError(t, err, "unable to update record sets: no updates for you")
 }
 
 // calculateChanges tests with no external dependencies
