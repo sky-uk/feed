@@ -17,39 +17,26 @@ import (
 )
 
 var (
-	debug                             bool
-	apiserverURL                      string
-	caCertFile                        string
-	tokenFile                         string
-	clientCertFile                    string
-	clientKeyFile                     string
-	ingressPort                       int
-	ingressAllow                      string
-	ingressHealthPort                 int
-	ingressStripPath                  bool
-	healthPort                        int
-	nginxBinary                       string
-	nginxWorkDir                      string
-	nginxWorkerProcesses              int
-	nginxWorkerConnections            int
-	nginxKeepAliveSeconds             int
-	nginxBackendKeepalives            int
-	nginxBackendKeepaliveSeconds      int
-	nginxBackendConnectTimeoutSeconds int
-	nginxLogLevel                     string
-	nginxTrustedFrontends             string
-	nginxServerNamesHashBucketSize    int
-	nginxServerNamesHashMaxSize       int
-	nginxProxyProtocol                bool
-	elbLabelValue                     string
-	elbRegion                         string
-	elbExpectedNumber                 int
-	pushgatewayURL                    string
-	pushgatewayIntervalSeconds        int
-	pushgatewayLabels                 cmd.KeyValues
-	accessLog                         bool
-	accessLogDir                      string
-	nginxLogHeaders                   string
+	debug                      bool
+	apiserverURL               string
+	caCertFile                 string
+	tokenFile                  string
+	clientCertFile             string
+	clientKeyFile              string
+	ingressPort                int
+	ingressAllow               string
+	ingressHealthPort          int
+	ingressStripPath           bool
+	healthPort                 int
+	elbLabelValue              string
+	elbRegion                  string
+	elbExpectedNumber          int
+	pushgatewayURL             string
+	pushgatewayIntervalSeconds int
+	pushgatewayLabels          cmd.KeyValues
+	nginxConfig                nginx.Conf
+	nginxLogHeaders            string
+	nginxTrustedFrontends      string
 )
 
 func init() {
@@ -76,6 +63,7 @@ func init() {
 		defaultNginxServerNamesHashBucketSize    = -1
 		defaultNginxServerNamesHashMaxSize       = -1
 		defaultNginxProxyProtocol                = false
+		defaultNginxUpdateFrequencySeconds       = 30
 		defaultElbLabelValue                     = ""
 		defaultElbRegion                         = "eu-west-1"
 		defaultElbExpectedNumber                 = 0
@@ -111,42 +99,49 @@ func init() {
 			"Can be overridden with the sky.uk/strip-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
-	flag.StringVar(&nginxBinary, "nginx-binary", defaultNginxBinary,
+
+	flag.StringVar(&nginxConfig.BinaryLocation, "nginx-binary", defaultNginxBinary,
 		"Location of nginx binary.")
-	flag.StringVar(&nginxWorkDir, "nginx-workdir", defaultNginxWorkingDir,
+	flag.StringVar(&nginxConfig.WorkingDir, "nginx-workdir", defaultNginxWorkingDir,
 		"Directory to store nginx files. Also the location of the nginx.tmpl file.")
-	flag.IntVar(&nginxWorkerProcesses, "nginx-workers", defaultNginxWorkers,
+	flag.IntVar(&nginxConfig.WorkerProcesses, "nginx-workers", defaultNginxWorkers,
 		"Number of nginx worker processes.")
-	flag.IntVar(&nginxWorkerConnections, "nginx-worker-connections", defaultNginxWorkerConnections,
+	flag.IntVar(&nginxConfig.WorkerConnections, "nginx-worker-connections", defaultNginxWorkerConnections,
 		"Max number of connections per nginx worker. Includes both client and proxy connections.")
-	flag.IntVar(&nginxKeepAliveSeconds, "nginx-keepalive-seconds", defaultNginxKeepAliveSeconds,
+	flag.IntVar(&nginxConfig.KeepaliveSeconds, "nginx-keepalive-seconds", defaultNginxKeepAliveSeconds,
 		"Keep alive time for persistent client connections to nginx. Should generally be set larger than frontend "+
 			"keep alive times to prevent stale connections.")
-	flag.IntVar(&nginxBackendKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
+	flag.IntVar(&nginxConfig.BackendKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
 		"Maximum number of keepalive connections per backend service. Keepalive connections count against"+
 			" nginx-worker-connections limit, and will be restricted by that global limit as well.")
-	flag.IntVar(&nginxBackendKeepaliveSeconds, "nginx-default-backend-keepalive-seconds", defaultNginxBackendKeepaliveSeconds,
+	flag.IntVar(&nginxConfig.BackendConnectTimeoutSeconds, "nginx-default-backend-keepalive-seconds", defaultNginxBackendKeepaliveSeconds,
 		"Time to keep backend keepalive connections open. This should generally be set smaller than backend service keepalive "+
 			"times to prevent stale connections. Can be overridden per ingress the sky.uk/backend-keepalive-seconds annotation")
-	flag.IntVar(&nginxBackendConnectTimeoutSeconds, "nginx-backend-connect-timeout-seconds",
+	flag.IntVar(&nginxConfig.BackendConnectTimeoutSeconds, "nginx-backend-connect-timeout-seconds",
 		defaultNginxBackendConnectTimeoutSeconds,
 		"Connect timeout to backend services.")
-	flag.StringVar(&nginxLogLevel, "nginx-loglevel", defaultNginxLogLevel,
+	flag.StringVar(&nginxConfig.LogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
-	flag.IntVar(&nginxServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,
+	flag.IntVar(&nginxConfig.ServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,
 		"Sets the bucket size for the server names hash tables. Setting this to 0 or less will exclude this "+
 			"config from the nginx conf file. The details of setting up hash tables are provided "+
 			"in a separate document. http://nginx.org/en/docs/hash.html")
-	flag.IntVar(&nginxServerNamesHashMaxSize, "nginx-server-names-hash-max-size", defaultNginxServerNamesHashMaxSize,
+	flag.IntVar(&nginxConfig.ServerNamesHashMaxSize, "nginx-server-names-hash-max-size", defaultNginxServerNamesHashMaxSize,
 		"Sets the maximum size of the server names hash tables. Setting this to 0 or less will exclude this "+
 			"config from the nginx conf file. The details of setting up hash tables are provided "+
 			"in a separate document. http://nginx.org/en/docs/hash.html")
+	flag.BoolVar(&nginxConfig.ProxyProtocol, "nginx-proxy-protocol", defaultNginxProxyProtocol,
+		"Enable PROXY protocol for nginx listeners.")
+	flag.Int64Var(&nginxConfig.UpdateFrequencySeconds, "nginx-update-interval", defaultNginxUpdateFrequencySeconds,
+		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
+	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
+	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
+	flag.StringVar(&nginxLogHeaders, "nginx-log-headers", "", "Comma separated list of headers to be logged in access logs")
 	flag.StringVar(&nginxTrustedFrontends, "nginx-trusted-frontends", "",
 		"Comma separated list of CIDRs to trust when determining the client's real IP from "+
 			"frontends. The client IP is used for allowing or denying ingress access. "+
 			"This will typically be the ELB subnet.")
-	flag.BoolVar(&nginxProxyProtocol, "nginx-proxy-protocol", defaultNginxProxyProtocol,
-		"Enable PROXY protocol for nginx listeners.")
+
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
@@ -154,15 +149,13 @@ func init() {
 			" otherwise it fails to start if it can't attach to this number.")
 	flag.StringVar(&elbRegion, "elb-region", defaultElbRegion,
 		"AWS region for ELBs.")
+
 	flag.StringVar(&pushgatewayURL, "pushgateway", "",
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
 	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
-	flag.StringVar(&accessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
-	flag.BoolVar(&accessLog, "access-log", false, "Enable access logs directive.")
-	flag.StringVar(&nginxLogHeaders, "nginx-log-headers", "", "Comma separated list of headers to be logged in access logs")
 }
 
 func main() {
@@ -179,7 +172,7 @@ func main() {
 		Updaters:                updaters,
 		DefaultAllow:            ingressAllow,
 		DefaultStripPath:        ingressStripPath,
-		DefaultBackendKeepAlive: nginxBackendKeepaliveSeconds,
+		DefaultBackendKeepAlive: nginxConfig.KeepaliveSeconds,
 	})
 
 	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
@@ -208,24 +201,11 @@ func createIngressUpdaters() []controller.Updater {
 		logHeaders = strings.Split(nginxLogHeaders, ",")
 	}
 
-	proxy := nginx.New(nginx.Conf{
-		BinaryLocation:               nginxBinary,
-		IngressPort:                  ingressPort,
-		WorkingDir:                   nginxWorkDir,
-		WorkerProcesses:              nginxWorkerProcesses,
-		WorkerConnections:            nginxWorkerConnections,
-		KeepaliveSeconds:             nginxKeepAliveSeconds,
-		BackendKeepalives:            nginxBackendKeepalives,
-		BackendConnectTimeoutSeconds: nginxBackendConnectTimeoutSeconds,
-		LogLevel:                     nginxLogLevel,
-		ServerNamesHashBucketSize:    nginxServerNamesHashBucketSize,
-		ServerNamesHashMaxSize:       nginxServerNamesHashMaxSize,
-		HealthPort:                   ingressHealthPort,
-		TrustedFrontends:             trustedFrontends,
-		ProxyProtocol:                nginxProxyProtocol,
-		AccessLog:                    accessLog,
-		AccessLogDir:                 accessLogDir,
-		NginxLogHeaders:              logHeaders,
-	})
+	nginxConfig.IngressPort = ingressPort
+	nginxConfig.HealthPort = ingressHealthPort
+	nginxConfig.TrustedFrontends = trustedFrontends
+	nginxConfig.LogHeaders = logHeaders
+
+	proxy := nginx.New(nginxConfig)
 	return []controller.Updater{frontend, proxy}
 }

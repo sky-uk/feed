@@ -59,6 +59,7 @@ func newConf(tmpDir string, binary string) Conf {
 		BackendConnectTimeoutSeconds: 1,
 		ServerNamesHashMaxSize:       -1,
 		ServerNamesHashBucketSize:    -1,
+		UpdateFrequencySeconds:       1,
 	}
 }
 
@@ -176,7 +177,7 @@ func TestNginxConfig(t *testing.T) {
 	enabledAccessLogConf.AccessLogDir = "/nginx-access-log"
 
 	logHeadersConf := defaultConf
-	logHeadersConf.NginxLogHeaders = []string{"Content-Type", "Authorization"}
+	logHeadersConf.LogHeaders = []string{"Content-Type", "Authorization"}
 
 	var tests = []struct {
 		name             string
@@ -702,7 +703,6 @@ func TestNginxIngressEntries(t *testing.T) {
 		}
 
 		assert.Nil(lb.Stop())
-		mockSignaller.AssertExpectations(t)
 	}
 }
 
@@ -710,7 +710,7 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	lb, mockSignaller := newLb(tmpDir)
+	lb, mockSignaller := newLbWithBinary(tmpDir, "./blocking_nginx.sh")
 	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Once()
 
 	assert.NoError(lb.Start())
@@ -725,6 +725,7 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	}
 
 	assert.NoError(lb.Update(controller.IngressUpdate{Entries: entries}))
+
 	config1, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
 	assert.NoError(err)
 
@@ -735,6 +736,42 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	assert.NoError(lb.Stop())
 
 	assert.Equal(string(config1), string(config2), "configs should be identical")
+	time.Sleep(time.Duration(1) * time.Second)
+	mockSignaller.AssertExpectations(t)
+}
+
+func TestRateLimitedForUpdates(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+	lb, mockSignaller := newLbWithBinary(tmpDir, "./blocking_nginx.sh")
+	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Once()
+
+	assert.NoError(lb.Start())
+
+	entries := []controller.IngressEntry{
+		{
+			Host:           "chris.com",
+			Path:           "/path",
+			ServiceAddress: "service",
+			ServicePort:    9090,
+		},
+	}
+
+	updatedEntries := []controller.IngressEntry{
+		{
+			Host:           "chris.com",
+			Path:           "/path",
+			ServiceAddress: "something different",
+			ServicePort:    9090,
+		},
+	}
+
+	assert.NoError(lb.Update(controller.IngressUpdate{Entries: entries}))
+	assert.NoError(lb.Update(controller.IngressUpdate{Entries: updatedEntries}))
+	time.Sleep(1 * time.Second)
+
+	assert.NoError(lb.Stop())
 	mockSignaller.AssertExpectations(t)
 }
 

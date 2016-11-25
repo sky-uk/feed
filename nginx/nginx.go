@@ -17,6 +17,8 @@ import (
 
 	"errors"
 
+	"sync"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
@@ -45,8 +47,9 @@ type Conf struct {
 	ProxyProtocol                bool
 	AccessLog                    bool
 	AccessLogDir                 string
-	NginxLogHeaders              []string
+	LogHeaders                   []string
 	AccessLogHeaders             string
+	UpdateFrequencySeconds       int64
 }
 
 // Signaller interface around signalling the loadbalancer process
@@ -70,15 +73,37 @@ func (s *osSignaller) sighup(p *os.Process) error {
 	return p.Signal(syscall.SIGHUP)
 }
 
+type updateRequired struct {
+	update bool
+	sync.Mutex
+}
+
+func (lb *nginxLoadBalancer) signalRequired() {
+	lb.updateRequired.Lock()
+	defer lb.updateRequired.Unlock()
+	lb.updateRequired.update = true
+}
+
+func (lb *nginxLoadBalancer) signalIfRequired() {
+	lb.updateRequired.Lock()
+	defer lb.updateRequired.Unlock()
+	if lb.updateRequired.update {
+		log.Info("Signalling Nginx to reload configuration")
+		lb.signaller.sighup(lb.cmd.Process)
+		lb.updateRequired.update = false
+	}
+}
+
 // Nginx implementation
 type nginxLoadBalancer struct {
 	Conf
 	cmd              *exec.Cmd
-	signaller        signaller
 	running          util.SafeBool
 	lastErr          util.SafeError
 	metricsUnhealthy util.SafeBool
 	doneCh           chan struct{}
+	signaller        signaller
+	updateRequired   *updateRequired
 }
 
 // Used for generating nginx config
@@ -120,11 +145,16 @@ func New(nginxConf Conf) controller.Updater {
 		nginxConf.LogLevel = "warn"
 	}
 
-	return &nginxLoadBalancer{
-		Conf:      nginxConf,
-		signaller: &osSignaller{},
-		doneCh:    make(chan struct{}),
+	lb := &nginxLoadBalancer{
+		Conf:           nginxConf,
+		doneCh:         make(chan struct{}),
+		signaller:      &osSignaller{},
+		updateRequired: &updateRequired{},
 	}
+
+	go lb.backgroundSignaller()
+
+	return lb
 }
 
 func (lb *nginxLoadBalancer) Start() error {
@@ -202,6 +232,23 @@ func (lb *nginxLoadBalancer) periodicallyUpdateMetrics() {
 	}
 }
 
+func (lb *nginxLoadBalancer) backgroundSignaller() {
+	rate := time.Second * time.Duration(lb.UpdateFrequencySeconds)
+	log.Infof("Checking for updates every %d", rate)
+	throttle := time.NewTicker(rate)
+	defer throttle.Stop()
+	for {
+		select {
+		case <-lb.doneCh:
+			log.Info("Signalling shut down")
+			return
+		case <-throttle.C:
+			lb.signalIfRequired()
+		}
+	}
+
+}
+
 func (lb *nginxLoadBalancer) updateMetrics() {
 	if err := parseAndSetNginxMetrics(lb.HealthPort, "/basic_status"); err != nil {
 		log.Warnf("Unable to update nginx metrics: %v", err)
@@ -221,6 +268,7 @@ func (lb *nginxLoadBalancer) Stop() error {
 	return lb.lastErr.Get()
 }
 
+// This is called by a single go routine from the controller
 func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
 	updated, err := lb.update(entries)
 	if err != nil {
@@ -228,18 +276,13 @@ func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
 	}
 
 	if updated {
-		err = lb.signaller.sighup(lb.cmd.Process)
-		if err != nil {
-			return fmt.Errorf("unable to signal nginx to reload: %v", err)
-		}
-		log.Info("Nginx updated")
+		lb.signalRequired()
 	}
 
 	return nil
 }
 
 func (lb *nginxLoadBalancer) update(entries controller.IngressUpdate) (bool, error) {
-	log.Debugf("Updating loadbalancer %s", entries)
 	updatedConfig, err := lb.createConfig(entries)
 	if err != nil {
 		return false, err
@@ -315,7 +358,7 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 
 func (lb *nginxLoadBalancer) getNginxLogHeaders() string {
 	headersString := ""
-	for _, nginxLogHeader := range lb.NginxLogHeaders {
+	for _, nginxLogHeader := range lb.LogHeaders {
 		headersString = headersString + " " + nginxLogHeader + "=$http_" + strings.Replace(nginxLogHeader, "-", "_", -1)
 	}
 
