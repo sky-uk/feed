@@ -97,13 +97,14 @@ func (lb *nginxLoadBalancer) signalIfRequired() {
 // Nginx implementation
 type nginxLoadBalancer struct {
 	Conf
-	cmd              *exec.Cmd
-	running          util.SafeBool
-	lastErr          util.SafeError
-	metricsUnhealthy util.SafeBool
-	doneCh           chan struct{}
-	signaller        signaller
-	updateRequired   *updateRequired
+	cmd                  *exec.Cmd
+	running              util.SafeBool
+	lastErr              util.SafeError
+	metricsUnhealthy     util.SafeBool
+	initialUpdateApplied util.SafeBool
+	doneCh               chan struct{}
+	signaller            signaller
+	updateRequired       *updateRequired
 }
 
 // Used for generating nginx config
@@ -246,7 +247,6 @@ func (lb *nginxLoadBalancer) backgroundSignaller() {
 			lb.signalIfRequired()
 		}
 	}
-
 }
 
 func (lb *nginxLoadBalancer) updateMetrics() {
@@ -275,7 +275,11 @@ func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
 		return fmt.Errorf("unable to update nginx: %v", err)
 	}
 
-	if updated {
+	if updated && !lb.initialUpdateApplied.Get() {
+		log.Info("Initial update. Signalling nginx synchronously.")
+		lb.signaller.sighup(lb.cmd.Process)
+		lb.initialUpdateApplied.Set(true)
+	} else if updated {
 		lb.signalRequired()
 	}
 
@@ -425,6 +429,9 @@ func createNginxPath(rawPath string) string {
 func (lb *nginxLoadBalancer) Health() error {
 	if !lb.running.Get() {
 		return errors.New("nginx is not running")
+	}
+	if !lb.initialUpdateApplied.Get() {
+		return errors.New("waiting for initial update")
 	}
 	if lb.metricsUnhealthy.Get() {
 		return errors.New("nginx metrics are failing to update")
