@@ -8,6 +8,8 @@ import (
 
 	"errors"
 
+	"sync"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
@@ -31,6 +33,7 @@ func New(region string, labelValue string, expectedNumber int) controller.Update
 		labelValue:     labelValue,
 		region:         region,
 		expectedNumber: expectedNumber,
+		initialised:    initialised{},
 	}
 }
 
@@ -51,6 +54,12 @@ type elb struct {
 	instanceID          string
 	elbs                map[string]LoadBalancerDetails
 	registeredFrontends int
+	initialised         initialised
+}
+
+type initialised struct {
+	sync.Mutex
+	done bool
 }
 
 // ELB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
@@ -70,6 +79,10 @@ type EC2Metadata interface {
 }
 
 func (e *elb) Start() error {
+	return nil
+}
+
+func (e *elb) attachToFrontEnds() error {
 	if e.labelValue == "" {
 		return nil
 	}
@@ -211,14 +224,14 @@ func (e *elb) Health() error {
 }
 
 func (e *elb) Update(controller.IngressUpdate) error {
-	return nil
-}
-
-func min(x, y int) int {
-	if x < y {
-		return x
+	e.initialised.Lock()
+	defer e.initialised.Unlock()
+	if !e.initialised.done {
+		log.Info("First update. Attaching to front ends.")
+		e.initialised.done = true
+		return e.attachToFrontEnds()
 	}
-	return y
+	return nil
 }
 
 func (e *elb) String() string {
