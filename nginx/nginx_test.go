@@ -104,27 +104,6 @@ func TestStopWaitsForGracefulShutdownOfNginx(t *testing.T) {
 	assert.Error(lb.Health(), "should have waited for nginx to gracefully stop")
 }
 
-func TestHealthyWhileRunning(t *testing.T) {
-	assert := assert.New(t)
-	tmpDir := setupWorkDir(t)
-	defer os.Remove(tmpDir)
-
-	ts := stubHealthPort()
-	defer ts.Close()
-	conf := newConf(tmpDir, fakeNginx)
-	conf.HealthPort = getPort(ts)
-	lb, _ := newLbWithConf(conf)
-
-	assert.Error(lb.Health(), "should be unhealthy")
-	assert.NoError(lb.Start())
-
-	time.Sleep(smallWaitTime)
-	assert.NoError(lb.Health(), "should be healthy")
-
-	assert.NoError(lb.Stop())
-	assert.Error(lb.Health(), "should be unhealthy")
-}
-
 func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
@@ -136,6 +115,32 @@ func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
 
 	time.Sleep(smallWaitTime)
 	assert.Error(lb.Health(), "should be unhealthy")
+}
+
+func TestUnhealthyUntilInitialUpdate(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	ts := stubHealthPort()
+	defer ts.Close()
+	conf := newConf(tmpDir, "./blocking_nginx.sh")
+	conf.HealthPort = getPort(ts)
+	lb, mockSignaller := newLbWithConf(conf)
+	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
+
+	assert.EqualError(lb.Health(), "nginx is not running")
+	assert.NoError(lb.Start())
+
+	time.Sleep(smallWaitTime)
+	assert.EqualError(lb.Health(), "waiting for initial update")
+	lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+		Host: "james.com",
+	}}})
+	assert.NoError(lb.Health(), "should be healthy")
+
+	assert.NoError(lb.Stop())
+	assert.EqualError(lb.Health(), "nginx is not running")
 }
 
 func TestFailsIfNginxDiesEarly(t *testing.T) {
@@ -745,7 +750,7 @@ func TestRateLimitedForUpdates(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 	lb, mockSignaller := newLbWithBinary(tmpDir, "./blocking_nginx.sh")
-	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Once()
+	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Twice()
 
 	assert.NoError(lb.Start())
 
@@ -767,7 +772,11 @@ func TestRateLimitedForUpdates(t *testing.T) {
 		},
 	}
 
+	// initial one should go through synchronously
 	assert.NoError(lb.Update(controller.IngressUpdate{Entries: entries}))
+
+	// these two should be merged into one
+	assert.NoError(lb.Update(controller.IngressUpdate{Entries: updatedEntries}))
 	assert.NoError(lb.Update(controller.IngressUpdate{Entries: updatedEntries}))
 	time.Sleep(1 * time.Second)
 

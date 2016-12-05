@@ -17,8 +17,6 @@ import (
 
 	"errors"
 
-	"sync"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
@@ -73,37 +71,30 @@ func (s *osSignaller) sighup(p *os.Process) error {
 	return p.Signal(syscall.SIGHUP)
 }
 
-type updateRequired struct {
-	update bool
-	sync.Mutex
-}
-
 func (lb *nginxLoadBalancer) signalRequired() {
-	lb.updateRequired.Lock()
-	defer lb.updateRequired.Unlock()
-	lb.updateRequired.update = true
+	lb.updateRequired.Set(true)
+
 }
 
 func (lb *nginxLoadBalancer) signalIfRequired() {
-	lb.updateRequired.Lock()
-	defer lb.updateRequired.Unlock()
-	if lb.updateRequired.update {
+	if lb.updateRequired.Get() {
 		log.Info("Signalling Nginx to reload configuration")
 		lb.signaller.sighup(lb.cmd.Process)
-		lb.updateRequired.update = false
+		lb.updateRequired.Set(false)
 	}
 }
 
 // Nginx implementation
 type nginxLoadBalancer struct {
 	Conf
-	cmd              *exec.Cmd
-	running          util.SafeBool
-	lastErr          util.SafeError
-	metricsUnhealthy util.SafeBool
-	doneCh           chan struct{}
-	signaller        signaller
-	updateRequired   *updateRequired
+	cmd                  *exec.Cmd
+	running              util.SafeBool
+	lastErr              util.SafeError
+	metricsUnhealthy     util.SafeBool
+	initialUpdateApplied util.SafeBool
+	doneCh               chan struct{}
+	signaller            signaller
+	updateRequired       util.SafeBool
 }
 
 // Used for generating nginx config
@@ -146,10 +137,9 @@ func New(nginxConf Conf) controller.Updater {
 	}
 
 	lb := &nginxLoadBalancer{
-		Conf:           nginxConf,
-		doneCh:         make(chan struct{}),
-		signaller:      &osSignaller{},
-		updateRequired: &updateRequired{},
+		Conf:      nginxConf,
+		doneCh:    make(chan struct{}),
+		signaller: &osSignaller{},
 	}
 
 	go lb.backgroundSignaller()
@@ -246,7 +236,6 @@ func (lb *nginxLoadBalancer) backgroundSignaller() {
 			lb.signalIfRequired()
 		}
 	}
-
 }
 
 func (lb *nginxLoadBalancer) updateMetrics() {
@@ -276,7 +265,13 @@ func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
 	}
 
 	if updated {
-		lb.signalRequired()
+		if !lb.initialUpdateApplied.Get() {
+			log.Info("Initial update. Signalling nginx synchronously.")
+			lb.signaller.sighup(lb.cmd.Process)
+			lb.initialUpdateApplied.Set(true)
+		} else {
+			lb.signalRequired()
+		}
 	}
 
 	return nil
@@ -425,6 +420,9 @@ func createNginxPath(rawPath string) string {
 func (lb *nginxLoadBalancer) Health() error {
 	if !lb.running.Get() {
 		return errors.New("nginx is not running")
+	}
+	if !lb.initialUpdateApplied.Get() {
+		return errors.New("waiting for initial update")
 	}
 	if lb.metricsUnhealthy.Get() {
 		return errors.New("nginx metrics are failing to update")

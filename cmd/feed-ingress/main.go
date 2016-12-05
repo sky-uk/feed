@@ -207,5 +207,6 @@ func createIngressUpdaters() []controller.Updater {
 	nginxConfig.LogHeaders = logHeaders
 
 	proxy := nginx.New(nginxConfig)
-	return []controller.Updater{frontend, proxy}
+	// update nginx before attaching to front ends
+	return []controller.Updater{proxy, frontend}
 }
