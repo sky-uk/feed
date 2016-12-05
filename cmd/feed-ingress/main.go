@@ -2,15 +2,17 @@ package main
 
 import (
 	"flag"
-	"os"
 
 	_ "net/http/pprof"
 
 	"strings"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
+	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
@@ -18,11 +20,8 @@ import (
 
 var (
 	debug                      bool
-	apiserverURL               string
-	caCertFile                 string
-	tokenFile                  string
-	clientCertFile             string
-	clientKeyFile              string
+	kubeconfig                 string
+	resyncPeriod               time.Duration
 	ingressPort                int
 	ingressAllow               string
 	ingressHealthPort          int
@@ -41,13 +40,9 @@ var (
 
 func init() {
 	const (
-		defaultAPIServer                         = "https://kubernetes:443"
-		defaultCaCertFile                        = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-		defaultTokenFile                         = ""
-		defaultClientCertFile                    = ""
-		defaultClientKeyFile                     = ""
+		defaultResyncPeriod                      = time.Minute * 15
 		defaultIngressPort                       = 8080
-		defaultIngressAllow                      = ""
+		defaultIngressAllow                      = "0.0.0.0/0"
 		defaultIngressHealthPort                 = 8081
 		defaultIngressStripPath                  = true
 		defaultHealthPort                        = 12082
@@ -63,7 +58,7 @@ func init() {
 		defaultNginxServerNamesHashBucketSize    = -1
 		defaultNginxServerNamesHashMaxSize       = -1
 		defaultNginxProxyProtocol                = false
-		defaultNginxUpdateFrequencySeconds       = 30
+		defaultNginxUpdatePeriod                 = time.Second * 30
 		defaultElbLabelValue                     = ""
 		defaultElbRegion                         = "eu-west-1"
 		defaultElbExpectedNumber                 = 0
@@ -73,16 +68,10 @@ func init() {
 
 	flag.BoolVar(&debug, "debug", false,
 		"Enable debug logging.")
-	flag.StringVar(&apiserverURL, "apiserver", defaultAPIServer,
-		"Kubernetes API server URL.")
-	flag.StringVar(&caCertFile, "cacertfile", defaultCaCertFile,
-		"File containing the Kubernetes API server certificate.")
-	flag.StringVar(&tokenFile, "tokenfile", defaultTokenFile,
-		"File containing kubernetes client authentication token. Leave empty to not use a token.")
-	flag.StringVar(&clientCertFile, "client-certfile", defaultClientCertFile,
-		"File containing client certificate. Leave empty to not use a client certificate.")
-	flag.StringVar(&clientKeyFile, "client-keyfile", defaultClientKeyFile,
-		"File containing client key. Leave empty to not use a client certificate.")
+	flag.StringVar(&kubeconfig, "kubeconfig", "",
+		"Path to kubeconfig for connecting to the apiserver. Leave blank to connect inside a cluster.")
+	flag.DurationVar(&resyncPeriod, "resync-period", defaultResyncPeriod,
+		"Resync with the apiserver periodically to handle missed updates.")
 	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort,
 		"Port to serve ingress traffic to backend services.")
 	flag.IntVar(&ingressHealthPort, "ingress-health-port", defaultIngressHealthPort,
@@ -132,7 +121,7 @@ func init() {
 			"in a separate document. http://nginx.org/en/docs/hash.html")
 	flag.BoolVar(&nginxConfig.ProxyProtocol, "nginx-proxy-protocol", defaultNginxProxyProtocol,
 		"Enable PROXY protocol for nginx listeners.")
-	flag.Int64Var(&nginxConfig.UpdateFrequencySeconds, "nginx-update-interval", defaultNginxUpdateFrequencySeconds,
+	flag.DurationVar(&nginxConfig.UpdatePeriod, "nginx-update-period", defaultNginxUpdatePeriod,
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
@@ -164,7 +153,11 @@ func main() {
 	cmd.ConfigureLogging(debug)
 	cmd.ConfigureMetrics("feed-ingress", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)
 
-	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiserverURL, clientCertFile, clientKeyFile)
+	client, err := k8s.New(kubeconfig, resyncPeriod)
+	if err != nil {
+		log.Fatal("Unable to create k8s client: ", err)
+	}
+
 	updaters := createIngressUpdaters()
 
 	controller := controller.New(controller.Config{
@@ -179,10 +172,8 @@ func main() {
 	cmd.AddHealthPort(controller, healthPort)
 	cmd.AddSignalHandler(controller)
 
-	err := controller.Start()
-	if err != nil {
-		log.Error("Error while starting controller: ", err)
-		os.Exit(-1)
+	if err = controller.Start(); err != nil {
+		log.Fatal("Error while starting controller: ", err)
 	}
 	log.Info("Controller started")
 

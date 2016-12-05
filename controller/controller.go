@@ -18,6 +18,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
@@ -42,6 +43,7 @@ type controller struct {
 	defaultStripPath      bool
 	defaultBackendTimeout int
 	watcher               k8s.Watcher
+	doneCh                chan struct{}
 	watcherDone           sync.WaitGroup
 	started               bool
 	updatesHealth         util.SafeError
@@ -65,6 +67,7 @@ func New(conf Config) Controller {
 		defaultAllow:          strings.Split(conf.DefaultAllow, ","),
 		defaultStripPath:      conf.DefaultStripPath,
 		defaultBackendTimeout: conf.DefaultBackendKeepAlive,
+		doneCh:                make(chan struct{}),
 	}
 }
 
@@ -101,19 +104,22 @@ func (c *controller) watchForUpdates() {
 }
 
 func (c *controller) handleUpdates() {
-	defer c.watcherDone.Done()
+	defer log.Debug("Controller stopped watching for updates")
 
-	for range c.watcher.Updates() {
-		log.Info("Received update on watcher")
-		if err := c.updateIngresses(); err != nil {
-			c.updatesHealth.Set(err)
-			log.Errorf("Unable to update ingresses: %v", err)
-		} else {
-			c.updatesHealth.Set(nil)
+	for {
+		select {
+		case <-c.watcher.Updates():
+			log.Info("Received update on watcher")
+			if err := c.updateIngresses(); err != nil {
+				c.updatesHealth.Set(err)
+				log.Errorf("Unable to update ingresses: %v", err)
+			} else {
+				c.updatesHealth.Set(nil)
+			}
+		case <-c.doneCh:
+			return
 		}
 	}
-
-	log.Debug("Controller stopped watching for updates")
 }
 
 func (c *controller) updateIngresses() error {
@@ -205,7 +211,7 @@ type serviceName struct {
 	name      string
 }
 
-func mapNamesToAddresses(services []k8s.Service) map[serviceName]string {
+func mapNamesToAddresses(services []*v1.Service) map[serviceName]string {
 	m := make(map[serviceName]string)
 
 	for _, svc := range services {
@@ -225,9 +231,7 @@ func (c *controller) Stop() error {
 	}
 
 	log.Info("Stopping controller")
-
-	close(c.watcher.Done())
-	c.watcherDone.Wait()
+	close(c.doneCh)
 
 	for _, u := range c.updaters {
 		if err := u.Stop(); err != nil {
@@ -252,10 +256,6 @@ func (c *controller) Health() error {
 		if err := u.Health(); err != nil {
 			return fmt.Errorf("%v: %v", u, err)
 		}
-	}
-
-	if err := c.watcher.Health(); err != nil {
-		return err
 	}
 
 	if err := c.updatesHealth.Get(); err != nil {

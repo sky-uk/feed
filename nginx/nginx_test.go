@@ -59,7 +59,7 @@ func newConf(tmpDir string, binary string) Conf {
 		BackendConnectTimeoutSeconds: 1,
 		ServerNamesHashMaxSize:       -1,
 		ServerNamesHashBucketSize:    -1,
-		UpdateFrequencySeconds:       1,
+		UpdatePeriod:                 time.Second,
 	}
 }
 

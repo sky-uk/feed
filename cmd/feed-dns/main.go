@@ -5,21 +5,21 @@ import (
 
 	"os"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/dns"
 	"github.com/sky-uk/feed/elb"
+	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
 )
 
 var (
-	apiServer                  string
-	caCertFile                 string
-	tokenFile                  string
-	clientCertFile             string
-	clientKeyFile              string
 	debug                      bool
+	kubeconfig                 string
+	resyncPeriod               time.Duration
 	healthPort                 int
 	elbLabelValue              string
 	elbRegion                  string
@@ -32,11 +32,7 @@ var (
 
 func init() {
 	const (
-		defaultAPIServer                  = "https://kubernetes:443"
-		defaultCaCertFile                 = "/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-		defaultTokenFile                  = ""
-		defaultClientCertFile             = ""
-		defaultClientKeyFile              = ""
+		defaultResyncPeriod               = time.Minute * 15
 		defaultHealthPort                 = 12082
 		defaultElbRegion                  = "eu-west-1"
 		defaultElbLabelValue              = ""
@@ -45,18 +41,12 @@ func init() {
 		defaultAwsAPIRetries              = 5
 	)
 
-	flag.StringVar(&apiServer, "apiserver", defaultAPIServer,
-		"Kubernetes API server URL.")
-	flag.StringVar(&caCertFile, "cacertfile", defaultCaCertFile,
-		"File containing kubernetes ca certificate.")
-	flag.StringVar(&tokenFile, "tokenfile", defaultTokenFile,
-		"File containing kubernetes client authentication token.")
-	flag.StringVar(&clientCertFile, "client-certfile", defaultClientCertFile,
-		"File containing client certificate. Leave empty to not use a client certificate.")
-	flag.StringVar(&clientKeyFile, "client-keyfile", defaultClientKeyFile,
-		"File containing client key. Leave empty to not use a client certificate.")
 	flag.BoolVar(&debug, "debug", false,
 		"Enable debug logging.")
+	flag.StringVar(&kubeconfig, "kubeconfig", "",
+		"Path to kubeconfig for connecting to the apiserver. Leave blank to connect inside a cluster.")
+	flag.DurationVar(&resyncPeriod, "resync-period", defaultResyncPeriod,
+		"Resync with the apiserver periodically to handle missed updates.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller.")
 	flag.StringVar(&elbRegion, "elb-region", defaultElbRegion,
@@ -82,7 +72,11 @@ func main() {
 	cmd.ConfigureLogging(debug)
 	cmd.ConfigureMetrics("feed-dns", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)
 
-	client := cmd.CreateK8sClient(caCertFile, tokenFile, apiServer, clientCertFile, clientKeyFile)
+	client, err := k8s.New(kubeconfig, resyncPeriod)
+	if err != nil {
+		log.Fatal("Unable to create k8s client: ", err)
+	}
+
 	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue, awsAPIRetries)
 
 	controller := controller.New(controller.Config{
@@ -94,10 +88,8 @@ func main() {
 	cmd.AddHealthPort(controller, healthPort)
 	cmd.AddSignalHandler(controller)
 
-	err := controller.Start()
-	if err != nil {
-		log.Error("Error while starting controller: ", err)
-		os.Exit(-1)
+	if err := controller.Start(); err != nil {
+		log.Fatal("Error while starting controller: ", err)
 	}
 
 	select {}

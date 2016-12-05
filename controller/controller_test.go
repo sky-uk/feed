@@ -15,6 +15,9 @@ import (
 	fake "github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/pkg/util/intstr"
 )
 
 const smallWaitTime = time.Millisecond * 50
@@ -56,41 +59,27 @@ func (w *fakeWatcher) Updates() <-chan interface{} {
 	return r.Get(0).(<-chan interface{})
 }
 
-func (w *fakeWatcher) Done() chan<- struct{} {
-	r := w.Called()
-	return r.Get(0).(chan<- struct{})
-}
-
-func (w *fakeWatcher) Health() error {
-	r := w.Called()
-	return r.Error(0)
-}
-
-func createFakeWatcher() (*fakeWatcher, chan interface{}, chan struct{}) {
+func createFakeWatcher() (*fakeWatcher, chan interface{}) {
 	watcher := new(fakeWatcher)
 	updateCh := make(chan interface{}, 1)
-	doneCh := make(chan struct{})
 	watcher.On("Updates").Return((<-chan interface{})(updateCh))
-	watcher.On("Done").Return((chan<- struct{})(doneCh))
-	return watcher, updateCh, doneCh
+	return watcher, updateCh
 }
 
 func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 	updater := new(fakeUpdater)
 	client := new(fake.FakeClient)
-	ingressWatcher, _, _ := createFakeWatcher()
-	serviceWatcher, _, _ := createFakeWatcher()
+	ingressWatcher, _ := createFakeWatcher()
+	serviceWatcher, _ := createFakeWatcher()
 
-	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
-	client.On("GetServices").Return([]k8s.Service{}, nil)
+	client.On("GetIngresses").Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetServices").Return([]*v1.Service{}, nil)
 	client.On("WatchIngresses").Return(ingressWatcher)
 	client.On("WatchServices").Return(serviceWatcher)
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
 	updater.On("Update", mock.Anything).Return(nil)
 	updater.On("Health").Return(nil)
-	ingressWatcher.On("Health").Return(nil)
-	serviceWatcher.On("Health").Return(nil)
 
 	return updater, client
 }
@@ -188,36 +177,6 @@ func TestControllerReturnsErrorIfUpdaterFails(t *testing.T) {
 	assert.Error(t, controller.Start())
 }
 
-func TestUnhealthyIfNotWatchingForUpdates(t *testing.T) {
-	// given
-	assert := assert.New(t)
-	updater, _ := createDefaultStubs()
-	client := new(fake.FakeClient)
-	controller := newController(updater, client)
-
-	ingressWatcher, _, _ := createFakeWatcher()
-	serviceWatcher, _, _ := createFakeWatcher()
-
-	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchServices").Return(serviceWatcher)
-	assert.NoError(controller.Start())
-
-	// when
-	watcherErr := fmt.Errorf("i'm a sad watcher")
-	ingressWatcher.On("Health").Return(watcherErr).Once()
-	ingressWatcher.On("Health").Return(nil)
-	serviceWatcher.On("Health").Return(watcherErr).Once()
-	serviceWatcher.On("Health").Return(nil)
-
-	// then
-	assert.Error(controller.Health())
-	assert.Error(controller.Health())
-	assert.NoError(controller.Health())
-
-	// cleanup
-	controller.Stop()
-}
-
 func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	// given
 	assert := assert.New(t)
@@ -225,10 +184,8 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	client := new(fake.FakeClient)
 	controller := newController(updater, client)
 
-	ingressWatcher, updateCh, _ := createFakeWatcher()
-	serviceWatcher, _, _ := createFakeWatcher()
-	ingressWatcher.On("Health").Return(nil)
-	serviceWatcher.On("Health").Return(nil)
+	ingressWatcher, updateCh := createFakeWatcher()
+	serviceWatcher, _ := createFakeWatcher()
 
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
@@ -236,8 +193,8 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	updater.On("Update", mock.Anything).Return(fmt.Errorf("kaboom, update failed :(")).Once()
 	updater.On("Health").Return(nil)
 
-	client.On("GetIngresses").Return([]k8s.Ingress{}, nil)
-	client.On("GetServices").Return([]k8s.Service{}, nil)
+	client.On("GetIngresses").Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetServices").Return([]*v1.Service{}, nil)
 	client.On("WatchIngresses").Return(ingressWatcher)
 	client.On("WatchServices").Return(serviceWatcher)
 	assert.NoError(controller.Start())
@@ -261,8 +218,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 
 	var tests = []struct {
 		description string
-		ingresses   []k8s.Ingress
-		services    []k8s.Service
+		ingresses   []*v1beta1.Ingress
+		services    []*v1.Service
 		entries     IngressUpdate
 	}{
 		{
@@ -281,7 +238,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		{
 			"ingress without corresponding service",
 			createDefaultIngresses(),
-			[]k8s.Service{},
+			[]*v1.Service{},
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
@@ -429,8 +386,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		client.On("GetIngresses").Return(test.ingresses, nil)
 		client.On("GetServices").Return(test.services, nil)
 
-		ingressWatcher, ingressCh, _ := createFakeWatcher()
-		serviceWatcher, serviceCh, _ := createFakeWatcher()
+		ingressWatcher, ingressCh := createFakeWatcher()
+		serviceWatcher, serviceCh := createFakeWatcher()
 		client.On("WatchIngresses").Return(ingressWatcher)
 		client.On("WatchServices").Return(serviceWatcher)
 
@@ -475,16 +432,18 @@ const (
 	backendTimeout      = 10
 )
 
-func createDefaultIngresses() []k8s.Ingress {
+func createDefaultIngresses() []*v1beta1.Ingress {
 	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout)
 }
 
-func createIngressesFixture(host string, serviceName string, servicePort int, allow string, stripPath string, backendTimeout int) []k8s.Ingress {
-	paths := []k8s.HTTPIngressPath{{
+func createIngressesFixture(host string, serviceName string, servicePort int, allow string, stripPath string,
+	backendTimeout int) []*v1beta1.Ingress {
+
+	paths := []v1beta1.HTTPIngressPath{{
 		Path: ingressPath,
-		Backend: k8s.IngressBackend{
+		Backend: v1beta1.IngressBackend{
 			ServiceName: serviceName,
-			ServicePort: k8s.FromInt(servicePort),
+			ServicePort: intstr.FromInt(servicePort),
 		},
 	}}
 
@@ -501,17 +460,17 @@ func createIngressesFixture(host string, serviceName string, servicePort int, al
 		annotations[backendKeepAliveSeconds] = strconv.Itoa(backendTimeout)
 	}
 
-	return []k8s.Ingress{
+	return []*v1beta1.Ingress{
 		{
-			ObjectMeta: k8s.ObjectMeta{
+			ObjectMeta: v1.ObjectMeta{
 				Name:        ingressName,
 				Namespace:   ingressNamespace,
 				Annotations: annotations,
 			},
-			Spec: k8s.IngressSpec{
-				Rules: []k8s.IngressRule{{
+			Spec: v1beta1.IngressSpec{
+				Rules: []v1beta1.IngressRule{{
 					Host: host,
-					IngressRuleValue: k8s.IngressRuleValue{HTTP: &k8s.HTTPIngressRuleValue{
+					IngressRuleValue: v1beta1.IngressRuleValue{HTTP: &v1beta1.HTTPIngressRuleValue{
 						Paths: paths,
 					}},
 				}},
@@ -520,18 +479,18 @@ func createIngressesFixture(host string, serviceName string, servicePort int, al
 	}
 }
 
-func createDefaultServices() []k8s.Service {
+func createDefaultServices() []*v1.Service {
 	return createServiceFixture(ingressSvcName, ingressNamespace, serviceIP)
 }
 
-func createServiceFixture(name string, namespace string, clusterIP string) []k8s.Service {
-	return []k8s.Service{
+func createServiceFixture(name string, namespace string, clusterIP string) []*v1.Service {
+	return []*v1.Service{
 		{
-			ObjectMeta: k8s.ObjectMeta{
+			ObjectMeta: v1.ObjectMeta{
 				Name:      name,
 				Namespace: namespace,
 			},
-			Spec: k8s.ServiceSpec{
+			Spec: v1.ServiceSpec{
 				ClusterIP: clusterIP,
 			},
 		},
