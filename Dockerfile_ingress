@@ -23,5 +23,14 @@ COPY feed-ingress /
 COPY nginx.tmpl /nginx/
 RUN chown nginx:nginx /nginx/nginx.tmpl
 
+ADD scripts/logrotate.config /etc/logrotate.d/nginx
+RUN chmod 600 /etc/logrotate.d/nginx
+
+ADD scripts/logrotate.cron /etc/cron.d/nginx
+RUN chmod 600 /etc/cron.d/nginx
+
+# Defer execution as the log dir may be mounted when running
+ADD scripts/log-dir-ownership.sh /etc/my_init.d/log-dir-ownership.sh
+
 ENTRYPOINT ["/sbin/my_init", "--quiet", "--", "/sbin/setuser", "nginx", \
     "/feed-ingress", "-nginx-workdir", "/nginx"]
