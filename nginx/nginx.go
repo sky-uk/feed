@@ -47,7 +47,7 @@ type Conf struct {
 	AccessLogDir                 string
 	LogHeaders                   []string
 	AccessLogHeaders             string
-	UpdateFrequencySeconds       int64
+	UpdatePeriod                 time.Duration
 }
 
 // Signaller interface around signalling the loadbalancer process
@@ -142,8 +142,6 @@ func New(nginxConf Conf) controller.Updater {
 		signaller: &osSignaller{},
 	}
 
-	go lb.backgroundSignaller()
-
 	return lb
 }
 
@@ -175,6 +173,7 @@ func (lb *nginxLoadBalancer) Start() error {
 	}
 
 	go lb.periodicallyUpdateMetrics()
+	go lb.backgroundSignaller()
 
 	log.Debugf("Nginx pid %d", lb.cmd.Process.Pid)
 	return nil
@@ -223,9 +222,8 @@ func (lb *nginxLoadBalancer) periodicallyUpdateMetrics() {
 }
 
 func (lb *nginxLoadBalancer) backgroundSignaller() {
-	rate := time.Second * time.Duration(lb.UpdateFrequencySeconds)
-	log.Infof("Checking for updates every %d", rate)
-	throttle := time.NewTicker(rate)
+	log.Debugf("Nginx reload will check for updates every %v", lb.UpdatePeriod)
+	throttle := time.NewTicker(lb.UpdatePeriod)
 	defer throttle.Stop()
 	for {
 		select {
