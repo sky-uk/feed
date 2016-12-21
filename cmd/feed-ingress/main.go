@@ -19,23 +19,24 @@ import (
 )
 
 var (
-	debug                      bool
-	kubeconfig                 string
-	resyncPeriod               time.Duration
-	ingressPort                int
-	ingressAllow               string
-	ingressHealthPort          int
-	ingressStripPath           bool
-	healthPort                 int
-	elbLabelValue              string
-	elbRegion                  string
-	elbExpectedNumber          int
-	pushgatewayURL             string
-	pushgatewayIntervalSeconds int
-	pushgatewayLabels          cmd.KeyValues
-	nginxConfig                nginx.Conf
-	nginxLogHeaders            string
-	nginxTrustedFrontends      string
+	debug                        bool
+	kubeconfig                   string
+	resyncPeriod                 time.Duration
+	ingressPort                  int
+	ingressAllow                 string
+	ingressHealthPort            int
+	ingressStripPath             bool
+	healthPort                   int
+	elbLabelValue                string
+	elbRegion                    string
+	elbExpectedNumber            int
+	pushgatewayURL               string
+	pushgatewayIntervalSeconds   int
+	pushgatewayLabels            cmd.KeyValues
+	nginxConfig                  nginx.Conf
+	nginxLogHeaders              string
+	nginxTrustedFrontends        string
+	nginxBackendKeepaliveSeconds int
 )
 
 func init() {
@@ -103,9 +104,9 @@ func init() {
 	flag.IntVar(&nginxConfig.BackendKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
 		"Maximum number of keepalive connections per backend service. Keepalive connections count against"+
 			" nginx-worker-connections limit, and will be restricted by that global limit as well.")
-	flag.IntVar(&nginxConfig.BackendConnectTimeoutSeconds, "nginx-default-backend-keepalive-seconds", defaultNginxBackendKeepaliveSeconds,
+	flag.IntVar(&nginxBackendKeepaliveSeconds, "nginx-default-backend-keepalive-seconds", defaultNginxBackendKeepaliveSeconds,
 		"Time to keep backend keepalive connections open. This should generally be set smaller than backend service keepalive "+
-			"times to prevent stale connections. Can be overridden per ingress the sky.uk/backend-keepalive-seconds annotation")
+			"times to prevent stale connections. Can be overridden per ingress with the sky.uk/backend-keepalive-seconds annotation.")
 	flag.IntVar(&nginxConfig.BackendConnectTimeoutSeconds, "nginx-backend-connect-timeout-seconds",
 		defaultNginxBackendConnectTimeoutSeconds,
 		"Connect timeout to backend services.")
@@ -165,7 +166,7 @@ func main() {
 		Updaters:                updaters,
 		DefaultAllow:            ingressAllow,
 		DefaultStripPath:        ingressStripPath,
-		DefaultBackendKeepAlive: nginxConfig.KeepaliveSeconds,
+		DefaultBackendKeepAlive: nginxBackendKeepaliveSeconds,
 	})
 
 	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
