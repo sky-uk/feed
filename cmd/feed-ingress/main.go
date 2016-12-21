@@ -19,24 +19,22 @@ import (
 )
 
 var (
-	debug                        bool
-	kubeconfig                   string
-	resyncPeriod                 time.Duration
-	ingressPort                  int
-	ingressAllow                 string
-	ingressHealthPort            int
-	ingressStripPath             bool
-	healthPort                   int
-	elbLabelValue                string
-	elbRegion                    string
-	elbExpectedNumber            int
-	pushgatewayURL               string
-	pushgatewayIntervalSeconds   int
-	pushgatewayLabels            cmd.KeyValues
-	nginxConfig                  nginx.Conf
-	nginxLogHeaders              string
-	nginxTrustedFrontends        string
-	nginxBackendKeepaliveSeconds int
+	debug                      bool
+	kubeconfig                 string
+	resyncPeriod               time.Duration
+	ingressPort                int
+	ingressHealthPort          int
+	healthPort                 int
+	elbLabelValue              string
+	elbRegion                  string
+	elbExpectedNumber          int
+	pushgatewayURL             string
+	pushgatewayIntervalSeconds int
+	pushgatewayLabels          cmd.KeyValues
+	controllerConfig           controller.Config
+	nginxConfig                nginx.Conf
+	nginxLogHeaders            string
+	nginxTrustedFrontends      string
 )
 
 func init() {
@@ -77,10 +75,10 @@ func init() {
 		"Port to serve ingress traffic to backend services.")
 	flag.IntVar(&ingressHealthPort, "ingress-health-port", defaultIngressHealthPort,
 		"Port for ingress /health and /status pages. Should be used by frontends to determine if ingress is available.")
-	flag.StringVar(&ingressAllow, "ingress-allow", defaultIngressAllow,
+	flag.StringVar(&controllerConfig.DefaultAllow, "ingress-allow", defaultIngressAllow,
 		"Source IP or CIDR to allow ingress access by default. This is overridden by the sky.uk/allow "+
 			"annotation on ingress resources. Leave empty to deny all access by default.")
-	flag.BoolVar(&ingressStripPath, "ingress-strip-path", defaultIngressStripPath,
+	flag.BoolVar(&controllerConfig.DefaultStripPath, "ingress-strip-path", defaultIngressStripPath,
 		"Whether to strip the ingress path from the URL before passing to backend services. For example, "+
 			"if enabled 'myhost/myapp/health' would be passed as '/health' to the backend service. If disabled, "+
 			"it would be passed as '/myapp/health'. Enabling this requires nginx to process the URL, which has some "+
@@ -104,7 +102,8 @@ func init() {
 	flag.IntVar(&nginxConfig.BackendKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
 		"Maximum number of keepalive connections per backend service. Keepalive connections count against"+
 			" nginx-worker-connections limit, and will be restricted by that global limit as well.")
-	flag.IntVar(&nginxBackendKeepaliveSeconds, "nginx-default-backend-keepalive-seconds", defaultNginxBackendKeepaliveSeconds,
+	flag.IntVar(&controllerConfig.DefaultBackendKeepAlive, "nginx-default-backend-keepalive-seconds",
+		defaultNginxBackendKeepaliveSeconds,
 		"Time to keep backend keepalive connections open. This should generally be set smaller than backend service keepalive "+
 			"times to prevent stale connections. Can be overridden per ingress with the sky.uk/backend-keepalive-seconds annotation.")
 	flag.IntVar(&nginxConfig.BackendConnectTimeoutSeconds, "nginx-backend-connect-timeout-seconds",
@@ -159,15 +158,9 @@ func main() {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
 
-	updaters := createIngressUpdaters()
-
-	controller := controller.New(controller.Config{
-		KubernetesClient:        client,
-		Updaters:                updaters,
-		DefaultAllow:            ingressAllow,
-		DefaultStripPath:        ingressStripPath,
-		DefaultBackendKeepAlive: nginxBackendKeepaliveSeconds,
-	})
+	controllerConfig.KubernetesClient = client
+	controllerConfig.Updaters = createIngressUpdaters()
+	controller := controller.New(controllerConfig)
 
 	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
 	cmd.AddHealthPort(controller, healthPort)
