@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/k8s"
@@ -26,8 +27,9 @@ var (
 	ingressHealthPort          int
 	healthPort                 int
 	elbLabelValue              string
-	elbRegion                  string
+	region                     string
 	elbExpectedNumber          int
+	targetGroupNames           string
 	pushgatewayURL             string
 	pushgatewayIntervalSeconds int
 	pushgatewayLabels          cmd.KeyValues
@@ -59,7 +61,7 @@ func init() {
 		defaultNginxProxyProtocol                = false
 		defaultNginxUpdatePeriod                 = time.Second * 30
 		defaultElbLabelValue                     = ""
-		defaultElbRegion                         = "eu-west-1"
+		defaultRegion                            = "eu-west-1"
 		defaultElbExpectedNumber                 = 0
 		defaultPushgatewayIntervalSeconds        = 60
 		defaultAccessLogDir                      = "/var/log/nginx"
@@ -131,13 +133,17 @@ func init() {
 			"frontends. The client IP is used for allowing or denying ingress access. "+
 			"This will typically be the ELB subnet.")
 
+	flag.StringVar(&region, "region", defaultRegion,
+		"AWS region for frontend attachment.")
+
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
-	flag.StringVar(&elbRegion, "elb-region", defaultElbRegion,
-		"AWS region for ELBs.")
+
+	flag.StringVar(&targetGroupNames, "alb-target-group-names", "",
+		"Names of ALB target groups to attach to, separated by commas.")
 
 	flag.StringVar(&pushgatewayURL, "pushgateway", "",
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
@@ -175,7 +181,6 @@ func main() {
 }
 
 func createIngressUpdaters() []controller.Updater {
-	frontend := elb.New(elbRegion, elbLabelValue, elbExpectedNumber)
 	trustedFrontends := []string{}
 	if nginxTrustedFrontends != "" {
 		trustedFrontends = strings.Split(nginxTrustedFrontends, ",")
@@ -192,6 +197,9 @@ func createIngressUpdaters() []controller.Updater {
 	nginxConfig.LogHeaders = logHeaders
 
 	proxy := nginx.New(nginxConfig)
+
+	frontendELBs := elb.New(region, elbLabelValue, elbExpectedNumber)
+	frontendALBs := alb.New(region, strings.Split(targetGroupNames, ","))
 	// update nginx before attaching to front ends
-	return []controller.Updater{proxy, frontend}
+	return []controller.Updater{proxy, frontendELBs, frontendALBs}
 }
