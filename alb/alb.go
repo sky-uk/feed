@@ -171,8 +171,6 @@ func (a *alb) findTargetGroupARNs(names []string) ([]*string, error) {
 			arns = append(arns, targetGroup.TargetGroupArn)
 		}
 
-		fmt.Printf("Setting marker: %v\n", resp.NextMarker)
-
 		if resp.NextMarker == nil {
 			break
 		}
