@@ -15,28 +15,28 @@ The controllers support several annotations on ingress resources:
 - `sky.uk/strip-path: true` - Strip the ingress path when sending the request to the backend service. Can be either `true` or `false`. Note that nginx may break some url encoded values when enabled.
 - `sky.uk/backend-keepalive-seconds: 28` - Idle seconds for keepalive connections to the backend service. Usually this should be less than the idle timeout in the service itself.
 
+An example is at https://github.com/sky-uk/feed/blob/master/examples/ingress.yml.
+
 ## feed-ingress
 
 `feed-ingress` manages an nginx instance for load balancing ingress traffic to Kubernetes services.
 It's intended to be replicated to scale.
 
-Run with:
+An example pod.yml is at https://github.com/sky-uk/feed/blob/master/examples/pod.yml.
+
+See the command line options with:
 
     docker run skycirrus/feed-ingress:latest -h
 
-See all tags at https://hub.docker.com/r/skycirrus/feed-ingress/tags/.
-
 ## feed-dns
 
-`feed-dns` manages Route53 entries to point to the correct ELBs. It is designed to be run as a single
-instance in your cluster.
+`feed-dns` manages a Route53 zone, updating entries to point to the correct ELBs. It is designed to be run as a single
+instance per zone in your cluster.
 
-Run with:
+See the command line options with:
 
     docker run skycirrus/feed-dns:latest -h
-    
-See all the tags at https://hub.docker.com/r/skycirrus/feed-dns/tags/.
-
+   
 ### Discovering ELBs
 
 ELBs are discovered that have the `sky.uk/KubernetesClusterFrontend` tag set to the value passed in
@@ -58,6 +58,14 @@ to point to the correct ELB.
 
 Each ingress must have the following tag `sky.uk/frontend-elb-scheme` set to `internal` or `internet-facing` so the A record can be set to the correct
 ELB.
+
+# Remaining TODOs for production
+
+There are a few known issues that we need to address before we consider feed production ready.
+
+- Move to ALBs to fix 504s caused by nginx reloads.
+- Move to endpoints to support zero downtime during pod deployments.
+- Expose upstream data as prometheus metrics.
 
 # Building
 
