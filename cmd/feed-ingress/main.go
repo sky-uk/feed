@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	debug                      boolP
+	debug                      bool
 	kubeconfig                 string
 	resyncPeriod               time.Duration
 	ingressPort                int

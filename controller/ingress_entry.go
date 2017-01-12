@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 )
 
@@ -12,7 +13,9 @@ type IngressUpdate struct {
 
 // IngressEntry describes the ingress for a single host, path, and service.
 type IngressEntry struct {
-	// Name of the entry.
+	// Namespace of the ingress.
+	Namespace string
+	// Name of the ingress.
 	Name string
 	// Host is the fully qualified domain name used for external access.
 	Host string
@@ -34,29 +37,34 @@ type IngressEntry struct {
 }
 
 // validate returns error if entry has invalid fields.
-func (entry IngressEntry) validate() error {
-	if entry.Host == "" {
+func (e IngressEntry) validate() error {
+	if e.Host == "" {
 		return errors.New("missing host")
 	}
-	if entry.ServiceAddress == "" {
+	if e.ServiceAddress == "" {
 		return errors.New("missing service address")
 	}
-	if entry.ServicePort == 0 {
+	if e.ServicePort == 0 {
 		return errors.New("missing service port")
 	}
 	return nil
 }
 
-// SortedByName returns the update with entries ordered by their Name.
-func (u IngressUpdate) SortedByName() IngressUpdate {
+// NamespaceName returns the string "Namespace/Name".
+func (e IngressEntry) NamespaceName() string {
+	return fmt.Sprintf("%s/%s", e.Namespace, e.Name)
+}
+
+// SortedByNamespaceName returns the update with entries ordered by their NamespaceName().
+func (u IngressUpdate) SortedByNamespaceName() IngressUpdate {
 	sortedEntries := make([]IngressEntry, len(u.Entries))
 	copy(sortedEntries, u.Entries)
-	sort.Sort(byName(sortedEntries))
+	sort.Sort(byNamespaceName(sortedEntries))
 	return IngressUpdate{Entries: sortedEntries}
 }
 
-type byName []IngressEntry
+type byNamespaceName []IngressEntry
 
-func (a byName) Len() int           { return len(a) }
-func (a byName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byName) Less(i, j int) bool { return a[i].Name < a[j].Name }
+func (a byNamespaceName) Len() int           { return len(a) }
+func (a byNamespaceName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byNamespaceName) Less(i, j int) bool { return a[i].NamespaceName() < a[j].NamespaceName() }

@@ -147,7 +147,8 @@ func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
 	e.Stop()
 
 	//then
-	mock.AssertExpectationsForObjects(t, mockElb.Mock, mockMetadata.Mock)
+	mockElb.AssertExpectations(t)
+	mockMetadata.AssertExpectations(t)
 }
 
 func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
@@ -328,7 +329,7 @@ func TestGetLoadBalancerPages(t *testing.T) {
 
 	// then
 	assert.NoError(t, err)
-	mock.AssertExpectationsForObjects(t, mockElb.Mock)
+	mockElb.AssertExpectations(t)
 }
 
 func TestTagCallsPage(t *testing.T) {
@@ -353,7 +354,7 @@ func TestTagCallsPage(t *testing.T) {
 
 	// then
 	assert.NoError(t, err)
-	mock.AssertExpectationsForObjects(t, mockElb.Mock)
+	mockElb.AssertExpectations(t)
 }
 
 func TestDeregistersWithAttachedELBs(t *testing.T) {
@@ -395,7 +396,7 @@ func TestDeregistersWithAttachedELBs(t *testing.T) {
 
 	//then
 	assert.NoError(t, err)
-	mock.AssertExpectationsForObjects(t, mockElb.Mock)
+	mockElb.AssertExpectations(t)
 }
 
 func TestRegisterInstanceError(t *testing.T) {

@@ -328,7 +328,7 @@ func TestNginxIngressEntries(t *testing.T) {
 				},
 			},
 			[]string{
-				"    # chris-ingress chris-ingress-another\n" +
+				"    # /chris-ingress /chris-ingress-another\n" +
 					"    upstream upstream000 {\n" +
 					"        server service:8080;\n" +
 					"        keepalive 1024;\n" +
@@ -457,11 +457,11 @@ func TestNginxIngressEntries(t *testing.T) {
 				},
 			},
 			[]string{
-				"    # 0-first-ingress\n" +
+				"    # /0-first-ingress\n" +
 					"    upstream upstream000 {\n",
-				"    # 1-next-ingress\n" +
+				"    # /1-next-ingress\n" +
 					"    upstream upstream001 {\n",
-				"    # 2-last-ingress\n" +
+				"    # /2-last-ingress\n" +
 					"    upstream upstream002 {\n",
 			},
 		},

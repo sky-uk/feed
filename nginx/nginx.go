@@ -353,7 +353,7 @@ func (n *nginxUpdater) getNginxLogHeaders() string {
 type pathSet map[string]struct{}
 
 func createNginxEntries(update controller.IngressUpdate) []*nginxEntry {
-	sortedIngressEntries := update.SortedByName().Entries
+	sortedIngressEntries := update.SortedByNamespaceName().Entries
 	hostToNginxEntry := make(map[string]*nginxEntry)
 	hostToPaths := make(map[string]pathSet)
 	var nginxEntries []*nginxEntry
@@ -373,24 +373,24 @@ func createNginxEntries(update controller.IngressUpdate) []*nginxEntry {
 			BackendKeepaliveSeconds: ingressEntry.BackendKeepAliveSeconds,
 		}
 
-		entry, exists := hostToNginxEntry[ingressEntry.Host]
+		ngxEntry, exists := hostToNginxEntry[ingressEntry.Host]
 		if !exists {
-			entry = &nginxEntry{ServerName: ingressEntry.Host}
-			hostToNginxEntry[ingressEntry.Host] = entry
-			nginxEntries = append(nginxEntries, entry)
+			ngxEntry = &nginxEntry{ServerName: ingressEntry.Host}
+			hostToNginxEntry[ingressEntry.Host] = ngxEntry
+			nginxEntries = append(nginxEntries, ngxEntry)
 			hostToPaths[ingressEntry.Host] = make(map[string]struct{})
 		}
 
 		paths := hostToPaths[ingressEntry.Host]
 		if _, exists := paths[location.Path]; exists {
-			log.Infof("Ignoring '%s' because it duplicates the host/path of a previous entry", ingressEntry.Name)
+			log.Infof("Ignoring '%s' because it duplicates the host/path of a previous entry", ingressEntry.NamespaceName())
 			continue
 		}
 		paths[location.Path] = struct{}{}
 
-		entry.Name += " " + ingressEntry.Name
-		entry.Upstreams = append(entry.Upstreams, upstream)
-		entry.Locations = append(entry.Locations, location)
+		ngxEntry.Name += " " + ingressEntry.NamespaceName()
+		ngxEntry.Upstreams = append(ngxEntry.Upstreams, upstream)
+		ngxEntry.Locations = append(ngxEntry.Locations, location)
 		upstreamIndex++
 	}
 

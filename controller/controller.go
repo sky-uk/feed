@@ -145,7 +145,8 @@ func (c *controller) updateIngresses() error {
 
 				if address := serviceMap[serviceName]; address != "" {
 					entry := IngressEntry{
-						Name:                    ingress.Namespace + "/" + ingress.Name,
+						Namespace:               ingress.Namespace,
+						Name:                    ingress.Name,
 						Host:                    rule.Host,
 						Path:                    path.Path,
 						ServiceAddress:          address,
@@ -182,7 +183,7 @@ func (c *controller) updateIngresses() error {
 					if err := entry.validate(); err == nil {
 						entries = append(entries, entry)
 					} else {
-						skipped = append(skipped, fmt.Sprintf("%s (%v)", entry.Name, err))
+						skipped = append(skipped, fmt.Sprintf("%s (%v)", entry.NamespaceName(), err))
 					}
 				} else {
 					skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
