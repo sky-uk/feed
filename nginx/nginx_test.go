@@ -22,7 +22,6 @@ import (
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util/metrics"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 func init() {
@@ -31,23 +30,9 @@ func init() {
 
 const (
 	port          = 9090
-	fakeNginx     = "./fake_nginx.sh"
+	fakeNginx     = "./fake_graceful_nginx.py"
 	smallWaitTime = time.Millisecond * 20
 )
-
-type mockSignaller struct {
-	mock.Mock
-}
-
-func (m *mockSignaller) sigquit(p *os.Process) error {
-	m.Called(p)
-	return nil
-}
-
-func (m *mockSignaller) sighup(p *os.Process) error {
-	m.Called(p)
-	return nil
-}
 
 func newConf(tmpDir string, binary string) Conf {
 	return Conf{
@@ -63,32 +48,28 @@ func newConf(tmpDir string, binary string) Conf {
 	}
 }
 
-func newLb(tmpDir string) (controller.Updater, *mockSignaller) {
-	return newLbWithBinary(tmpDir, fakeNginx)
+func newUpdater(tmpDir string) controller.Updater {
+	return newUpdaterWithBinary(tmpDir, fakeNginx)
 }
 
-func newLbWithBinary(tmpDir string, binary string) (controller.Updater, *mockSignaller) {
+func newUpdaterWithBinary(tmpDir string, binary string) controller.Updater {
 	conf := newConf(tmpDir, binary)
-	return newLbWithConf(conf)
+	return newNginxWithConf(conf)
 }
 
-func newLbWithConf(conf Conf) (controller.Updater, *mockSignaller) {
+func newNginxWithConf(conf Conf) controller.Updater {
 	lb := New(conf)
-	signaller := &mockSignaller{}
-	signaller.On("sigquit", mock.AnythingOfType("*os.Process")).Return(nil)
-	lb.(*nginxLoadBalancer).signaller = signaller
-	return lb, signaller
+	return lb
 }
 
 func TestCanStartThenStop(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
-	lb, mockSignaller := newLb(tmpDir)
+	lb := newUpdater(tmpDir)
 
 	assert.NoError(t, lb.Start())
 	assert.NoError(t, lb.Stop())
-	mockSignaller.AssertExpectations(t)
 }
 
 func TestStopWaitsForGracefulShutdownOfNginx(t *testing.T) {
@@ -96,8 +77,7 @@ func TestStopWaitsForGracefulShutdownOfNginx(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
-	lb, _ := newLbWithBinary(tmpDir, "./fake_graceful_nginx.py")
-	lb.(*nginxLoadBalancer).signaller = &osSignaller{}
+	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
 
 	assert.NoError(lb.Start())
 	assert.NoError(lb.Stop())
@@ -109,7 +89,7 @@ func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
-	lb, _ := newLb(tmpDir)
+	lb := newUpdater(tmpDir)
 
 	assert.NoError(lb.Start())
 
@@ -124,10 +104,9 @@ func TestUnhealthyUntilInitialUpdate(t *testing.T) {
 
 	ts := stubHealthPort()
 	defer ts.Close()
-	conf := newConf(tmpDir, "./blocking_nginx.sh")
+	conf := newConf(tmpDir, "./fake_graceful_nginx.py")
 	conf.HealthPort = getPort(ts)
-	lb, mockSignaller := newLbWithConf(conf)
-	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
+	lb := newNginxWithConf(conf)
 
 	assert.EqualError(lb.Health(), "nginx is not running")
 	assert.NoError(lb.Start())
@@ -148,7 +127,7 @@ func TestFailsIfNginxDiesEarly(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
-	lb, _ := newLbWithBinary(tmpDir, "./fake_failing_nginx.sh")
+	lb := newUpdaterWithBinary(tmpDir, "./fake_failing_nginx.sh")
 
 	assert.Error(lb.Start())
 	assert.Error(lb.Health())
@@ -288,7 +267,7 @@ func TestNginxConfig(t *testing.T) {
 
 	for _, test := range tests {
 		fmt.Println(test.name)
-		lb, _ := newLbWithConf(test.conf)
+		lb := newNginxWithConf(test.conf)
 
 		assert.NoError(lb.Start())
 		err := lb.Update(controller.IngressUpdate{})
@@ -319,7 +298,7 @@ func TestNginxIngressEntries(t *testing.T) {
 
 	var tests = []struct {
 		name          string
-		lbConf        Conf
+		config        Conf
 		entries       []controller.IngressEntry
 		configEntries []string
 	}{
@@ -679,8 +658,9 @@ func TestNginxIngressEntries(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		lb, mockSignaller := newLbWithConf(test.lbConf)
-		mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil)
+		fmt.Printf("\n=== test: %s\n", test.name)
+
+		lb := newNginxWithConf(test.config)
 
 		assert.NoError(lb.Start())
 		entries := test.entries
@@ -708,6 +688,10 @@ func TestNginxIngressEntries(t *testing.T) {
 		}
 
 		assert.Nil(lb.Stop())
+
+		if t.Failed() {
+			t.FailNow()
+		}
 	}
 }
 
@@ -715,8 +699,7 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	lb, mockSignaller := newLbWithBinary(tmpDir, "./blocking_nginx.sh")
-	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Once()
+	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
 
 	assert.NoError(lb.Start())
 
@@ -742,15 +725,13 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 
 	assert.Equal(string(config1), string(config2), "configs should be identical")
 	time.Sleep(time.Duration(1) * time.Second)
-	mockSignaller.AssertExpectations(t)
 }
 
 func TestRateLimitedForUpdates(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	lb, mockSignaller := newLbWithBinary(tmpDir, "./blocking_nginx.sh")
-	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Twice()
+	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
 
 	assert.NoError(lb.Start())
 
@@ -781,7 +762,6 @@ func TestRateLimitedForUpdates(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	assert.NoError(lb.Stop())
-	mockSignaller.AssertExpectations(t)
 }
 
 func TestUpdatesMetricsFromNginxStatusPage(t *testing.T) {
@@ -795,7 +775,7 @@ func TestUpdatesMetricsFromNginxStatusPage(t *testing.T) {
 
 	conf := newConf(tmpDir, fakeNginx)
 	conf.HealthPort = getPort(ts)
-	lb, _ := newLbWithConf(conf)
+	lb := newNginxWithConf(conf)
 
 	// when
 	assert.NoError(lb.Start())
@@ -851,8 +831,7 @@ func TestFailsToUpdateIfConfigurationIsBroken(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	lb, mockSignaller := newLbWithBinary(tmpDir, "./fake_nginx_failing_reload.sh")
-	mockSignaller.On("sighup", mock.AnythingOfType("*os.Process")).Return(nil).Once()
+	lb := newUpdaterWithBinary(tmpDir, "./fake_nginx_failing_reload.sh")
 
 	assert.NoError(lb.Start())
 

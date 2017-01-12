@@ -50,50 +50,45 @@ type Conf struct {
 	UpdatePeriod                 time.Duration
 }
 
-// Signaller interface around signalling the loadbalancer process
-type signaller interface {
-	sigquit(*os.Process) error
-	sighup(*os.Process) error
-}
-
-type osSignaller struct {
+type nginx struct {
+	*exec.Cmd
 }
 
 // Sigquit sends a SIGQUIT to the process
-func (s *osSignaller) sigquit(p *os.Process) error {
+func (n *nginx) sigquit() error {
+	p := n.Process
 	log.Debugf("Sending SIGQUIT to %d", p.Pid)
 	return p.Signal(syscall.SIGQUIT)
 }
 
 // Sighup sends a SIGHUP to the process
-func (s *osSignaller) sighup(p *os.Process) error {
+func (n *nginx) sighup() error {
+	p := n.Process
 	log.Debugf("Sending SIGHUP to %d", p.Pid)
 	return p.Signal(syscall.SIGHUP)
 }
 
-func (lb *nginxLoadBalancer) signalRequired() {
-	lb.updateRequired.Set(true)
-
+func (n *nginxUpdater) signalRequired() {
+	n.updateRequired.Set(true)
 }
 
-func (lb *nginxLoadBalancer) signalIfRequired() {
-	if lb.updateRequired.Get() {
+func (n *nginxUpdater) signalIfRequired() {
+	if n.updateRequired.Get() {
 		log.Info("Signalling Nginx to reload configuration")
-		lb.signaller.sighup(lb.cmd.Process)
-		lb.updateRequired.Set(false)
+		n.nginx.sighup()
+		n.updateRequired.Set(false)
 	}
 }
 
 // Nginx implementation
-type nginxLoadBalancer struct {
+type nginxUpdater struct {
 	Conf
-	cmd                  *exec.Cmd
 	running              util.SafeBool
 	lastErr              util.SafeError
 	metricsUnhealthy     util.SafeBool
 	initialUpdateApplied util.SafeBool
 	doneCh               chan struct{}
-	signaller            signaller
+	nginx                *nginx
 	updateRequired       util.SafeBool
 }
 
@@ -123,11 +118,11 @@ type location struct {
 	BackendKeepaliveSeconds int
 }
 
-func (lb *nginxLoadBalancer) nginxConfFile() string {
-	return lb.WorkingDir + "/nginx.conf"
+func (c *Conf) nginxConfFile() string {
+	return c.WorkingDir + "/nginx.conf"
 }
 
-// New creates an nginx proxy.
+// New creates an nginx updater.
 func New(nginxConf Conf) controller.Updater {
 	initMetrics()
 
@@ -136,162 +131,159 @@ func New(nginxConf Conf) controller.Updater {
 		nginxConf.LogLevel = "warn"
 	}
 
-	lb := &nginxLoadBalancer{
-		Conf:      nginxConf,
-		doneCh:    make(chan struct{}),
-		signaller: &osSignaller{},
+	cmd := exec.Command(nginxConf.BinaryLocation, "-c", nginxConf.nginxConfFile())
+	cmd.Stdout = log.StandardLogger().Writer()
+	cmd.Stderr = log.StandardLogger().Writer()
+	cmd.Stdin = os.Stdin
+
+	updater := &nginxUpdater{
+		Conf:   nginxConf,
+		doneCh: make(chan struct{}),
+		nginx:  &nginx{Cmd: cmd},
 	}
 
-	return lb
+	return updater
 }
 
-func (lb *nginxLoadBalancer) Start() error {
-	if err := lb.logNginxVersion(); err != nil {
+func (n *nginxUpdater) Start() error {
+	if err := n.logNginxVersion(); err != nil {
 		return err
 	}
 
-	if err := lb.initialiseNginxConf(); err != nil {
+	if err := n.initialiseNginxConf(); err != nil {
 		return fmt.Errorf("unable to initialise nginx config: %v", err)
 	}
 
-	lb.cmd = exec.Command(lb.BinaryLocation, "-c", lb.nginxConfFile())
-
-	lb.cmd.Stdout = log.StandardLogger().Writer()
-	lb.cmd.Stderr = log.StandardLogger().Writer()
-	lb.cmd.Stdin = os.Stdin
-
-	if err := lb.cmd.Start(); err != nil {
+	if err := n.nginx.Start(); err != nil {
 		return fmt.Errorf("unable to start nginx: %v", err)
 	}
 
-	lb.running.Set(true)
-	go lb.waitForNginxToFinish()
+	n.running.Set(true)
+	go n.waitForNginxToFinish()
 
 	time.Sleep(nginxStartDelay)
-	if !lb.running.Get() {
+	if !n.running.Get() {
 		return errors.New("nginx died shortly after starting")
 	}
 
-	go lb.periodicallyUpdateMetrics()
-	go lb.backgroundSignaller()
+	go n.periodicallyUpdateMetrics()
+	go n.backgroundSignaller()
 
-	log.Debugf("Nginx pid %d", lb.cmd.Process.Pid)
 	return nil
 }
 
-func (lb *nginxLoadBalancer) logNginxVersion() error {
-	cmd := exec.Command(lb.BinaryLocation, "-v")
+func (n *nginxUpdater) logNginxVersion() error {
+	cmd := exec.Command(n.BinaryLocation, "-v")
 	cmd.Stdout = log.StandardLogger().Writer()
 	cmd.Stderr = log.StandardLogger().Writer()
 	return cmd.Run()
 }
 
-func (lb *nginxLoadBalancer) initialiseNginxConf() error {
-	err := os.Remove(lb.nginxConfFile())
+func (n *nginxUpdater) initialiseNginxConf() error {
+	err := os.Remove(n.nginxConfFile())
 	if err != nil {
 		log.Debugf("Can't remove nginx.conf: %v", err)
 	}
-	_, err = lb.update(controller.IngressUpdate{Entries: []controller.IngressEntry{}})
+	_, err = n.update(controller.IngressUpdate{Entries: []controller.IngressEntry{}})
 	return err
 }
 
-func (lb *nginxLoadBalancer) waitForNginxToFinish() {
-	err := lb.cmd.Wait()
+func (n *nginxUpdater) waitForNginxToFinish() {
+	err := n.nginx.Wait()
 	if err != nil {
 		log.Error("Nginx has exited with an error: ", err)
 	} else {
 		log.Info("Nginx has shutdown successfully")
 	}
-	lb.running.Set(false)
-	lb.lastErr.Set(err)
-	close(lb.doneCh)
+	n.running.Set(false)
+	n.lastErr.Set(err)
+	close(n.doneCh)
 }
 
-func (lb *nginxLoadBalancer) periodicallyUpdateMetrics() {
-	lb.updateMetrics()
+func (n *nginxUpdater) periodicallyUpdateMetrics() {
+	n.updateMetrics()
 	ticker := time.NewTicker(metricsUpdateInterval)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-lb.doneCh:
+		case <-n.doneCh:
 			return
 		case <-ticker.C:
-			lb.updateMetrics()
+			n.updateMetrics()
 		}
 	}
 }
 
-func (lb *nginxLoadBalancer) backgroundSignaller() {
-	log.Debugf("Nginx reload will check for updates every %v", lb.UpdatePeriod)
-	throttle := time.NewTicker(lb.UpdatePeriod)
+func (n *nginxUpdater) backgroundSignaller() {
+	log.Debugf("Nginx reload will check for updates every %v", n.UpdatePeriod)
+	throttle := time.NewTicker(n.UpdatePeriod)
 	defer throttle.Stop()
 	for {
 		select {
-		case <-lb.doneCh:
+		case <-n.doneCh:
 			log.Info("Signalling shut down")
 			return
 		case <-throttle.C:
-			lb.signalIfRequired()
+			n.signalIfRequired()
 		}
 	}
 }
 
-func (lb *nginxLoadBalancer) updateMetrics() {
-	if err := parseAndSetNginxMetrics(lb.HealthPort, "/basic_status"); err != nil {
+func (n *nginxUpdater) updateMetrics() {
+	if err := parseAndSetNginxMetrics(n.HealthPort, "/basic_status"); err != nil {
 		log.Warnf("Unable to update nginx metrics: %v", err)
-		lb.metricsUnhealthy.Set(true)
+		n.metricsUnhealthy.Set(true)
 	} else {
-		lb.metricsUnhealthy.Set(false)
+		n.metricsUnhealthy.Set(false)
 	}
 }
 
-func (lb *nginxLoadBalancer) Stop() error {
+func (n *nginxUpdater) Stop() error {
 	log.Info("Shutting down nginx process")
-	lb.cmd.Process.Signal(syscall.SIGQUIT)
-	if err := lb.signaller.sigquit(lb.cmd.Process); err != nil {
+	if err := n.nginx.sigquit(); err != nil {
 		return fmt.Errorf("error shutting down nginx: %v", err)
 	}
-	<-lb.doneCh
-	return lb.lastErr.Get()
+	<-n.doneCh
+	return n.lastErr.Get()
 }
 
 // This is called by a single go routine from the controller
-func (lb *nginxLoadBalancer) Update(entries controller.IngressUpdate) error {
-	updated, err := lb.update(entries)
+func (n *nginxUpdater) Update(entries controller.IngressUpdate) error {
+	updated, err := n.update(entries)
 	if err != nil {
 		return fmt.Errorf("unable to update nginx: %v", err)
 	}
 
 	if updated {
-		if !lb.initialUpdateApplied.Get() {
+		if !n.initialUpdateApplied.Get() {
 			log.Info("Initial update. Signalling nginx synchronously.")
-			lb.signaller.sighup(lb.cmd.Process)
-			lb.initialUpdateApplied.Set(true)
+			n.nginx.sighup()
+			n.initialUpdateApplied.Set(true)
 		} else {
-			lb.signalRequired()
+			n.signalRequired()
 		}
 	}
 
 	return nil
 }
 
-func (lb *nginxLoadBalancer) update(entries controller.IngressUpdate) (bool, error) {
-	updatedConfig, err := lb.createConfig(entries)
+func (n *nginxUpdater) update(entries controller.IngressUpdate) (bool, error) {
+	updatedConfig, err := n.createConfig(entries)
 	if err != nil {
 		return false, err
 	}
 
-	existingConfig, err := ioutil.ReadFile(lb.nginxConfFile())
+	existingConfig, err := ioutil.ReadFile(n.nginxConfFile())
 	if err != nil {
 		log.Debugf("Error trying to read nginx.conf: %v", err)
 		log.Info("Creating nginx.conf for the first time")
-		return writeFile(lb.nginxConfFile(), updatedConfig)
+		return writeFile(n.nginxConfFile(), updatedConfig)
 	}
 
-	return lb.diffAndUpdate(existingConfig, updatedConfig)
+	return n.diffAndUpdate(existingConfig, updatedConfig)
 }
 
-func (lb *nginxLoadBalancer) diffAndUpdate(existing, updated []byte) (bool, error) {
+func (n *nginxUpdater) diffAndUpdate(existing, updated []byte) (bool, error) {
 	diffOutput, err := diff(existing, updated)
 	if err != nil {
 		log.Warnf("Unable to diff nginx files: %v", err)
@@ -304,14 +296,14 @@ func (lb *nginxLoadBalancer) diffAndUpdate(existing, updated []byte) (bool, erro
 	}
 
 	log.Infof("Updating nginx config: %s", string(diffOutput))
-	_, err = writeFile(lb.nginxConfFile(), updated)
+	_, err = writeFile(n.nginxConfFile(), updated)
 
 	if err != nil {
 		log.Errorf("Unable to write nginx configuration: %v", err)
 		return false, err
 	}
 
-	err = lb.checkNginxConfig()
+	err = n.checkNginxConfig()
 	if err != nil {
 		return false, err
 	}
@@ -319,8 +311,8 @@ func (lb *nginxLoadBalancer) diffAndUpdate(existing, updated []byte) (bool, erro
 	return true, nil
 }
 
-func (lb *nginxLoadBalancer) checkNginxConfig() error {
-	cmd := exec.Command(lb.BinaryLocation, "-t", "-c", lb.nginxConfFile())
+func (n *nginxUpdater) checkNginxConfig() error {
+	cmd := exec.Command(n.BinaryLocation, "-t", "-c", n.nginxConfFile())
 	var out bytes.Buffer
 	cmd.Stderr = &out
 	cmd.Stdout = &out
@@ -331,16 +323,16 @@ func (lb *nginxLoadBalancer) checkNginxConfig() error {
 	return nil
 }
 
-func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]byte, error) {
-	tmpl, err := template.New("nginx.tmpl").ParseFiles(lb.WorkingDir + "/nginx.tmpl")
+func (n *nginxUpdater) createConfig(update controller.IngressUpdate) ([]byte, error) {
+	tmpl, err := template.New("nginx.tmpl").ParseFiles(n.WorkingDir + "/nginx.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
 	entries := createNginxEntries(update)
-	lb.AccessLogHeaders = lb.getNginxLogHeaders()
+	n.AccessLogHeaders = n.getNginxLogHeaders()
 	var output bytes.Buffer
-	err = tmpl.Execute(&output, loadBalancerTemplate{Conf: lb.Conf, Entries: entries})
+	err = tmpl.Execute(&output, loadBalancerTemplate{Conf: n.Conf, Entries: entries})
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("unable to create nginx config from template: %v", err)
@@ -349,9 +341,9 @@ func (lb *nginxLoadBalancer) createConfig(update controller.IngressUpdate) ([]by
 	return output.Bytes(), nil
 }
 
-func (lb *nginxLoadBalancer) getNginxLogHeaders() string {
+func (n *nginxUpdater) getNginxLogHeaders() string {
 	headersString := ""
-	for _, nginxLogHeader := range lb.LogHeaders {
+	for _, nginxLogHeader := range n.LogHeaders {
 		headersString = headersString + " " + nginxLogHeader + "=$http_" + strings.Replace(nginxLogHeader, "-", "_", -1)
 	}
 
@@ -415,20 +407,20 @@ func createNginxPath(rawPath string) string {
 	return nginxPath
 }
 
-func (lb *nginxLoadBalancer) Health() error {
-	if !lb.running.Get() {
+func (n *nginxUpdater) Health() error {
+	if !n.running.Get() {
 		return errors.New("nginx is not running")
 	}
-	if !lb.initialUpdateApplied.Get() {
+	if !n.initialUpdateApplied.Get() {
 		return errors.New("waiting for initial update")
 	}
-	if lb.metricsUnhealthy.Get() {
+	if n.metricsUnhealthy.Get() {
 		return errors.New("nginx metrics are failing to update")
 	}
 	return nil
 }
 
-func (lb *nginxLoadBalancer) String() string {
+func (n *nginxUpdater) String() string {
 	return "nginx proxy"
 }
 
