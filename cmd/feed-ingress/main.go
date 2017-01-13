@@ -5,8 +5,6 @@ import (
 
 	_ "net/http/pprof"
 
-	"strings"
-
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -29,14 +27,14 @@ var (
 	elbLabelValue              string
 	region                     string
 	elbExpectedNumber          int
-	targetGroupNames           string
+	targetGroupNames           cmd.CommaSeparatedValues
 	pushgatewayURL             string
 	pushgatewayIntervalSeconds int
 	pushgatewayLabels          cmd.KeyValues
 	controllerConfig           controller.Config
 	nginxConfig                nginx.Conf
-	nginxLogHeaders            string
-	nginxTrustedFrontends      string
+	nginxLogHeaders            cmd.CommaSeparatedValues
+	nginxTrustedFrontends      cmd.CommaSeparatedValues
 )
 
 func init() {
@@ -127,8 +125,8 @@ func init() {
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
-	flag.StringVar(&nginxLogHeaders, "nginx-log-headers", "", "Comma separated list of headers to be logged in access logs")
-	flag.StringVar(&nginxTrustedFrontends, "nginx-trusted-frontends", "",
+	flag.Var(&nginxLogHeaders, "nginx-log-headers", "Comma separated list of headers to be logged in access logs")
+	flag.Var(&nginxTrustedFrontends, "nginx-trusted-frontends",
 		"Comma separated list of CIDRs to trust when determining the client's real IP from "+
 			"frontends. The client IP is used for allowing or denying ingress access. "+
 			"This will typically be the ELB subnet.")
@@ -142,7 +140,7 @@ func init() {
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
 
-	flag.StringVar(&targetGroupNames, "alb-target-group-names", "",
+	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
 
 	flag.StringVar(&pushgatewayURL, "pushgateway", "",
@@ -181,25 +179,14 @@ func main() {
 }
 
 func createIngressUpdaters() []controller.Updater {
-	trustedFrontends := []string{}
-	if nginxTrustedFrontends != "" {
-		trustedFrontends = strings.Split(nginxTrustedFrontends, ",")
-	}
-
-	logHeaders := []string{}
-	if nginxLogHeaders != "" {
-		logHeaders = strings.Split(nginxLogHeaders, ",")
-	}
-
 	nginxConfig.IngressPort = ingressPort
 	nginxConfig.HealthPort = ingressHealthPort
-	nginxConfig.TrustedFrontends = trustedFrontends
-	nginxConfig.LogHeaders = logHeaders
+	nginxConfig.TrustedFrontends = nginxTrustedFrontends
+	nginxConfig.LogHeaders = nginxLogHeaders
+	nginx := nginx.New(nginxConfig)
 
-	proxy := nginx.New(nginxConfig)
-
-	frontendELBs := elb.New(region, elbLabelValue, elbExpectedNumber)
-	frontendALBs := alb.New(region, strings.Split(targetGroupNames, ","))
+	elbAttacher := elb.New(region, elbLabelValue, elbExpectedNumber)
+	albAttacher := alb.New(region, targetGroupNames)
 	// update nginx before attaching to front ends
-	return []controller.Updater{proxy, frontendELBs, frontendALBs}
+	return []controller.Updater{nginx, elbAttacher, albAttacher}
 }
