@@ -17,6 +17,8 @@ import (
 
 	"errors"
 
+	"sort"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
@@ -95,14 +97,14 @@ type nginxUpdater struct {
 // Used for generating nginx config
 type loadBalancerTemplate struct {
 	Conf
-	Entries []*nginxEntry
+	Servers   []*server
+	Upstreams []*upstream
 }
 
-type nginxEntry struct {
+type server struct {
 	Name       string
 	ServerName string
-	Upstreams  []upstream
-	Locations  []location
+	Locations  []*location
 }
 
 type upstream struct {
@@ -256,7 +258,7 @@ func (n *nginxUpdater) Update(entries controller.IngressUpdate) error {
 
 	if updated {
 		if !n.initialUpdateApplied.Get() {
-			log.Info("Initial update. Signalling nginx synchronously.")
+			log.Info("Loading nginx configuration for the first time.")
 			n.nginx.sighup()
 			n.initialUpdateApplied.Set(true)
 		} else {
@@ -295,7 +297,7 @@ func (n *nginxUpdater) diffAndUpdate(existing, updated []byte) (bool, error) {
 		return false, nil
 	}
 
-	log.Infof("Updating nginx config: %s", string(diffOutput))
+	log.Debugf("Updating nginx config: %s", string(diffOutput))
 	_, err = writeFile(n.nginxConfFile(), updated)
 
 	if err != nil {
@@ -329,10 +331,17 @@ func (n *nginxUpdater) createConfig(update controller.IngressUpdate) ([]byte, er
 		return nil, err
 	}
 
-	entries := createNginxEntries(update)
+	serverEntries := createServerEntries(update)
+	upstreamEntries := createUpstreamEntries(update)
+
 	n.AccessLogHeaders = n.getNginxLogHeaders()
 	var output bytes.Buffer
-	err = tmpl.Execute(&output, loadBalancerTemplate{Conf: n.Conf, Entries: entries})
+	template := loadBalancerTemplate{
+		Conf:      n.Conf,
+		Servers:   serverEntries,
+		Upstreams: upstreamEntries,
+	}
+	err = tmpl.Execute(&output, template)
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("unable to create nginx config from template: %v", err)
@@ -350,51 +359,90 @@ func (n *nginxUpdater) getNginxLogHeaders() string {
 	return headersString
 }
 
-type pathSet map[string]struct{}
+type upstreams []*upstream
 
-func createNginxEntries(update controller.IngressUpdate) []*nginxEntry {
-	sortedIngressEntries := update.SortedByNamespaceName().Entries
-	hostToNginxEntry := make(map[string]*nginxEntry)
-	hostToPaths := make(map[string]pathSet)
-	var nginxEntries []*nginxEntry
-	var upstreamIndex int
+func (u upstreams) Len() int           { return len(u) }
+func (u upstreams) Less(i, j int) bool { return u[i].ID < u[j].ID }
+func (u upstreams) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
 
-	for _, ingressEntry := range sortedIngressEntries {
-		nginxPath := createNginxPath(ingressEntry.Path)
-		upstream := upstream{
-			ID:     fmt.Sprintf("upstream%03d", upstreamIndex),
+func createUpstreamEntries(update controller.IngressUpdate) []*upstream {
+	idToUpstream := make(map[string]*upstream)
+
+	for _, ingressEntry := range update.Entries {
+		upstream := &upstream{
+			ID:     upstreamID(ingressEntry),
 			Server: fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
 		}
+		idToUpstream[upstream.ID] = upstream
+	}
+
+	var sortedUpstreams []*upstream
+	for _, upstream := range idToUpstream {
+		sortedUpstreams = append(sortedUpstreams, upstream)
+	}
+
+	sort.Sort(upstreams(sortedUpstreams))
+	return sortedUpstreams
+}
+
+func upstreamID(e controller.IngressEntry) string {
+	return fmt.Sprintf("%s.%s.%d", e.Namespace, e.ServiceAddress, e.ServicePort)
+}
+
+type servers []*server
+
+func (s servers) Len() int           { return len(s) }
+func (s servers) Less(i, j int) bool { return s[i].ServerName < s[j].ServerName }
+func (s servers) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+type locations []*location
+
+func (l locations) Len() int           { return len(l) }
+func (l locations) Less(i, j int) bool { return l[i].Path < l[j].Path }
+func (l locations) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
+
+type pathSet map[string]bool
+
+func createServerEntries(update controller.IngressUpdate) []*server {
+	hostToNginxEntry := make(map[string]*server)
+	hostToPaths := make(map[string]pathSet)
+
+	for _, ingressEntry := range update.Entries {
+		serverEntry, exists := hostToNginxEntry[ingressEntry.Host]
+		if !exists {
+			serverEntry = &server{ServerName: ingressEntry.Host}
+			hostToNginxEntry[ingressEntry.Host] = serverEntry
+			hostToPaths[ingressEntry.Host] = make(map[string]bool)
+		}
+
+		nginxPath := createNginxPath(ingressEntry.Path)
 		location := location{
 			Path:                    nginxPath,
-			UpstreamID:              upstream.ID,
+			UpstreamID:              upstreamID(ingressEntry),
 			Allow:                   ingressEntry.Allow,
 			StripPath:               ingressEntry.StripPaths,
 			BackendKeepaliveSeconds: ingressEntry.BackendKeepAliveSeconds,
 		}
 
-		ngxEntry, exists := hostToNginxEntry[ingressEntry.Host]
-		if !exists {
-			ngxEntry = &nginxEntry{ServerName: ingressEntry.Host}
-			hostToNginxEntry[ingressEntry.Host] = ngxEntry
-			nginxEntries = append(nginxEntries, ngxEntry)
-			hostToPaths[ingressEntry.Host] = make(map[string]struct{})
-		}
-
 		paths := hostToPaths[ingressEntry.Host]
-		if _, exists := paths[location.Path]; exists {
+		if paths[location.Path] {
 			log.Infof("Ignoring '%s' because it duplicates the host/path of a previous entry", ingressEntry.NamespaceName())
 			continue
 		}
-		paths[location.Path] = struct{}{}
+		paths[location.Path] = true
 
-		ngxEntry.Name += " " + ingressEntry.NamespaceName()
-		ngxEntry.Upstreams = append(ngxEntry.Upstreams, upstream)
-		ngxEntry.Locations = append(ngxEntry.Locations, location)
-		upstreamIndex++
+		serverEntry.Name += " " + ingressEntry.NamespaceName()
+		serverEntry.Locations = append(serverEntry.Locations, &location)
 	}
 
-	return nginxEntries
+	var serverEntries []*server
+	for _, serverEntry := range hostToNginxEntry {
+		sort.Sort(locations(serverEntry.Locations))
+		serverEntries = append(serverEntries, serverEntry)
+	}
+	sort.Sort(servers(serverEntries))
+
+	return serverEntries
 }
 
 func createNginxPath(rawPath string) string {

@@ -85,19 +85,20 @@ http {
     # Don't mess with redirects.
     proxy_redirect off;
 
-    # Configure ingresses
+    # Start ingresses
     {{- $port := .IngressPort }}
     {{- $keepalive := .BackendKeepalives }}
     {{- $proxyprotocol := .ProxyProtocol }}
-    {{ range $entry := .Entries }}
-    # Start entry
-    #{{ $entry.Name }}
-{{- range $upstream := $entry.Upstreams }}
+    
+{{- range $upstream := .Upstreams }}
     upstream {{ $upstream.ID }} {
         server {{ $upstream.Server }};
         keepalive {{ $keepalive }};
     }
 {{ end }}
+
+{{- range $entry := .Servers }}
+    # ingress:{{ $entry.Name }}    
     server {
         listen {{ $port }}{{ if $proxyprotocol }} proxy_protocol{{ end }};
         server_name {{ $entry.ServerName }};
@@ -134,9 +135,7 @@ http {
         }
         {{- end }}
     }
-    # End entry
-    {{ end }}
-
+{{- end }}
     # End ingresses
 
     # Default backend

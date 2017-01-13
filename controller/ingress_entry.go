@@ -3,7 +3,6 @@ package controller
 import (
 	"errors"
 	"fmt"
-	"sort"
 )
 
 // IngressUpdate data
@@ -54,17 +53,3 @@ func (e IngressEntry) validate() error {
 func (e IngressEntry) NamespaceName() string {
 	return fmt.Sprintf("%s/%s", e.Namespace, e.Name)
 }
-
-// SortedByNamespaceName returns the update with entries ordered by their NamespaceName().
-func (u IngressUpdate) SortedByNamespaceName() IngressUpdate {
-	sortedEntries := make([]IngressEntry, len(u.Entries))
-	copy(sortedEntries, u.Entries)
-	sort.Sort(byNamespaceName(sortedEntries))
-	return IngressUpdate{Entries: sortedEntries}
-}
-
-type byNamespaceName []IngressEntry
-
-func (a byNamespaceName) Len() int           { return len(a) }
-func (a byNamespaceName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byNamespaceName) Less(i, j int) bool { return a[i].NamespaceName() < a[j].NamespaceName() }

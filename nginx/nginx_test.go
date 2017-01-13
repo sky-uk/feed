@@ -297,10 +297,11 @@ func TestNginxIngressEntries(t *testing.T) {
 	enableProxyProtocolConf.ProxyProtocol = true
 
 	var tests = []struct {
-		name          string
-		config        Conf
-		entries       []controller.IngressEntry
-		configEntries []string
+		name            string
+		config          Conf
+		entries         []controller.IngressEntry
+		upstreamEntries []string
+		serverEntries   []string
 	}{
 		{
 			"Check full ingress entry works",
@@ -308,6 +309,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]controller.IngressEntry{
 				{
 					Host:                    "chris.com",
+					Namespace:               "core",
 					Name:                    "chris-ingress",
 					Path:                    "/path",
 					ServiceAddress:          "service",
@@ -318,6 +320,7 @@ func TestNginxIngressEntries(t *testing.T) {
 				},
 				{
 					Host:                    "chris.com",
+					Namespace:               "core",
 					Name:                    "chris-ingress-another",
 					Path:                    "/anotherpath",
 					ServiceAddress:          "anotherservice",
@@ -328,48 +331,26 @@ func TestNginxIngressEntries(t *testing.T) {
 				},
 			},
 			[]string{
-				"    # /chris-ingress /chris-ingress-another\n" +
-					"    upstream upstream000 {\n" +
-					"        server service:8080;\n" +
-					"        keepalive 1024;\n" +
-					"    }\n" +
-					"\n" +
-					"    upstream upstream001 {\n" +
+				"    upstream core.anotherservice.6060 {\n" +
 					"        server anotherservice:6060;\n" +
 					"        keepalive 1024;\n" +
-					"    }\n" +
-					"\n" +
-					"    server {\n" +
+					"    }",
+				"    upstream core.service.8080 {\n" +
+					"        server service:8080;\n" +
+					"        keepalive 1024;\n" +
+					"    }",
+			},
+			[]string{
+				"    server {\n" +
 					"        listen 9090;\n" +
 					"        server_name chris.com;\n" +
 					"\n" +
 					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
 					"        client_max_body_size 0;\n" +
 					"\n" +
-					"        location /path/ {\n" +
-					"            # Strip location path when proxying.\n" +
-					"            # Beware this can cause issues with url encoded characters.\n" +
-					"            proxy_pass http://upstream000/;\n" +
-					"\n" +
-					"            # Set display name for vhost stats.\n" +
-					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
-					"\n" +
-					"            # Close proxy connections after backend keepalive time.\n" +
-					"            proxy_read_timeout 1s;\n" +
-					"            proxy_send_timeout 1s;\n" +
-					"\n" +
-					"            # Allow localhost for debugging\n" +
-					"            allow 127.0.0.1;\n" +
-					"\n" +
-					"            # Restrict clients\n" +
-					"            allow 10.82.0.0/16;\n" +
-					"            \n" +
-					"            deny all;\n" +
-					"        }\n" +
-					"\n" +
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://upstream001;\n" +
+					"            proxy_pass http://core.anotherservice.6060;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
@@ -386,7 +367,28 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            \n" +
 					"            deny all;\n" +
 					"        }\n" +
-					"    }\n",
+					"\n" +
+					"        location /path/ {\n" +
+					"            # Strip location path when proxying.\n" +
+					"            # Beware this can cause issues with url encoded characters.\n" +
+					"            proxy_pass http://core.service.8080/;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 1s;\n" +
+					"            proxy_send_timeout 1s;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            allow 10.82.0.0/16;\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"    }",
 			},
 		},
 		{
@@ -395,6 +397,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]controller.IngressEntry{
 				{
 					Host:           "chris.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "/path",
 					ServiceAddress: "service",
@@ -402,6 +405,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					Allow:          []string{},
 				},
 			},
+			nil,
 			[]string{
 				"            # Restrict clients\n" +
 					"            \n" +
@@ -414,6 +418,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]controller.IngressEntry{
 				{
 					Host:           "chris.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "/path",
 					ServiceAddress: "service",
@@ -421,6 +426,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					Allow:          nil,
 				},
 			},
+			nil,
 			[]string{
 				"            # Restrict clients\n" +
 					"            \n" +
@@ -428,10 +434,11 @@ func TestNginxIngressEntries(t *testing.T) {
 			},
 		},
 		{
-			"Check entries ordered by name",
+			"Check servers ordered by hostname",
 			defaultConf,
 			[]controller.IngressEntry{
 				{
+					Namespace:      "core",
 					Name:           "2-last-ingress",
 					Host:           "foo-2.com",
 					Path:           "/",
@@ -440,6 +447,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
+					Namespace:      "core",
 					Name:           "0-first-ingress",
 					Host:           "foo-0.com",
 					Path:           "/",
@@ -448,6 +456,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
+					Namespace:      "core",
 					Name:           "1-next-ingress",
 					Host:           "foo-1.com",
 					Path:           "/",
@@ -456,51 +465,11 @@ func TestNginxIngressEntries(t *testing.T) {
 					Allow:          []string{"10.82.0.0/16"},
 				},
 			},
+			nil,
 			[]string{
-				"    # /0-first-ingress\n" +
-					"    upstream upstream000 {\n",
-				"    # /1-next-ingress\n" +
-					"    upstream upstream001 {\n",
-				"    # /2-last-ingress\n" +
-					"    upstream upstream002 {\n",
-			},
-		},
-		{
-			"Check proxy_pass ordered correctly",
-			defaultConf,
-			[]controller.IngressEntry{
-				{
-					Name:           "2-last-ingress",
-					Host:           "foo-2.com",
-					Path:           "/",
-					ServiceAddress: "foo",
-					ServicePort:    8080,
-					Allow:          []string{"10.82.0.0/16"},
-					StripPaths:     true,
-				},
-				{
-					Name:           "0-first-ingress",
-					Host:           "foo-0.com",
-					Path:           "/",
-					ServiceAddress: "foo",
-					ServicePort:    8080,
-					Allow:          []string{"10.82.0.0/16"},
-					StripPaths:     true,
-				},
-				{
-					Name:           "1-next-ingress",
-					Host:           "foo-1.com",
-					Path:           "/",
-					ServiceAddress: "foo",
-					ServicePort:    8080,
-					Allow:          []string{"10.82.0.0/16"},
-					StripPaths:     true,
-				},
-			},
-			[]string{
-				"    proxy_pass http://upstream000/;\n",
-				"    proxy_pass http://upstream001/;\n",
-				"    proxy_pass http://upstream002/;\n",
+				"        server_name foo-0.com;",
+				"        server_name foo-1.com;",
+				"        server_name foo-2.com;",
 			},
 		},
 		{
@@ -509,45 +478,46 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]controller.IngressEntry{
 				{
 					Host:           "chris-0.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Host:           "chris-1.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "/prefix-with-slash/",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Host:           "chris-2.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "prefix-without-preslash/",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Host:           "chris-3.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "/prefix-without-postslash",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          []string{"10.82.0.0/16"},
 				},
 				{
 					Host:           "chris-4.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "prefix-without-anyslash",
 					ServiceAddress: "service",
 					ServicePort:    9090,
-					Allow:          []string{"10.82.0.0/16"},
 				},
 			},
+			nil,
 			[]string{
 				"        location / {\n",
 				"        location /prefix-with-slash/ {\n",
@@ -562,6 +532,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]controller.IngressEntry{
 				{
 					Host:           "chris.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "",
 					ServiceAddress: "service",
@@ -569,6 +540,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					Allow:          []string{"10.82.0.0/16", "10.99.0.0/16"},
 				},
 			},
+			nil,
 			[]string{
 				"            # Restrict clients\n" +
 					"            allow 10.82.0.0/16;\n" +
@@ -582,46 +554,128 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris.com",
-					Name:           "chris-ingress",
-					Path:           "/my-path",
-					ServiceAddress: "service1",
-					ServicePort:    9090,
+					Host:                    "chris.com",
+					Namespace:               "core",
+					Name:                    "chris-ingress-first",
+					Path:                    "/my-path",
+					ServiceAddress:          "service1",
+					ServicePort:             9090,
+					BackendKeepAliveSeconds: 28,
 				},
 				{
-					Host:           "chris.com",
-					Name:           "chris-ingress",
-					Path:           "/my-path",
-					ServiceAddress: "service2",
-					ServicePort:    9090,
+					Host:                    "chris.com",
+					Namespace:               "core",
+					Name:                    "chris-ingress-second",
+					Path:                    "/my-path",
+					ServiceAddress:          "service2",
+					ServicePort:             9090,
+					BackendKeepAliveSeconds: 28,
 				},
 				{
-					Host:           "chris.com",
-					Name:           "chris-ingress",
-					Path:           "/my-path",
-					ServiceAddress: "service3",
-					ServicePort:    9090,
+					Host:                    "chris.com",
+					Namespace:               "core",
+					Name:                    "chris-ingress-third",
+					Path:                    "/my-path",
+					ServiceAddress:          "service3",
+					ServicePort:             9090,
+					BackendKeepAliveSeconds: 28,
 				},
 				{
-					Host:           "chris-again.com",
-					Name:           "chris-ingress",
-					Path:           "/my-path",
-					ServiceAddress: "service4",
-					ServicePort:    9090,
+					Host:                    "chris-again.com",
+					Namespace:               "core",
+					Name:                    "chris-ingress-again",
+					Path:                    "/my-path",
+					ServiceAddress:          "service4",
+					ServicePort:             9090,
+					BackendKeepAliveSeconds: 28,
 				},
 			},
+			nil,
 			[]string{
-				"    upstream upstream000 {\n" +
-					"        server service1:9090;\n" +
-					"        keepalive 1024;\n" +
-					"    }\n" +
+				"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris-again.com;\n" +
 					"\n" +
-					"    server {\n",
-				"    upstream upstream001 {\n" +
-					"        server service4:9090;\n" +
-					"        keepalive 1024;\n" +
-					"    }\n",
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        location /my-path/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service4.9090;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /my-path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 28s;\n" +
+					"            proxy_send_timeout 28s;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"    }",
+				"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name chris.com;\n" +
+					"\n" +
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        location /my-path/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service1.9090;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /my-path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 28s;\n" +
+					"            proxy_send_timeout 28s;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"    }",
 			},
+		},
+		{
+			"Only a single upstream per ingress",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Namespace:      "core",
+					Name:           "chris-ingress",
+					Path:           "/my-path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+
+				{
+					Host:           "chris.com",
+					Namespace:      "core",
+					Name:           "chris-ingress",
+					Path:           "/my-path2",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+			},
+
+			[]string{
+				"    upstream core.service.9090 {\n" +
+					"        server service:9090;\n" +
+					"        keepalive 1024;\n" +
+					"    }",
+			},
+			nil,
 		},
 		{
 			"Disabled path stripping should not put a trailing slash on proxy_pass",
@@ -629,14 +683,16 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]controller.IngressEntry{
 				{
 					Host:           "chris.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "/path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
 				},
 			},
+			nil,
 			[]string{
-				"    proxy_pass http://upstream000;\n",
+				"    proxy_pass http://core.service.9090;\n",
 			},
 		},
 		{
@@ -645,14 +701,108 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]controller.IngressEntry{
 				{
 					Host:           "chris.com",
+					Namespace:      "core",
 					Name:           "chris-ingress",
 					Path:           "/path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
 				},
 			},
+			nil,
 			[]string{
 				"listen 9090 proxy_protocol;",
+			},
+		},
+		{
+			"Locations should be ordered by path",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Host:                    "chris.com",
+					Namespace:               "core",
+					Name:                    "chris-ingress",
+					Path:                    "",
+					ServiceAddress:          "service",
+					ServicePort:             9090,
+					BackendKeepAliveSeconds: 28,
+				},
+				{
+					Host:                    "chris.com",
+					Namespace:               "core",
+					Name:                    "chris-ingress",
+					Path:                    "/lala",
+					ServiceAddress:          "service",
+					ServicePort:             9090,
+					BackendKeepAliveSeconds: 28,
+				},
+				{
+					Host:                    "chris.com",
+					Namespace:               "core",
+					Name:                    "chris-ingress",
+					Path:                    "/01234-hi",
+					ServiceAddress:          "service",
+					ServicePort:             9090,
+					BackendKeepAliveSeconds: 28,
+				},
+			},
+			nil,
+			[]string{
+				"        location / {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.9090;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 28s;\n" +
+					"            proxy_send_timeout 28s;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /01234-hi/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.9090;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /01234-hi/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 28s;\n" +
+					"            proxy_send_timeout 28s;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /lala/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.9090;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /lala/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 28s;\n" +
+					"            proxy_send_timeout 28s;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n",
 			},
 		},
 	}
@@ -671,28 +821,50 @@ func TestNginxIngressEntries(t *testing.T) {
 		assert.NoError(err)
 		configContents := string(config)
 
-		r := regexp.MustCompile(`(?sU)# Start entry\n(.+)# End entry`)
-		serverEntries := r.FindAllStringSubmatch(configContents, -1)
-
-		if len(test.configEntries) != len(serverEntries) {
-			fmt.Printf("%s: expected %d config entries but found %d: %v\n", test.name, len(test.configEntries),
-				len(serverEntries), serverEntries)
-			panic("mismatch in number of expected server entries")
+		if test.upstreamEntries != nil {
+			assertConfigEntries(t, test.name, "upstream", `(?sU)(    upstream.+\n    })`, test.upstreamEntries, configContents)
 		}
-
-		for i := range test.configEntries {
-			expected := test.configEntries[i]
-			actual := serverEntries[i][1]
-			assert.True(strings.Contains(actual, expected),
-				"%s\nExpected:\n%s\nActual:\n%s\n", test.name, expected, actual)
+		if test.serverEntries != nil {
+			assertConfigEntries(t, test.name, "server", `(?sU)(# ingress:.+server.+\n    })`, test.serverEntries, configContents)
 		}
-
 		assert.Nil(lb.Stop())
 
 		if t.Failed() {
 			t.FailNow()
 		}
 	}
+}
+
+func assertConfigEntries(t *testing.T, testName, entryName, entryRegex string, expectedEntries []string, configContents string) {
+	r := regexp.MustCompile(entryRegex)
+
+	actualEntries := r.FindAllStringSubmatch(configContents, -1)
+	if len(expectedEntries) != len(actualEntries) {
+		assert.FailNow(t, "wrong number of entries", "%s: Expected %d %s entries but found %d: %v\n", testName,
+			len(expectedEntries), entryName, len(actualEntries), actualEntries)
+	}
+
+	for i := range expectedEntries {
+		expected := expectedEntries[i]
+		actualSubgroups := actualEntries[i]
+		if len(actualSubgroups) != 2 {
+			assert.FailNow(t, "wrong number of subgroups", "%s: Expected exactly one subgroup, but %s had %d", testName,
+				entryRegex, len(actualSubgroups))
+		}
+		actual := actualSubgroups[1]
+
+		diff := calculateDiff(actual, expected)
+		assert.Contains(t, actual, expected, "%s: %s entry doesn't match, diff(actual, expected):\n%s", testName,
+			entryName, diff)
+	}
+}
+
+func calculateDiff(actual, expected string) string {
+	diff, err := diff([]byte(actual), []byte(expected))
+	if err != nil {
+		panic(err)
+	}
+	return string(diff)
 }
 
 func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
