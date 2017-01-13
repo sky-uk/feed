@@ -21,6 +21,7 @@ var (
 	kubeconfig                 string
 	resyncPeriod               time.Duration
 	healthPort                 int
+	albNames                   cmd.CommaSeparatedValues
 	elbLabelValue              string
 	elbRegion                  string
 	r53HostedZone              string
@@ -49,6 +50,8 @@ func init() {
 		"Resync with the apiserver periodically to handle missed updates.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller.")
+	flag.Var(&albNames, "alb-names",
+		"Comma delimited list of ALB names to use for Route53 updates. Should only include a single ALB name per LB scheme.")
 	flag.StringVar(&elbRegion, "elb-region", defaultElbRegion,
 		"AWS region for ELBs.")
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
@@ -62,7 +65,8 @@ func init() {
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
-	flag.IntVar(&awsAPIRetries, "aws-api-retries", defaultAwsAPIRetries, "Number of times a request to the AWS API is retries")
+	flag.IntVar(&awsAPIRetries, "aws-api-retries", defaultAwsAPIRetries,
+		"Number of times a request to the AWS API is retried.")
 }
 
 func main() {
@@ -77,7 +81,7 @@ func main() {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
 
-	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue, awsAPIRetries)
+	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue, albNames, awsAPIRetries)
 
 	controller := controller.New(controller.Config{
 		KubernetesClient: client,
