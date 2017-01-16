@@ -3,6 +3,12 @@ language: go
 go:
   - 1.7
 
+before_install:
+  - sudo add-apt-repository -y ppa:jonathonf/python-3.6
+  - sudo apt-get -y update
+  - sudo apt-get -y install python3.6
+  - python3.6 -V
+
 install:
   - go get github.com/golang/lint/golint
   - go get golang.org/x/tools/cmd/goimports

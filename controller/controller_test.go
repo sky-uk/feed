@@ -282,7 +282,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING", stripPath, backendTimeout),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
-				Name:           ingressNamespace + "/" + ingressName,
+				Namespace:      ingressNamespace,
+				Name:           ingressName,
 				Host:           ingressHost,
 				Path:           ingressPath,
 				ServiceAddress: serviceIP,
@@ -296,7 +297,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", stripPath, backendTimeout),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
-				Name:           ingressNamespace + "/" + ingressName,
+				Namespace:      ingressNamespace,
+				Name:           ingressName,
 				Host:           ingressHost,
 				Path:           ingressPath,
 				ServiceAddress: serviceIP,
@@ -311,7 +313,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "true", backendTimeout),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
-				Name:                    ingressNamespace + "/" + ingressName,
+				Namespace:               ingressNamespace,
+				Name:                    ingressName,
 				Host:                    ingressHost,
 				Path:                    ingressPath,
 				ServiceAddress:          serviceIP,
@@ -327,7 +330,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", backendTimeout),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
-				Name:                    ingressNamespace + "/" + ingressName,
+				Namespace:               ingressNamespace,
+				Name:                    ingressName,
 				Host:                    ingressHost,
 				Path:                    ingressPath,
 				ServiceAddress:          serviceIP,
@@ -343,7 +347,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
-				Name:                    ingressNamespace + "/" + ingressName,
+				Namespace:               ingressNamespace,
+				Name:                    ingressName,
 				Host:                    ingressHost,
 				Path:                    ingressPath,
 				ServiceAddress:          serviceIP,
@@ -359,7 +364,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", -1),
 			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
-				Name:                    ingressNamespace + "/" + ingressName,
+				Namespace:               ingressNamespace,
+				Name:                    ingressName,
 				Host:                    ingressHost,
 				Path:                    ingressPath,
 				ServiceAddress:          serviceIP,
@@ -406,7 +412,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 
 func createLbEntriesFixture() IngressUpdate {
 	return IngressUpdate{Entries: []IngressEntry{{
-		Name:                    ingressNamespace + "/" + ingressName,
+		Namespace:               ingressNamespace,
+		Name:                    ingressName,
 		Host:                    ingressHost,
 		Path:                    ingressPath,
 		ServiceAddress:          serviceIP,

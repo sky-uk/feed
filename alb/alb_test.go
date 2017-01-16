@@ -125,7 +125,8 @@ func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
 	a.Stop()
 
 	//then
-	mock.AssertExpectationsForObjects(t, mockElb.Mock, mockMetadata.Mock)
+	mockElb.AssertExpectations(t)
+	mockMetadata.AssertExpectations(t)
 }
 
 func TestRegisterInstance(t *testing.T) {
