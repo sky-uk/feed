@@ -19,7 +19,7 @@ import (
 // New creates a controller.Updater for attaching to ALB target groups on first update.
 func New(region string, targetGroupNames []string) controller.Updater {
 	initMetrics()
-	log.Infof("Will attach to ALBs %v in %s", targetGroupNames, region)
+	log.Infof("ALB frontend region: %s target groups: %v", region, targetGroupNames)
 	session := session.New(&aws.Config{Region: &region})
 	return &alb{
 		metadata:         ec2metadata.New(session),
@@ -69,12 +69,11 @@ func (a *alb) Update(controller.IngressUpdate) error {
 	a.initialised.Lock()
 	defer a.initialised.Unlock()
 	if !a.initialised.done {
-		log.Info("First update. Attaching to front ends...")
+		log.Info("Attaching to ALB target groups: %v", a.targetGroupNames)
 		if err := a.attachToFrontEnds(); err != nil {
 			return err
 		}
 		a.initialised.done = true
-		log.Info("Attached to front ends.")
 	}
 	return nil
 }
