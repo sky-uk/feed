@@ -32,5 +32,9 @@ RUN chmod 600 /etc/cron.d/nginx
 # Defer execution as the log dir may be mounted when running
 ADD scripts/log-dir-ownership.sh /etc/my_init.d/log-dir-ownership.sh
 
+# Let feed shutdown gracefully by giving it plenty of time to stop.
+RUN sed -i 's/KILL_PROCESS_TIMEOUT = 5/KILL_PROCESS_TIMEOUT = 300/' /sbin/my_init \
+    && grep 'KILL_PROCESS_TIMEOUT = 300' /sbin/my_init
+
 ENTRYPOINT ["/sbin/my_init", "--quiet", "--", "/sbin/setuser", "nginx", \
     "/feed-ingress", "-nginx-workdir", "/nginx"]
