@@ -18,13 +18,17 @@ import (
 
 type hostToIngress map[string]controller.IngressEntry
 type findELBsFunc func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error)
+type dnsDetails struct {
+	dnsName      string
+	hostedZoneID string
+}
 
 type updater struct {
 	r53           r53.Route53Client
 	hostedZoneID  string
 	elb           elb.ELB
 	alb           ALB
-	schemeToDNS   map[string]string
+	schemeToDNS   map[string]dnsDetails
 	albNames      []string
 	elbLabelValue string
 	domain        string
@@ -91,9 +95,9 @@ func (u *updater) initELBs() error {
 		return fmt.Errorf("unable to find front end load balancers: %v", err)
 	}
 
-	u.schemeToDNS = make(map[string]string)
+	u.schemeToDNS = make(map[string]dnsDetails)
 	for scheme, lbDetails := range elbs {
-		u.schemeToDNS[scheme] = lbDetails.DNSName
+		u.schemeToDNS[scheme] = dnsDetails{dnsName: lbDetails.DNSName, hostedZoneID: lbDetails.DNSName}
 	}
 
 	return nil
@@ -104,7 +108,7 @@ func (u *updater) initALBs() error {
 		return nil
 	}
 
-	u.schemeToDNS = make(map[string]string)
+	u.schemeToDNS = make(map[string]dnsDetails)
 	req := &aws_alb.DescribeLoadBalancersInput{Names: aws.StringSlice(u.albNames)}
 
 	for {
@@ -114,7 +118,7 @@ func (u *updater) initALBs() error {
 		}
 
 		for _, lb := range resp.LoadBalancers {
-			u.schemeToDNS[*lb.Scheme] = *lb.DNSName
+			u.schemeToDNS[*lb.Scheme] = dnsDetails{dnsName: *lb.DNSName, hostedZoneID: *lb.CanonicalHostedZoneId}
 		}
 
 		if resp.NextMarker == nil {
@@ -215,14 +219,14 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 	changes := []*route53.Change{}
 
 	for host, entry := range hostToIngress {
-		lbDNSName, exists := u.schemeToDNS[entry.ELbScheme]
+		dnsDetails, exists := u.schemeToDNS[entry.ELbScheme]
 		if !exists {
 			skipped = append(skipped, entry.NamespaceName()+":scheme:"+entry.ELbScheme)
 			skippedCount.Inc()
 			continue
 		}
 
-		changes = append(changes, newChange("UPSERT", host, lbDNSName, u.hostedZoneID))
+		changes = append(changes, newChange("UPSERT", host, dnsDetails.dnsName, dnsDetails.hostedZoneID))
 	}
 
 	for _, recordSet := range originalRecords {
