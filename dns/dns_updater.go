@@ -97,7 +97,7 @@ func (u *updater) initELBs() error {
 
 	u.schemeToDNS = make(map[string]dnsDetails)
 	for scheme, lbDetails := range elbs {
-		u.schemeToDNS[scheme] = dnsDetails{dnsName: lbDetails.DNSName, hostedZoneID: lbDetails.DNSName}
+		u.schemeToDNS[scheme] = dnsDetails{dnsName: lbDetails.DNSName, hostedZoneID: lbDetails.HostedZoneID}
 	}
 
 	return nil
