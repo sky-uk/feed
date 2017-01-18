@@ -26,6 +26,7 @@ const (
 	hostedZoneID       = "1234"
 	domain             = "james.com."
 	awsRegion          = "awsRegion"
+	lbHostedZoneID     = "lb-hosted-zone-id"
 	internalALBName    = "internal-alb"
 	externalALBName    = "external-alb"
 	internalALBDnsName = "internal-alb-dns-name"
@@ -59,8 +60,9 @@ func (m *mockALB) mockDescribeLoadBalancers(names []string, lbDetails []lbDetail
 
 	for _, lb := range lbDetails {
 		lbs = append(lbs, &aws_alb.LoadBalancer{
-			Scheme:  aws.String(lb.scheme),
-			DNSName: aws.String(lb.dnsName),
+			Scheme:                aws.String(lb.scheme),
+			DNSName:               aws.String(lb.dnsName),
+			CanonicalHostedZoneId: aws.String(lbHostedZoneID),
 		})
 	}
 
@@ -183,7 +185,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsName),
-						HostedZoneId:         aws.String(hostedZoneID),
+						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
 				},
@@ -202,7 +204,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				Name: aws.String("foo.james.com."),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String(internalALBDnsName),
-					HostedZoneId:         aws.String(hostedZoneID),
+					HostedZoneId:         aws.String(lbHostedZoneID),
 					EvaluateTargetHealth: aws.Bool(false),
 				},
 			}},
@@ -213,7 +215,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(externalALBDnsName),
-						HostedZoneId:         aws.String(hostedZoneID),
+						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
 				},
@@ -226,7 +228,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				Name: aws.String("foo.com."),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String(internalALBDnsName),
-					HostedZoneId:         aws.String(hostedZoneID),
+					HostedZoneId:         aws.String(lbHostedZoneID),
 					EvaluateTargetHealth: aws.Bool(false),
 				},
 			}},
@@ -237,7 +239,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsName),
-						HostedZoneId:         aws.String(hostedZoneID),
+						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
 				},
@@ -256,7 +258,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				Name: aws.String("bar.james.com."),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String(internalALBDnsName),
-					HostedZoneId:         aws.String(hostedZoneID),
+					HostedZoneId:         aws.String(lbHostedZoneID),
 					EvaluateTargetHealth: aws.Bool(false),
 				},
 			}},
@@ -267,7 +269,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsName),
-						HostedZoneId:         aws.String(hostedZoneID),
+						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
 				}},
@@ -278,7 +280,7 @@ func TestRecordSetUpdates(t *testing.T) {
 						Type: aws.String("A"),
 						AliasTarget: &route53.AliasTarget{
 							DNSName:              aws.String(internalALBDnsName),
-							HostedZoneId:         aws.String(hostedZoneID),
+							HostedZoneId:         aws.String(lbHostedZoneID),
 							EvaluateTargetHealth: aws.Bool(false),
 						},
 					},
@@ -341,7 +343,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsName),
-						HostedZoneId:         aws.String(hostedZoneID),
+						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
 				},
@@ -373,7 +375,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(externalALBDnsName),
-						HostedZoneId:         aws.String(hostedZoneID),
+						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
 				},
