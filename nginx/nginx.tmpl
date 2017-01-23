@@ -89,6 +89,7 @@ http {
     {{- $port := .IngressPort }}
     {{- $keepalive := .BackendKeepalives }}
     {{- $proxyprotocol := .ProxyProtocol }}
+    {{- $connectTimeout := .BackendConnectTimeoutSeconds }}
     
 {{- range $upstream := .Upstreams }}
     upstream {{ $upstream.ID }} {
@@ -96,6 +97,12 @@ http {
         server {{ $address }}:{{ $upstream.Port }};
 {{ end }}
         keepalive {{ $keepalive }};
+        # Keep connections balanced - especially useful for rolling deployments.
+        least_conn;
+        # Health checks - check every 5 seconds, expect new endpoints to be down by default.
+        check interval=5000 rise=1 fall=2 timeout={{ $connectTimeout }}000 default_down=false type=http;
+        # Anything not a 500 is a sign of being alive.
+        check_http_expect_alive http_2xx | http_3xx | http_4xx;
     }
 {{ end }}
 
@@ -167,6 +174,11 @@ http {
             access_log off;
             vhost_traffic_status_display;
             vhost_traffic_status_display_format html;
+        }
+
+        location /upstreams {
+            access_log off;
+            check_status html;
         }
 
         location / {

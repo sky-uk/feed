@@ -333,11 +333,23 @@ func TestNginxIngressEntries(t *testing.T) {
 					"        server 2.2.2.2:6060;\n" +
 					"\n" +
 					"        keepalive 1024;\n" +
+					"        # Keep connections balanced - especially useful for rolling deployments.\n" +
+					"        least_conn;\n" +
+					"        # Health checks - check every 5 seconds, expect new endpoints to be down by default.\n" +
+					"        check interval=5000 rise=1 fall=2 timeout=1000 default_down=false type=http;\n" +
+					"        # Anything not a 500 is a sign of being alive.\n" +
+					"        check_http_expect_alive http_2xx | http_3xx | http_4xx;\n" +
 					"    }",
 				"    upstream core.service.8080 {\n" +
 					"        server 1.1.1.1:8080;\n" +
 					"\n" +
 					"        keepalive 1024;\n" +
+					"        # Keep connections balanced - especially useful for rolling deployments.\n" +
+					"        least_conn;\n" +
+					"        # Health checks - check every 5 seconds, expect new endpoints to be down by default.\n" +
+					"        check interval=5000 rise=1 fall=2 timeout=1000 default_down=false type=http;\n" +
+					"        # Anything not a 500 is a sign of being alive.\n" +
+					"        check_http_expect_alive http_2xx | http_3xx | http_4xx;\n" +
 					"    }",
 			},
 			[]string{
@@ -657,7 +669,8 @@ func TestNginxIngressEntries(t *testing.T) {
 					"        server 1.1.1.1:9090;\n" +
 					"\n" +
 					"        keepalive 1024;\n" +
-					"    }",
+					"        # Keep connections balanced - especially useful for rolling deployments.\n" +
+					"        least_conn;\n",
 			},
 			nil,
 		},

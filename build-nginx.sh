@@ -19,13 +19,16 @@ mkdir /tmp/nginx
 cd /tmp/nginx
 curl -O http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
 curl -JLO https://github.com/vozlt/nginx-module-vts/archive/v${VTS_VERSION}.tar.gz
+curl -LO https://github.com/yaoweibin/nginx_upstream_check_module/archive/${CHECK_VERSION}.tar.gz
 
 nginx_tarball="nginx-${NGINX_VERSION}.tar.gz"
 vts_tarball="nginx-module-vts-${VTS_VERSION}.tar.gz"
+check_tarball="${CHECK_VERSION}.tar.gz"
 
 touch hashes
 echo "${NGINX_SHA256} ${nginx_tarball}" >> hashes
 echo "${VTS_SHA256} ${vts_tarball}" >> hashes
+echo "${CHECK_SHA256} ${check_tarball}" >> hashes
 if ! sha256sum -c hashes; then
     echo "sha256 hashes do not match downloaded files"
     exit 1
@@ -33,7 +36,14 @@ fi
 
 tar xzf nginx-${NGINX_VERSION}.tar.gz
 tar xzf nginx-module-vts-${VTS_VERSION}.tar.gz
+tar xzf ${CHECK_VERSION}.tar.gz
 cd nginx-${NGINX_VERSION}
+
+vts_module_dir="/tmp/nginx/nginx-module-vts-${VTS_VERSION}"
+check_module_dir="/tmp/nginx/nginx_upstream_check_module-${CHECK_VERSION}"
+
+# patch for upstream check module
+patch -p0 < ${check_module_dir}/check_1.9.2+.patch
 
 echo "--- Configuring nginx"
 ./configure \
@@ -58,7 +68,8 @@ echo "--- Configuring nginx"
     --with-http_v2_module \
     --with-ipv6 \
     --with-debug \
-    --add-module=/tmp/nginx/nginx-module-vts-0.1.10
+    --add-module=${vts_module_dir} \
+    --add-module=${check_module_dir}
 
 echo "--- Building nginx"
 make
