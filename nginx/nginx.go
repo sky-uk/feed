@@ -108,8 +108,9 @@ type server struct {
 }
 
 type upstream struct {
-	ID     string
-	Server string
+	ID        string
+	Port      int32
+	Addresses []string
 }
 
 type location struct {
@@ -368,10 +369,11 @@ func (u upstreams) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
 func createUpstreamEntries(update controller.IngressUpdate) []*upstream {
 	idToUpstream := make(map[string]*upstream)
 
-	for _, ingressEntry := range update.Entries {
+	for _, entry := range update.Entries {
 		upstream := &upstream{
-			ID:     upstreamID(ingressEntry),
-			Server: fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
+			ID:        upstreamID(entry),
+			Port:      entry.Service.Port,
+			Addresses: entry.Service.Addresses,
 		}
 		idToUpstream[upstream.ID] = upstream
 	}
@@ -386,7 +388,7 @@ func createUpstreamEntries(update controller.IngressUpdate) []*upstream {
 }
 
 func upstreamID(e controller.IngressEntry) string {
-	return fmt.Sprintf("%s.%s.%d", e.Namespace, e.ServiceAddress, e.ServicePort)
+	return fmt.Sprintf("%s.%s.%d", e.Namespace, e.Service.Name, e.Service.Port)
 }
 
 type servers []*server

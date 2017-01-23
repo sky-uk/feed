@@ -92,7 +92,9 @@ http {
     
 {{- range $upstream := .Upstreams }}
     upstream {{ $upstream.ID }} {
-        server {{ $upstream.Server }};
+{{- range $address := $upstream.Addresses }}
+        server {{ $address }}:{{ $upstream.Port }};
+{{ end }}
         keepalive {{ $keepalive }};
     }
 {{ end }}
