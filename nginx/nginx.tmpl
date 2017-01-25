@@ -75,7 +75,7 @@ http {
     proxy_set_header Host $host;
 
     # Timeout to backend services on initial connect.
-    proxy_connect_timeout {{ .BackendConnectTimeoutSeconds }}s;
+    proxy_connect_timeout {{ .ProxyConnectTimeoutSeconds }}s;
 
     # Disable buffering, as we'll be interacting with ELBs with http listeners, which we assume will
     # quickly consume and generate responses and requests.
@@ -87,22 +87,20 @@ http {
 
     # Start ingresses
     {{- $port := .IngressPort }}
-    {{- $keepalive := .BackendKeepalives }}
+    {{- $keepalive := .UpstreamKeepalives }}
     {{- $proxyprotocol := .ProxyProtocol }}
-    {{- $connectTimeout := .BackendConnectTimeoutSeconds }}
+    {{- $maxFails := .UpstreamMaxFails }}
+    {{- $failTimeoutSecs := .UpstreamFailTimeoutSeconds }}
+    {{- $nextUpstreamErrors := .ProxyNextUpstreamErrors }}
     
 {{- range $upstream := .Upstreams }}
     upstream {{ $upstream.ID }} {
 {{- range $address := $upstream.Addresses }}
-        server {{ $address }}:{{ $upstream.Port }};
+        server {{ $address }}:{{ $upstream.Port }} max_fails={{ $maxFails }} fail_timeout={{ $failTimeoutSecs }}s;
 {{ end }}
         keepalive {{ $keepalive }};
         # Keep connections balanced - especially useful for rolling deployments.
         least_conn;
-        # Health checks - check every 5 seconds, expect new endpoints to be down by default.
-        check interval=5000 rise=1 fall=2 timeout={{ $connectTimeout }}000 default_down=false type=http;
-        # Anything not a 500 is a sign of being alive.
-        check_http_expect_alive http_2xx | http_3xx | http_4xx;
     }
 {{ end }}
 
@@ -113,7 +111,10 @@ http {
         server_name {{ $entry.ServerName }};
 
         # disable any limits to avoid HTTP 413 for large uploads
-        client_max_body_size 0; 
+        client_max_body_size 0;
+
+        # Retry next upstream if any of these errors are encountered.
+        proxy_next_upstream{{ range $nextUpstreamErrors }} {{ . }}{{ end }};
 
         {{- range $location := $entry.Locations }}
 
@@ -174,11 +175,6 @@ http {
             access_log off;
             vhost_traffic_status_display;
             vhost_traffic_status_display_format html;
-        }
-
-        location /upstreams {
-            access_log off;
-            check_status html;
         }
 
         location / {

@@ -412,39 +412,6 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 	}
 }
 
-func createExpectedIngressUpdate() IngressUpdate {
-	return IngressUpdate{Entries: []IngressEntry{
-		{
-			Namespace: ingressNamespace,
-			Name:      ingressName,
-			Host:      ingressHost,
-			Path:      ingressPath,
-			Service: Service{
-				Name:      serviceName,
-				Port:      8080,
-				Addresses: endpointAddresses,
-			},
-			Allow:                   strings.Split(ingressAllow, ","),
-			ELbScheme:               elbScheme,
-			BackendKeepAliveSeconds: defaultBackendTimeout,
-		},
-		{
-			Namespace: ingressNamespace,
-			Name:      ingressName,
-			Host:      ingressHost,
-			Path:      ingressPath,
-			Service: Service{
-				Name:      serviceName,
-				Port:      8081,
-				Addresses: endpointAddresses,
-			},
-			Allow:                   strings.Split(ingressAllow, ","),
-			ELbScheme:               elbScheme,
-			BackendKeepAliveSeconds: defaultBackendTimeout,
-		},
-	}}
-}
-
 const (
 	ingressHost           = "foo.sky.com"
 	ingressPath           = "/foo"
@@ -459,6 +426,39 @@ const (
 	stripPath             = "MISSING"
 	defaultBackendTimeout = 10
 )
+
+func createExpectedIngressUpdate() IngressUpdate {
+	return IngressUpdate{Entries: []IngressEntry{
+		{
+			Namespace: ingressNamespace,
+			Name:      ingressName,
+			Host:      ingressHost,
+			Path:      ingressPath,
+			Service: Service{
+				Name:      serviceName,
+				Port:      serviceHTTPPort,
+				Addresses: endpointAddresses,
+			},
+			Allow:                   strings.Split(ingressAllow, ","),
+			ELbScheme:               elbScheme,
+			BackendKeepAliveSeconds: defaultBackendTimeout,
+		},
+		{
+			Namespace: ingressNamespace,
+			Name:      ingressName,
+			Host:      ingressHost,
+			Path:      ingressPath,
+			Service: Service{
+				Name:      serviceName,
+				Port:      serviceAdminPort,
+				Addresses: endpointAddresses,
+			},
+			Allow:                   strings.Split(ingressAllow, ","),
+			ELbScheme:               elbScheme,
+			BackendKeepAliveSeconds: defaultBackendTimeout,
+		},
+	}}
+}
 
 var endpointAddresses = []string{"1.1.1.1", "2.2.2.2"}
 

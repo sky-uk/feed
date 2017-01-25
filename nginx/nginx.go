@@ -31,25 +31,28 @@ const (
 
 // Conf configuration for nginx
 type Conf struct {
-	BinaryLocation               string
-	WorkingDir                   string
-	WorkerProcesses              int
-	WorkerConnections            int
-	KeepaliveSeconds             int
-	BackendKeepalives            int
-	BackendConnectTimeoutSeconds int
-	ServerNamesHashBucketSize    int
-	ServerNamesHashMaxSize       int
-	HealthPort                   int
-	TrustedFrontends             []string
-	IngressPort                  int
-	LogLevel                     string
-	ProxyProtocol                bool
-	AccessLog                    bool
-	AccessLogDir                 string
-	LogHeaders                   []string
-	AccessLogHeaders             string
-	UpdatePeriod                 time.Duration
+	BinaryLocation             string
+	WorkingDir                 string
+	WorkerProcesses            int
+	WorkerConnections          int
+	KeepaliveSeconds           int
+	UpstreamKeepalives         int
+	ProxyConnectTimeoutSeconds int
+	UpstreamMaxFails           int
+	UpstreamFailTimeoutSeconds int
+	ProxyNextUpstreamErrors    []string
+	ServerNamesHashBucketSize  int
+	ServerNamesHashMaxSize     int
+	HealthPort                 int
+	TrustedFrontends           []string
+	IngressPort                int
+	LogLevel                   string
+	ProxyProtocol              bool
+	AccessLog                  bool
+	AccessLogDir               string
+	LogHeaders                 []string
+	AccessLogHeaders           string
+	UpdatePeriod               time.Duration
 }
 
 type nginx struct {
@@ -132,6 +135,10 @@ func New(nginxConf Conf) controller.Updater {
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
 	if nginxConf.LogLevel == "" {
 		nginxConf.LogLevel = "warn"
+	}
+
+	if len(nginxConf.ProxyNextUpstreamErrors) == 0 {
+		log.Fatal("ProxyNextUpstreamErrors was empty, should contain at least one value.")
 	}
 
 	cmd := exec.Command(nginxConf.BinaryLocation, "-c", nginxConf.nginxConfFile())

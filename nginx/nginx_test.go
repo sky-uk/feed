@@ -36,15 +36,18 @@ const (
 
 func newConf(tmpDir string, binary string) Conf {
 	return Conf{
-		WorkingDir:                   tmpDir,
-		BinaryLocation:               binary,
-		IngressPort:                  port,
-		WorkerProcesses:              1,
-		BackendKeepalives:            1024,
-		BackendConnectTimeoutSeconds: 1,
-		ServerNamesHashMaxSize:       -1,
-		ServerNamesHashBucketSize:    -1,
-		UpdatePeriod:                 time.Second,
+		WorkingDir:                 tmpDir,
+		BinaryLocation:             binary,
+		IngressPort:                port,
+		WorkerProcesses:            1,
+		UpstreamKeepalives:         1024,
+		ProxyConnectTimeoutSeconds: 1,
+		UpstreamMaxFails:           1,
+		UpstreamFailTimeoutSeconds: 10,
+		ProxyNextUpstreamErrors:    []string{"timeout", "error"},
+		ServerNamesHashMaxSize:     -1,
+		ServerNamesHashBucketSize:  -1,
+		UpdatePeriod:               time.Second,
 	}
 }
 
@@ -154,7 +157,7 @@ func TestNginxConfig(t *testing.T) {
 	proxyProtocol.ProxyProtocol = true
 
 	connectTimeout := defaultConf
-	connectTimeout.BackendConnectTimeoutSeconds = 3
+	connectTimeout.ProxyConnectTimeoutSeconds = 3
 
 	enabledAccessLogConf := defaultConf
 	enabledAccessLogConf.AccessLog = true
@@ -330,26 +333,18 @@ func TestNginxIngressEntries(t *testing.T) {
 			},
 			[]string{
 				"    upstream core.anotherservice.6060 {\n" +
-					"        server 2.2.2.2:6060;\n" +
+					"        server 2.2.2.2:6060 max_fails=1 fail_timeout=10s;\n" +
 					"\n" +
 					"        keepalive 1024;\n" +
 					"        # Keep connections balanced - especially useful for rolling deployments.\n" +
 					"        least_conn;\n" +
-					"        # Health checks - check every 5 seconds, expect new endpoints to be down by default.\n" +
-					"        check interval=5000 rise=1 fall=2 timeout=1000 default_down=false type=http;\n" +
-					"        # Anything not a 500 is a sign of being alive.\n" +
-					"        check_http_expect_alive http_2xx | http_3xx | http_4xx;\n" +
 					"    }",
 				"    upstream core.service.8080 {\n" +
-					"        server 1.1.1.1:8080;\n" +
+					"        server 1.1.1.1:8080 max_fails=1 fail_timeout=10s;\n" +
 					"\n" +
 					"        keepalive 1024;\n" +
 					"        # Keep connections balanced - especially useful for rolling deployments.\n" +
 					"        least_conn;\n" +
-					"        # Health checks - check every 5 seconds, expect new endpoints to be down by default.\n" +
-					"        check interval=5000 rise=1 fall=2 timeout=1000 default_down=false type=http;\n" +
-					"        # Anything not a 500 is a sign of being alive.\n" +
-					"        check_http_expect_alive http_2xx | http_3xx | http_4xx;\n" +
 					"    }",
 			},
 			[]string{
@@ -359,6 +354,9 @@ func TestNginxIngressEntries(t *testing.T) {
 					"\n" +
 					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
 					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        # Retry next upstream if any of these errors are encountered.\n" +
+					"        proxy_next_upstream timeout error;\n" +
 					"\n" +
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
@@ -596,6 +594,9 @@ func TestNginxIngressEntries(t *testing.T) {
 					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
 					"        client_max_body_size 0;\n" +
 					"\n" +
+					"        # Retry next upstream if any of these errors are encountered.\n" +
+					"        proxy_next_upstream timeout error;\n" +
+					"\n" +
 					"        location /my-path/ {\n" +
 					"            # Keep original path when proxying.\n" +
 					"            proxy_pass http://core.service4.9090;\n" +
@@ -621,6 +622,9 @@ func TestNginxIngressEntries(t *testing.T) {
 					"\n" +
 					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
 					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        # Retry next upstream if any of these errors are encountered.\n" +
+					"        proxy_next_upstream timeout error;\n" +
 					"\n" +
 					"        location /my-path/ {\n" +
 					"            # Keep original path when proxying.\n" +
@@ -666,7 +670,7 @@ func TestNginxIngressEntries(t *testing.T) {
 
 			[]string{
 				"    upstream core.service.9090 {\n" +
-					"        server 1.1.1.1:9090;\n" +
+					"        server 1.1.1.1:9090 max_fails=1 fail_timeout=10s;\n" +
 					"\n" +
 					"        keepalive 1024;\n" +
 					"        # Keep connections balanced - especially useful for rolling deployments.\n" +

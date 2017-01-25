@@ -168,12 +168,11 @@ func (c *controller) updateIngresses() error {
 				}
 
 				if stripPath, ok := ingress.Annotations[stripPathAnnotation]; ok {
-					if stripPath == "true" {
-						entry.StripPaths = true
-					} else if stripPath == "false" {
-						entry.StripPaths = false
+					b, err := strconv.ParseBool(stripPath)
+					if err != nil {
+						log.Warnf("Ingress %s has an invalid strip path annotation: %s. Using default", ingress.Name, stripPath)
 					} else {
-						log.Warnf("Ingress %s has an invalid strip path annotation: %s. Uing default", ingress.Name, stripPath)
+						entry.StripPaths = b
 					}
 				}
 
