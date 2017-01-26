@@ -35,6 +35,7 @@ var (
 	nginxConfig                nginx.Conf
 	nginxLogHeaders            cmd.CommaSeparatedValues
 	nginxTrustedFrontends      cmd.CommaSeparatedValues
+	nginxRetryErrors           cmd.CommaSeparatedValues
 )
 
 func init() {
@@ -58,12 +59,16 @@ func init() {
 		defaultNginxServerNamesHashMaxSize       = -1
 		defaultNginxProxyProtocol                = false
 		defaultNginxUpdatePeriod                 = time.Second * 30
+		defaultNginxMaxFails                     = 1
+		defaultNginxFailTimeoutSeconds           = 10
 		defaultElbLabelValue                     = ""
 		defaultRegion                            = "eu-west-1"
 		defaultElbExpectedNumber                 = 0
 		defaultPushgatewayIntervalSeconds        = 60
 		defaultAccessLogDir                      = "/var/log/nginx"
 	)
+
+	nginxRetryErrors = []string{"error", "timeout"}
 
 	flag.BoolVar(&debug, "debug", false,
 		"Enable debug logging.")
@@ -99,16 +104,15 @@ func init() {
 	flag.IntVar(&nginxConfig.KeepaliveSeconds, "nginx-keepalive-seconds", defaultNginxKeepAliveSeconds,
 		"Keep alive time for persistent client connections to nginx. Should generally be set larger than frontend "+
 			"keep alive times to prevent stale connections.")
-	flag.IntVar(&nginxConfig.BackendKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
+	flag.IntVar(&nginxConfig.UpstreamKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
 		"Maximum number of keepalive connections per backend service. Keepalive connections count against"+
 			" nginx-worker-connections limit, and will be restricted by that global limit as well.")
 	flag.IntVar(&controllerConfig.DefaultBackendKeepAlive, "nginx-default-backend-keepalive-seconds",
 		defaultNginxBackendKeepaliveSeconds,
 		"Time to keep backend keepalive connections open. This should generally be set smaller than backend service keepalive "+
 			"times to prevent stale connections. Can be overridden per ingress with the sky.uk/backend-keepalive-seconds annotation.")
-	flag.IntVar(&nginxConfig.BackendConnectTimeoutSeconds, "nginx-backend-connect-timeout-seconds",
-		defaultNginxBackendConnectTimeoutSeconds,
-		"Connect timeout to backend services.")
+	flag.IntVar(&nginxConfig.ProxyConnectTimeoutSeconds, "nginx-backend-connect-timeout-seconds",
+		defaultNginxBackendConnectTimeoutSeconds, "Connect timeout to backend services.")
 	flag.StringVar(&nginxConfig.LogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 	flag.IntVar(&nginxConfig.ServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,
@@ -123,13 +127,21 @@ func init() {
 		"Enable PROXY protocol for nginx listeners.")
 	flag.DurationVar(&nginxConfig.UpdatePeriod, "nginx-update-period", defaultNginxUpdatePeriod,
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
-	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
+	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs directory.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
+	flag.IntVar(&nginxConfig.UpstreamMaxFails, "nginx-max-fails", defaultNginxMaxFails,
+		"Maximum number of failures within the nginx-fail-timeout to consider an endpoint as being down.")
+	flag.IntVar(&nginxConfig.UpstreamFailTimeoutSeconds, "nginx-fail-timeout-seconds", defaultNginxFailTimeoutSeconds,
+		"Time period during which failures are counted to mark an endpoint down. Also determines how long before "+
+			"a down endpoint is tried again.")
 	flag.Var(&nginxLogHeaders, "nginx-log-headers", "Comma separated list of headers to be logged in access logs")
 	flag.Var(&nginxTrustedFrontends, "nginx-trusted-frontends",
 		"Comma separated list of CIDRs to trust when determining the client's real IP from "+
 			"frontends. The client IP is used for allowing or denying ingress access. "+
 			"This will typically be the ELB subnet.")
+	flag.Var(&nginxRetryErrors, "nginx-retry-errors",
+		"Comma separated list of error types to pass to proxy_next_upstream, which determines what errors to retry. "+
+			"See http://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_next_upstream for details.")
 
 	flag.StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
@@ -183,6 +195,7 @@ func createIngressUpdaters() []controller.Updater {
 	nginxConfig.HealthPort = ingressHealthPort
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
+	nginxConfig.ProxyNextUpstreamErrors = nginxRetryErrors
 	nginx := nginx.New(nginxConfig)
 
 	elbAttacher := elb.New(region, elbLabelValue, elbExpectedNumber)

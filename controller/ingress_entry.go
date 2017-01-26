@@ -1,13 +1,22 @@
 package controller
 
 import (
-	"errors"
 	"fmt"
 )
 
 // IngressUpdate data
 type IngressUpdate struct {
 	Entries []IngressEntry
+}
+
+// Service represents a collection of backends for serving traffic of a particular service.
+type Service struct {
+	// Name of the service.
+	Name string
+	// Port to access the service on.
+	Port int32
+	// Addresses to access the service at.
+	Addresses []string
 }
 
 // IngressEntry describes the ingress for a single host, path, and service.
@@ -20,11 +29,8 @@ type IngressEntry struct {
 	Host string
 	// Path is the url path after the hostname. Must be non-empty.
 	Path string
-	// ServiceAddress is a routable address for the Kubernetes backend service to proxy traffic to.
-	// Must be non-empty.
-	ServiceAddress string
-	// ServicePort is the port to proxy traffic to. Must be non-zero.
-	ServicePort int32
+	// Service to serve traffic.
+	Service Service
 	// Allow are the ips or cidrs that are allowed to access the service.
 	Allow []string
 	// ElbScheme internet-facing or internal will dictate which kind of ELB to attach to
@@ -35,21 +41,13 @@ type IngressEntry struct {
 	BackendKeepAliveSeconds int
 }
 
-// validate returns error if entry has invalid fields.
-func (e IngressEntry) validate() error {
-	if e.Host == "" {
-		return errors.New("missing host")
-	}
-	if e.ServiceAddress == "" {
-		return errors.New("missing service address")
-	}
-	if e.ServicePort == 0 {
-		return errors.New("missing service port")
-	}
-	return nil
+// NamespaceName returns the string "Namespace/Name".
+func (e *IngressEntry) NamespaceName() string {
+	return fmt.Sprintf("%s/%s", e.Namespace, e.Name)
 }
 
-// NamespaceName returns the string "Namespace/Name".
-func (e IngressEntry) NamespaceName() string {
-	return fmt.Sprintf("%s/%s", e.Namespace, e.Name)
+// String representation of an IngressEntry.
+func (e IngressEntry) String() string {
+	return fmt.Sprintf("%s/%s: %s%s backends:%+v allow:%v lbScheme:%s stripPaths:%v BackendKeepAlive:%d",
+		e.Namespace, e.Name, e.Host, e.Path, e.Service, e.Allow, e.ELbScheme, e.StripPaths, e.BackendKeepAliveSeconds)
 }
