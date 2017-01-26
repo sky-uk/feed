@@ -268,7 +268,8 @@ func (c *controller) Stop() error {
 	log.Info("Stopping controller")
 	close(c.doneCh)
 
-	for _, u := range c.updaters {
+	for i := range c.updaters {
+		u := c.updaters[len(c.updaters)-i-1]
 		if err := u.Stop(); err != nil {
 			log.Warnf("Error while stopping %v: %v", u, err)
 		}

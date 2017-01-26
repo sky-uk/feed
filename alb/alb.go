@@ -8,6 +8,8 @@ import (
 
 	"sync"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
@@ -17,28 +19,30 @@ import (
 )
 
 // New creates a controller.Updater for attaching to ALB target groups on first update.
-func New(region string, targetGroupNames []string) controller.Updater {
+func New(region string, targetGroupNames []string, targetGroupDeregistrationDelay time.Duration) controller.Updater {
 	initMetrics()
 	log.Infof("ALB frontend region: %s target groups: %v", region, targetGroupNames)
 	session := session.New(&aws.Config{Region: &region})
 	return &alb{
-		metadata:         ec2metadata.New(session),
-		awsALB:           aws_alb.New(session),
-		targetGroupNames: targetGroupNames,
-		region:           region,
-		initialised:      initialised{},
+		metadata:                       ec2metadata.New(session),
+		awsALB:                         aws_alb.New(session),
+		targetGroupNames:               targetGroupNames,
+		targetGroupDeregistrationDelay: targetGroupDeregistrationDelay,
+		region:      region,
+		initialised: initialised{},
 	}
 }
 
 type alb struct {
-	awsALB              ALB
-	metadata            EC2Metadata
-	targetGroupNames    []string
-	region              string
-	instanceID          string
-	albARNs             []*string
-	registeredFrontends int
-	initialised         initialised
+	awsALB                         ALB
+	metadata                       EC2Metadata
+	targetGroupNames               []string
+	targetGroupDeregistrationDelay time.Duration
+	region                         string
+	instanceID                     string
+	albARNs                        []*string
+	registeredFrontends            int
+	initialised                    initialised
 }
 
 type initialised struct {
@@ -94,6 +98,8 @@ func (a *alb) Stop() error {
 			log.Warnf("Unable to deregister instance %s with ALB target group %s: %v", a.instanceID, *arn, err)
 		}
 	}
+
+	time.Sleep(a.targetGroupDeregistrationDelay)
 
 	return nil
 }

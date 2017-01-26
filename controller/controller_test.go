@@ -31,12 +31,18 @@ func (lb *fakeUpdater) Update(update IngressUpdate) error {
 	return r.Error(0)
 }
 
+var started []*fakeUpdater
+
 func (lb *fakeUpdater) Start() error {
+	started = append(started, lb)
 	r := lb.Called()
 	return r.Error(0)
 }
 
+var stopped []*fakeUpdater
+
 func (lb *fakeUpdater) Stop() error {
+	stopped = append(stopped, lb)
 	r := lb.Called()
 	return r.Error(0)
 }
@@ -102,6 +108,38 @@ func TestControllerCanBeStartedAndStopped(t *testing.T) {
 	assert.NoError(controller.Stop())
 	updater.AssertCalled(t, "Start")
 	updater.AssertCalled(t, "Stop")
+}
+
+func TestControllerStartsAndStopsUpdatersInCorrectOrder(t *testing.T) {
+	// given
+	assert := assert.New(t)
+	updater1 := new(fakeUpdater)
+	updater1.TestData().Set("name", "updater1")
+	updater1.On("Start").Return(nil)
+	updater1.On("Stop").Return(nil)
+
+	updater2 := new(fakeUpdater)
+	updater2.TestData().Set("name", "updater2")
+	updater2.On("Start").Return(nil)
+	updater2.On("Stop").Return(nil)
+
+	_, client := createDefaultStubs()
+	controller := New(Config{
+		Updaters:                []Updater{updater1, updater2},
+		KubernetesClient:        client,
+		DefaultAllow:            ingressDefaultAllow,
+		DefaultBackendKeepAlive: defaultBackendTimeout,
+	})
+
+	// when
+	started = nil
+	stopped = nil
+	assert.NoError(controller.Start())
+	assert.NoError(controller.Stop())
+
+	// then
+	assert.Equal(started, []*fakeUpdater{updater1, updater2}, "should start in order")
+	assert.Equal(stopped, []*fakeUpdater{updater2, updater1}, "should stop in reverse order")
 }
 
 func TestControllerCannotBeRestarted(t *testing.T) {
