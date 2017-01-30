@@ -7,6 +7,8 @@ import (
 
 	"errors"
 
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
@@ -106,7 +108,7 @@ func (m *mockMetadata) mockInstanceMetadata(instanceID string) {
 }
 
 func setup(targetGroupNames ...string) (controller.Updater, *mockALB, *mockMetadata) {
-	a := New(region, targetGroupNames)
+	a := New(region, targetGroupNames, time.Nanosecond)
 	mockALB := &mockALB{}
 	mockMetadata := &mockMetadata{}
 	a.(*alb).awsALB = mockALB
@@ -279,4 +281,20 @@ func TestDeregisterErrorIsHandledInStop(t *testing.T) {
 	mockALB.AssertExpectations(t)
 	mockMetadata.AssertExpectations(t)
 	assert.NoError(t, stopErr)
+}
+
+func TestStopWaitsForDeregisterDelay(t *testing.T) {
+	//given
+	a, _, _ := setup()
+	a.(*alb).targetGroupNames = nil
+	a.(*alb).targetGroupDeregistrationDelay = time.Millisecond * 50
+
+	//when
+	a.Start()
+	beforeStop := time.Now()
+	a.Stop()
+	stopDuration := time.Now().Sub(beforeStop)
+
+	//then
+	assert.True(t, stopDuration.Nanoseconds() > time.Millisecond.Nanoseconds()*50)
 }

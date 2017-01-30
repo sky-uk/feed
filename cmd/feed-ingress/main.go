@@ -18,24 +18,25 @@ import (
 )
 
 var (
-	debug                      bool
-	kubeconfig                 string
-	resyncPeriod               time.Duration
-	ingressPort                int
-	ingressHealthPort          int
-	healthPort                 int
-	elbLabelValue              string
-	region                     string
-	elbExpectedNumber          int
-	targetGroupNames           cmd.CommaSeparatedValues
-	pushgatewayURL             string
-	pushgatewayIntervalSeconds int
-	pushgatewayLabels          cmd.KeyValues
-	controllerConfig           controller.Config
-	nginxConfig                nginx.Conf
-	nginxLogHeaders            cmd.CommaSeparatedValues
-	nginxTrustedFrontends      cmd.CommaSeparatedValues
-	nginxRetryErrors           cmd.CommaSeparatedValues
+	debug                          bool
+	kubeconfig                     string
+	resyncPeriod                   time.Duration
+	ingressPort                    int
+	ingressHealthPort              int
+	healthPort                     int
+	elbLabelValue                  string
+	region                         string
+	elbExpectedNumber              int
+	targetGroupNames               cmd.CommaSeparatedValues
+	targetGroupDeregistrationDelay time.Duration
+	pushgatewayURL                 string
+	pushgatewayIntervalSeconds     int
+	pushgatewayLabels              cmd.KeyValues
+	controllerConfig               controller.Config
+	nginxConfig                    nginx.Conf
+	nginxLogHeaders                cmd.CommaSeparatedValues
+	nginxTrustedFrontends          cmd.CommaSeparatedValues
+	nginxRetryErrors               cmd.CommaSeparatedValues
 )
 
 func init() {
@@ -59,9 +60,10 @@ func init() {
 		defaultNginxServerNamesHashMaxSize       = -1
 		defaultNginxProxyProtocol                = false
 		defaultNginxUpdatePeriod                 = time.Second * 30
-		defaultNginxMaxFails                     = 1
+		defaultNginxMaxFails                     = 0
 		defaultNginxFailTimeoutSeconds           = 10
 		defaultElbLabelValue                     = ""
+		defaultTargetGroupDeregistrationDelay    = time.Second * 30
 		defaultRegion                            = "eu-west-1"
 		defaultElbExpectedNumber                 = 0
 		defaultPushgatewayIntervalSeconds        = 60
@@ -130,7 +132,8 @@ func init() {
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs directory.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
 	flag.IntVar(&nginxConfig.UpstreamMaxFails, "nginx-max-fails", defaultNginxMaxFails,
-		"Maximum number of failures within the nginx-fail-timeout to consider an endpoint as being down.")
+		"Maximum number of failures within the nginx-fail-timeout to consider an endpoint as being down. Usually leave "+
+			"this to 0 to let kubelet manage endpoint health.")
 	flag.IntVar(&nginxConfig.UpstreamFailTimeoutSeconds, "nginx-fail-timeout-seconds", defaultNginxFailTimeoutSeconds,
 		"Time period during which failures are counted to mark an endpoint down. Also determines how long before "+
 			"a down endpoint is tried again.")
@@ -154,6 +157,10 @@ func init() {
 
 	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
+	flag.DurationVar(&targetGroupDeregistrationDelay, "alb-target-group-deregistration-delay",
+		defaultTargetGroupDeregistrationDelay,
+		"Delay to wait for feed-ingress to deregister from the ALB target group on shutdown. Should match the target"+
+			" group setting in AWS.")
 
 	flag.StringVar(&pushgatewayURL, "pushgateway", "",
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
@@ -199,7 +206,7 @@ func createIngressUpdaters() []controller.Updater {
 	nginx := nginx.New(nginxConfig)
 
 	elbAttacher := elb.New(region, elbLabelValue, elbExpectedNumber)
-	albAttacher := alb.New(region, targetGroupNames)
+	albAttacher := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
 	// update nginx before attaching to front ends
 	return []controller.Updater{nginx, elbAttacher, albAttacher}
 }
