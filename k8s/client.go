@@ -21,6 +21,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// Time to handle multiple updates occurring in a short time period, such as at startup where
+// each existing endpoint / ingress produces a single update.
+const bufferedWatcherDuration = time.Millisecond * 50
+
 // Client for connecting to a Kubernetes cluster.
 // Watchers will receive a notification whenever the client connects to the API server,
 // including reconnects, to notify that there may be new ingresses that need to be retrieved.
@@ -95,7 +99,7 @@ func (c *client) createIngressSource() {
 
 	ingressLW := cache.NewListWatchFromClient(c.clientset.ExtensionsV1beta1().RESTClient(), "ingresses", "",
 		fields.Everything())
-	c.ingressWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(time.Second)}
+	c.ingressWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
 	store, controller := cache.NewInformer(ingressLW, &v1beta1.Ingress{}, c.resyncPeriod, c.ingressWatcher)
 
 	c.ingressStore = store
@@ -131,7 +135,7 @@ func (c *client) createEndpointSource() {
 	}
 
 	endpointLW := cache.NewListWatchFromClient(c.clientset.CoreV1().RESTClient(), "endpoints", "", fields.Everything())
-	c.endpointWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(time.Second)}
+	c.endpointWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
 	store, controller := cache.NewInformer(endpointLW, &v1.Endpoints{}, c.resyncPeriod, c.endpointWatcher)
 
 	c.endpointStore = store
