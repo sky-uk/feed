@@ -24,14 +24,14 @@ func (c *FakeClient) WatchIngresses() k8s.Watcher {
 	return r.Get(0).(k8s.Watcher)
 }
 
-// GetEndpoints mocks out calls to GetEndpoints
-func (c *FakeClient) GetEndpoints() ([]*v1.Endpoints, error) {
+// GetServices mocks out calls to GetServices
+func (c *FakeClient) GetServices() ([]*v1.Service, error) {
 	r := c.Called()
-	return r.Get(0).([]*v1.Endpoints), r.Error(1)
+	return r.Get(0).([]*v1.Service), r.Error(1)
 }
 
-// WatchEndpoints mocks out calls to WatchEndpoints
-func (c *FakeClient) WatchEndpoints() k8s.Watcher {
+// WatchServices mocks out calls to WatchServices
+func (c *FakeClient) WatchServices() k8s.Watcher {
 	r := c.Called()
 	return r.Get(0).(k8s.Watcher)
 }
