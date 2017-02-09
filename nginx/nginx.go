@@ -31,25 +31,28 @@ const (
 
 // Conf configuration for nginx
 type Conf struct {
-	BinaryLocation               string
-	WorkingDir                   string
-	WorkerProcesses              int
-	WorkerConnections            int
-	KeepaliveSeconds             int
-	BackendKeepalives            int
-	BackendConnectTimeoutSeconds int
-	ServerNamesHashBucketSize    int
-	ServerNamesHashMaxSize       int
-	HealthPort                   int
-	TrustedFrontends             []string
-	IngressPort                  int
-	LogLevel                     string
-	ProxyProtocol                bool
-	AccessLog                    bool
-	AccessLogDir                 string
-	LogHeaders                   []string
-	AccessLogHeaders             string
-	UpdatePeriod                 time.Duration
+	BinaryLocation             string
+	WorkingDir                 string
+	WorkerProcesses            int
+	WorkerConnections          int
+	KeepaliveSeconds           int
+	UpstreamKeepalives         int
+	ProxyConnectTimeoutSeconds int
+	UpstreamMaxFails           int
+	UpstreamFailTimeoutSeconds int
+	ProxyNextUpstreamErrors    []string
+	ServerNamesHashBucketSize  int
+	ServerNamesHashMaxSize     int
+	HealthPort                 int
+	TrustedFrontends           []string
+	IngressPort                int
+	LogLevel                   string
+	ProxyProtocol              bool
+	AccessLog                  bool
+	AccessLogDir               string
+	LogHeaders                 []string
+	AccessLogHeaders           string
+	UpdatePeriod               time.Duration
 }
 
 type nginx struct {
@@ -108,8 +111,9 @@ type server struct {
 }
 
 type upstream struct {
-	ID     string
-	Server string
+	ID        string
+	Port      int32
+	Addresses []string
 }
 
 type location struct {
@@ -131,6 +135,10 @@ func New(nginxConf Conf) controller.Updater {
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
 	if nginxConf.LogLevel == "" {
 		nginxConf.LogLevel = "warn"
+	}
+
+	if len(nginxConf.ProxyNextUpstreamErrors) == 0 {
+		log.Fatal("ProxyNextUpstreamErrors was empty, should contain at least one value.")
 	}
 
 	cmd := exec.Command(nginxConf.BinaryLocation, "-c", nginxConf.nginxConfFile())
@@ -368,10 +376,11 @@ func (u upstreams) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
 func createUpstreamEntries(update controller.IngressUpdate) []*upstream {
 	idToUpstream := make(map[string]*upstream)
 
-	for _, ingressEntry := range update.Entries {
+	for _, entry := range update.Entries {
 		upstream := &upstream{
-			ID:     upstreamID(ingressEntry),
-			Server: fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
+			ID:        upstreamID(entry),
+			Port:      entry.Service.Port,
+			Addresses: entry.Service.Addresses,
 		}
 		idToUpstream[upstream.ID] = upstream
 	}
@@ -386,7 +395,7 @@ func createUpstreamEntries(update controller.IngressUpdate) []*upstream {
 }
 
 func upstreamID(e controller.IngressEntry) string {
-	return fmt.Sprintf("%s.%s.%d", e.Namespace, e.ServiceAddress, e.ServicePort)
+	return fmt.Sprintf("%s.%s.%d", e.Namespace, e.Service.Name, e.Service.Port)
 }
 
 type servers []*server

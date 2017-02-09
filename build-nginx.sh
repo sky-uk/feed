@@ -31,9 +31,11 @@ if ! sha256sum -c hashes; then
     exit 1
 fi
 
-tar xzf nginx-${NGINX_VERSION}.tar.gz
-tar xzf nginx-module-vts-${VTS_VERSION}.tar.gz
+tar xzf ${nginx_tarball}
+tar xzf ${vts_tarball}
 cd nginx-${NGINX_VERSION}
+
+vts_module_dir="/tmp/nginx/nginx-module-vts-${VTS_VERSION}"
 
 echo "--- Configuring nginx"
 ./configure \
@@ -58,7 +60,7 @@ echo "--- Configuring nginx"
     --with-http_v2_module \
     --with-ipv6 \
     --with-debug \
-    --add-module=/tmp/nginx/nginx-module-vts-0.1.10
+    --add-module=${vts_module_dir}
 
 echo "--- Building nginx"
 make

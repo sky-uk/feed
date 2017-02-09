@@ -5,13 +5,12 @@ It delegates update logic to an Updater interface.
 package controller
 
 import (
+	"strconv"
 	"sync"
 
 	"fmt"
 
 	"strings"
-
-	"strconv"
 
 	"errors"
 
@@ -44,7 +43,6 @@ type controller struct {
 	defaultBackendTimeout int
 	watcher               k8s.Watcher
 	doneCh                chan struct{}
-	watcherDone           sync.WaitGroup
 	started               bool
 	updatesHealth         util.SafeError
 	sync.Mutex
@@ -97,9 +95,8 @@ func (c *controller) Start() error {
 
 func (c *controller) watchForUpdates() {
 	ingressWatcher := c.client.WatchIngresses()
-	serviceWatcher := c.client.WatchServices()
-	c.watcher = k8s.CombineWatchers(ingressWatcher, serviceWatcher)
-	c.watcherDone.Add(1)
+	endpointWatcher := c.client.WatchEndpoints()
+	c.watcher = k8s.CombineWatchers(ingressWatcher, endpointWatcher)
 	go c.handleUpdates()
 }
 
@@ -128,66 +125,68 @@ func (c *controller) updateIngresses() error {
 	if err != nil {
 		return err
 	}
-	services, err := c.client.GetServices()
+	endpoints, err := c.client.GetEndpoints()
 	if err != nil {
 		return err
 	}
 
-	serviceMap := mapNamesToAddresses(services)
+	services := mapEndpointsToServices(endpoints)
 
 	var skipped []string
-	entries := []IngressEntry{}
+	var entries []IngressEntry
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {
 
-				serviceName := serviceName{namespace: ingress.Namespace, name: path.Backend.ServiceName}
+				serviceKey := serviceKey{namespace: ingress.Namespace, name: path.Backend.ServiceName,
+					port: int32(path.Backend.ServicePort.IntValue())}
 
-				if address := serviceMap[serviceName]; address != "" {
-					entry := IngressEntry{
-						Namespace:               ingress.Namespace,
-						Name:                    ingress.Name,
-						Host:                    rule.Host,
-						Path:                    path.Path,
-						ServiceAddress:          address,
-						ServicePort:             int32(path.Backend.ServicePort.IntValue()),
-						Allow:                   c.defaultAllow,
-						ELbScheme:               ingress.Annotations[frontendElbSchemeAnnotation],
-						StripPaths:              c.defaultStripPath,
-						BackendKeepAliveSeconds: c.defaultBackendTimeout,
-					}
-
-					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
-						if allow == "" {
-							entry.Allow = []string{}
-						} else {
-							entry.Allow = strings.Split(allow, ",")
-						}
-					}
-
-					if stripPath, ok := ingress.Annotations[stripPathAnnotation]; ok {
-						if stripPath == "true" {
-							entry.StripPaths = true
-						} else if stripPath == "false" {
-							entry.StripPaths = false
-						} else {
-							log.Warnf("Ingress %s has an invalid strip path annotation: %s. Uing default", ingress.Name, stripPath)
-						}
-					}
-
-					if backendKeepAlive, ok := ingress.Annotations[backendKeepAliveSeconds]; ok {
-						tmp, _ := strconv.Atoi(backendKeepAlive)
-						entry.BackendKeepAliveSeconds = tmp
-					}
-
-					if err := entry.validate(); err == nil {
-						entries = append(entries, entry)
-					} else {
-						skipped = append(skipped, fmt.Sprintf("%s (%v)", entry.NamespaceName(), err))
-					}
-				} else {
+				service, exists := services[serviceKey]
+				if !exists {
 					skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
+					continue
 				}
+
+				entry := IngressEntry{
+					Namespace:               ingress.Namespace,
+					Name:                    ingress.Name,
+					Host:                    rule.Host,
+					Path:                    path.Path,
+					Service:                 service,
+					Allow:                   c.defaultAllow,
+					ELbScheme:               ingress.Annotations[frontendElbSchemeAnnotation],
+					StripPaths:              c.defaultStripPath,
+					BackendKeepAliveSeconds: c.defaultBackendTimeout,
+				}
+
+				if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
+					if allow == "" {
+						entry.Allow = []string{}
+					} else {
+						entry.Allow = strings.Split(allow, ",")
+					}
+				}
+
+				if stripPath, ok := ingress.Annotations[stripPathAnnotation]; ok {
+					b, err := strconv.ParseBool(stripPath)
+					if err != nil {
+						log.Warnf("Ingress %s has an invalid strip path annotation: %s. Using default", ingress.Name, stripPath)
+					} else {
+						entry.StripPaths = b
+					}
+				}
+
+				if backendKeepAlive, ok := ingress.Annotations[backendKeepAliveSeconds]; ok {
+					tmp, _ := strconv.Atoi(backendKeepAlive)
+					entry.BackendKeepAliveSeconds = tmp
+				}
+
+				if err := validate(&entry); err != nil {
+					skipped = append(skipped, fmt.Sprintf("%s (%v)", entry.NamespaceName(), err))
+					continue
+				}
+
+				entries = append(entries, entry)
 			}
 		}
 	}
@@ -207,17 +206,52 @@ func (c *controller) updateIngresses() error {
 	return nil
 }
 
-type serviceName struct {
-	namespace string
-	name      string
+func validate(e *IngressEntry) error {
+	if e.Host == "" {
+		return errors.New("missing host")
+	}
+	if len(e.Service.Addresses) == 0 {
+		return errors.New("no service endpoints")
+	}
+	if e.Service.Port == 0 {
+		return errors.New("missing service port")
+	}
+	return nil
 }
 
-func mapNamesToAddresses(services []*v1.Service) map[serviceName]string {
-	m := make(map[serviceName]string)
+type serviceKey struct {
+	namespace string
+	name      string
+	port      int32
+}
 
-	for _, svc := range services {
-		name := serviceName{namespace: svc.Namespace, name: svc.Name}
-		m[name] = svc.Spec.ClusterIP
+func mapEndpointsToServices(multipleEndpoints []*v1.Endpoints) map[serviceKey]Service {
+	m := make(map[serviceKey]Service)
+
+	for _, endpoints := range multipleEndpoints {
+		for _, subset := range endpoints.Subsets {
+			for _, port := range subset.Ports {
+
+				if port.Protocol == v1.ProtocolUDP {
+					continue
+				}
+
+				key := serviceKey{namespace: endpoints.Namespace, name: endpoints.Name, port: port.Port}
+
+				var addresses []string
+				for _, address := range subset.Addresses {
+					addresses = append(addresses, address.IP)
+				}
+
+				service := Service{
+					Name:      endpoints.Name,
+					Port:      port.Port,
+					Addresses: addresses,
+				}
+
+				m[key] = service
+			}
+		}
 	}
 
 	return m
