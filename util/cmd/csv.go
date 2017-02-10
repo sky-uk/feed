@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -9,7 +8,7 @@ import (
 type CommaSeparatedValues []string
 
 func (c *CommaSeparatedValues) String() string {
-	return fmt.Sprint(*c)
+	return strings.Join(*c, ",")
 }
 
 // Set binds a comma separated command line flag value to a KeyValue.

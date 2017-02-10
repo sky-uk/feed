@@ -33,26 +33,26 @@ type Client interface {
 	// GetIngresses returns all the ingresses in the cluster.
 	GetIngresses() ([]*v1beta1.Ingress, error)
 
-	// GetServices returns all the services in the cluster.
-	GetServices() ([]*v1.Service, error)
+	// GetEndpoints returns all the endpoints in the cluster.
+	GetEndpoints() ([]*v1.Endpoints, error)
 
 	// WatchIngresses watches for updates to ingresses and notifies the Watcher.
 	WatchIngresses() Watcher
 
-	// WatchServices watches for updates to services and notifies the Watcher.
-	WatchServices() Watcher
+	// WatchEndpoints watches for updates to endpoints and notifies the Watcher.
+	WatchEndpoints() Watcher
 }
 
 type client struct {
 	sync.Mutex
-	clientset         *kubernetes.Clientset
-	resyncPeriod      time.Duration
-	ingressStore      cache.Store
-	ingressController *cache.Controller
-	ingressWatcher    *handlerWatcher
-	serviceStore      cache.Store
-	serviceController *cache.Controller
-	serviceWatcher    *handlerWatcher
+	clientset          *kubernetes.Clientset
+	resyncPeriod       time.Duration
+	ingressStore       cache.Store
+	ingressController  *cache.Controller
+	ingressWatcher     *handlerWatcher
+	endpointStore      cache.Store
+	endpointController *cache.Controller
+	endpointWatcher    *handlerWatcher
 }
 
 // New creates a client for the kubernetes apiserver.
@@ -107,39 +107,39 @@ func (c *client) createIngressSource() {
 	go controller.Run(make(chan struct{}))
 }
 
-func (c *client) GetServices() ([]*v1.Service, error) {
-	c.createServiceSource()
+func (c *client) GetEndpoints() ([]*v1.Endpoints, error) {
+	c.createEndpointSource()
 
-	if !c.serviceController.HasSynced() {
-		return nil, errors.New("Services haven't synced yet")
+	if !c.endpointController.HasSynced() {
+		return nil, errors.New("Endpoints haven't synced yet")
 	}
 
-	services := []*v1.Service{}
-	for _, obj := range c.serviceStore.List() {
-		services = append(services, obj.(*v1.Service))
+	var endpoints []*v1.Endpoints
+	for _, obj := range c.endpointStore.List() {
+		endpoints = append(endpoints, obj.(*v1.Endpoints))
 	}
 
-	return services, nil
+	return endpoints, nil
 }
 
-func (c *client) WatchServices() Watcher {
-	c.createServiceSource()
-	return c.serviceWatcher
+func (c *client) WatchEndpoints() Watcher {
+	c.createEndpointSource()
+	return c.endpointWatcher
 }
 
-func (c *client) createServiceSource() {
+func (c *client) createEndpointSource() {
 	c.Lock()
 	defer c.Unlock()
-	if c.serviceStore != nil {
+	if c.endpointStore != nil {
 		return
 	}
 
-	serviceLW := cache.NewListWatchFromClient(c.clientset.CoreV1().RESTClient(), "services", "", fields.Everything())
-	c.serviceWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
-	store, controller := cache.NewInformer(serviceLW, &v1.Service{}, c.resyncPeriod, c.serviceWatcher)
+	endpointLW := cache.NewListWatchFromClient(c.clientset.CoreV1().RESTClient(), "endpoints", "", fields.Everything())
+	c.endpointWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
+	store, controller := cache.NewInformer(endpointLW, &v1.Endpoints{}, c.resyncPeriod, c.endpointWatcher)
 
-	c.serviceStore = store
-	c.serviceController = controller
+	c.endpointStore = store
+	c.endpointController = controller
 	go controller.Run(make(chan struct{}))
 }
 
