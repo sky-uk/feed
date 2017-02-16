@@ -240,7 +240,7 @@ func (n *nginxUpdater) backgroundSignaller() {
 }
 
 func (n *nginxUpdater) updateMetrics() {
-	if err := parseAndSetNginxMetrics(n.HealthPort, "/basic_status"); err != nil {
+	if err := parseAndSetNginxMetrics(n.HealthPort); err != nil {
 		log.Warnf("Unable to update nginx metrics: %v", err)
 		n.metricsUnhealthy.Set(true)
 	} else {

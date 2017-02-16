@@ -947,24 +947,69 @@ func TestUpdatesMetricsFromNginxStatusPage(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	// then
-	assert.Equal(9.0, gaugeValue(connectionGauge))
-	assert.Equal(2.0, gaugeValue(readingConnectionsGauge))
-	assert.Equal(1.0, gaugeValue(writingConnectionsGauge))
-	assert.Equal(8.0, gaugeValue(waitingConnectionsGauge))
-	assert.Equal(13287.0, gaugeValue(acceptsGauge))
-	assert.Equal(13286.0, gaugeValue(handledGauge))
-	assert.Equal(66627.0, gaugeValue(requestsGauge))
+	assert.Equal(2.0, metricValue(connections))
+	assert.Equal(0.0, metricValue(readingConnections))
+	assert.Equal(1.0, metricValue(writingConnections))
+	assert.Equal(1.0, metricValue(waitingConnections))
+	assert.Equal(68942.0, metricValue(totalAccepts))
+	assert.Equal(68942.0, metricValue(totalHandled))
+	assert.Equal(76622.0, metricValue(totalRequests))
+
+	// and
+	assertIngressRequestCounters(t,
+		"heapster-external.sandbox.cosmic.sky", "/stuff/",
+		898.0, 471.0, 6.0, 3.0, 2.0, 1.0, 7.0)
+	assertIngressRequestCounters(t,
+		"heapster.sandbox.cosmic.sky", "/",
+		2012.0, 1099.0, 0.0, 7.0, 0.0, 0.0, 0.0)
+	assertEndpointRequestCounters(t,
+		"kube-system.10.254.201.199.80", "10.254.201.199:80",
+		2910.0, 1570.0, 1.0, 10.0, 9.0, 2.0, 3.0)
+}
+
+func assertIngressRequestCounters(t *testing.T, host, path string, in, out, ones, twos, threes, fours, fives float64) {
+	assert := assert.New(t)
+	inBytes, _ := ingressBytes.GetMetricWithLabelValues(host, path, "in")
+	assert.Equal(in, metricValue(inBytes), "in bytes for %s%s", host, path)
+	outBytes, _ := ingressBytes.GetMetricWithLabelValues(host, path, "out")
+	assert.Equal(out, metricValue(outBytes), "out bytes for %s%s", host, path)
+	req1xx, _ := ingressRequests.GetMetricWithLabelValues(host, path, "1xx")
+	assert.Equal(ones, metricValue(req1xx), "1xx for %s%s", host, path)
+	req2xx, _ := ingressRequests.GetMetricWithLabelValues(host, path, "2xx")
+	assert.Equal(twos, metricValue(req2xx), "2xx for %s%s", host, path)
+	req3xx, _ := ingressRequests.GetMetricWithLabelValues(host, path, "3xx")
+	assert.Equal(threes, metricValue(req3xx), "3xx for %s%s", host, path)
+	req4xx, _ := ingressRequests.GetMetricWithLabelValues(host, path, "4xx")
+	assert.Equal(fours, metricValue(req4xx), "4xx for %s%s", host, path)
+	req5xx, _ := ingressRequests.GetMetricWithLabelValues(host, path, "5xx")
+	assert.Equal(fives, metricValue(req5xx), "5xx for %s%s", host, path)
+}
+
+func assertEndpointRequestCounters(t *testing.T, name, endpoint string, in, out, ones, twos, threes, fours, fives float64) {
+	assert := assert.New(t)
+	inBytes, _ := endpointBytes.GetMetricWithLabelValues(name, endpoint, "in")
+	assert.Equal(in, metricValue(inBytes), "in bytes for %s%s", name, endpoint)
+	outBytes, _ := endpointBytes.GetMetricWithLabelValues(name, endpoint, "out")
+	assert.Equal(out, metricValue(outBytes), "out bytes for %s%s", name, endpoint)
+	req1xx, _ := endpointRequests.GetMetricWithLabelValues(name, endpoint, "1xx")
+	assert.Equal(ones, metricValue(req1xx), "1xx for %s%s", name, endpoint)
+	req2xx, _ := endpointRequests.GetMetricWithLabelValues(name, endpoint, "2xx")
+	assert.Equal(twos, metricValue(req2xx), "2xx for %s%s", name, endpoint)
+	req3xx, _ := endpointRequests.GetMetricWithLabelValues(name, endpoint, "3xx")
+	assert.Equal(threes, metricValue(req3xx), "3xx for %s%s", name, endpoint)
+	req4xx, _ := endpointRequests.GetMetricWithLabelValues(name, endpoint, "4xx")
+	assert.Equal(fours, metricValue(req4xx), "4xx for %s%s", name, endpoint)
+	req5xx, _ := endpointRequests.GetMetricWithLabelValues(name, endpoint, "5xx")
+	assert.Equal(fives, metricValue(req5xx), "5xx for %s%s", name, endpoint)
 }
 
 func stubHealthPort() *httptest.Server {
-	statusBody := `Active connections: 9
-server accepts handled requests
- 13287 13286 66627
-Reading: 2 Writing: 1 Waiting: 8
-`
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/basic_status" {
-			fmt.Fprintln(w, statusBody)
+		if r.URL.Path == "/status/format/json" {
+			w.Header().Set("Content-Type", "application/json")
+			if _, err := w.Write(statusResponseBody); err != nil {
+				fmt.Printf("Unable to write health port stub data: %v\n", err)
+			}
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -983,13 +1028,19 @@ func getPort(ts *httptest.Server) int {
 	return intPort
 }
 
-func gaugeValue(g prometheus.Gauge) float64 {
+func metricValue(c prometheus.Collector) float64 {
 	metricCh := make(chan prometheus.Metric, 1)
-	g.Collect(metricCh)
+	c.Collect(metricCh)
 	metric := <-metricCh
 	var metricVal dto.Metric
 	metric.Write(&metricVal)
-	return *metricVal.Gauge.Value
+	if metricVal.Gauge != nil {
+		return *metricVal.Gauge.Value
+	}
+	if metricVal.Counter != nil {
+		return *metricVal.Counter.Value
+	}
+	return -1.0
 }
 
 func TestFailsToUpdateIfConfigurationIsBroken(t *testing.T) {
@@ -1023,3 +1074,256 @@ func setupWorkDir(t *testing.T) string {
 func copyNginxTemplate(t *testing.T, tmpDir string) {
 	assert.NoError(t, exec.Command("cp", "nginx.tmpl", tmpDir+"/").Run())
 }
+
+var statusResponseBody = []byte(`{
+  "nginxVersion": "1.10.2",
+  "loadMsec": 1486665540251,
+  "nowMsec": 1486742278375,
+  "connections": {
+    "active": 2,
+    "reading": 0,
+    "writing": 1,
+    "waiting": 1,
+    "accepted": 68942,
+    "handled": 68942,
+    "requests": 76622
+  },
+  "serverZones": {
+    "heapster.sandbox.cosmic.sky": {
+      "requestCounter": 7,
+      "inBytes": 2012,
+      "outBytes": 1099,
+      "responses": {
+        "1xx": 0,
+        "2xx": 7,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      },
+      "overCounts": {
+        "maxIntegerSize": 18446744073709551615,
+        "requestCounter": 0,
+        "inBytes": 0,
+        "outBytes": 0,
+        "1xx": 0,
+        "2xx": 0,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      }
+    },
+    "heapster-external.sandbox.cosmic.sky": {
+      "requestCounter": 3,
+      "inBytes": 898,
+      "outBytes": 471,
+      "responses": {
+        "1xx": 0,
+        "2xx": 3,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      },
+      "overCounts": {
+        "maxIntegerSize": 18446744073709551615,
+        "requestCounter": 0,
+        "inBytes": 0,
+        "outBytes": 0,
+        "1xx": 0,
+        "2xx": 0,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      }
+    },
+    "*": {
+      "requestCounter": 10,
+      "inBytes": 2910,
+      "outBytes": 1570,
+      "responses": {
+        "1xx": 0,
+        "2xx": 10,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      },
+      "overCounts": {
+        "maxIntegerSize": 18446744073709551615,
+        "requestCounter": 0,
+        "inBytes": 0,
+        "outBytes": 0,
+        "1xx": 0,
+        "2xx": 0,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      }
+    }
+  },
+  "filterZones": {
+    "heapster-external.sandbox.cosmic.sky": {
+      "/stuff/::kube-system.10.254.201.199.80": {
+        "requestCounter": 19,
+        "inBytes": 898,
+        "outBytes": 471,
+        "responses": {
+          "1xx": 6,
+          "2xx": 3,
+          "3xx": 2,
+          "4xx": 1,
+          "5xx": 7,
+          "miss": 0,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        },
+        "overCounts": {
+          "maxIntegerSize": 18446744073709551615,
+          "requestCounter": 0,
+          "inBytes": 0,
+          "outBytes": 0,
+          "1xx": 0,
+          "2xx": 0,
+          "3xx": 0,
+          "4xx": 0,
+          "5xx": 0,
+          "miss": 0,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        }
+      }
+    },
+    "heapster.sandbox.cosmic.sky": {
+      "/::kube-system.10.254.201.199.80": {
+        "requestCounter": 7,
+        "inBytes": 2012,
+        "outBytes": 1099,
+        "responses": {
+          "1xx": 0,
+          "2xx": 7,
+          "3xx": 0,
+          "4xx": 0,
+          "5xx": 0,
+          "miss": 0,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        },
+        "overCounts": {
+          "maxIntegerSize": 18446744073709551615,
+          "requestCounter": 0,
+          "inBytes": 0,
+          "outBytes": 0,
+          "1xx": 0,
+          "2xx": 0,
+          "3xx": 0,
+          "4xx": 0,
+          "5xx": 0,
+          "miss": 0,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        }
+      }
+    }
+  },
+  "upstreamZones": {
+    "kube-system.10.254.201.199.80": [
+      {
+        "server": "10.254.201.199:80",
+        "requestCounter": 10,
+        "inBytes": 2910,
+        "outBytes": 1570,
+        "responses": {
+          "1xx": 1,
+          "2xx": 10,
+          "3xx": 9,
+          "4xx": 2,
+          "5xx": 3
+        },
+        "responseMsec": 1,
+        "weight": 1,
+        "maxFails": 1,
+        "failTimeout": 10,
+        "backup": false,
+        "down": false,
+        "overCounts": {
+          "maxIntegerSize": 18446744073709551615,
+          "requestCounter": 0,
+          "inBytes": 0,
+          "outBytes": 0,
+          "1xx": 0,
+          "2xx": 0,
+          "3xx": 0,
+          "4xx": 0,
+          "5xx": 0
+        }
+      }
+    ]
+  }
+}
+`)
