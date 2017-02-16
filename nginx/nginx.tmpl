@@ -78,7 +78,7 @@ http {
     proxy_set_header Host $host;
 
     # Timeout to backend services on initial connect.
-    proxy_connect_timeout {{ .ProxyConnectTimeoutSeconds }}s;
+    proxy_connect_timeout {{ .BackendConnectTimeoutSeconds }}s;
 
     # Disable buffering, as we'll be interacting with ELBs with http listeners, which we assume will
     # quickly consume and generate responses and requests.
@@ -90,20 +90,13 @@ http {
 
     # Start ingresses
     {{- $port := .IngressPort }}
-    {{- $keepalive := .UpstreamKeepalives }}
+    {{- $keepalive := .BackendKeepalives }}
     {{- $proxyprotocol := .ProxyProtocol }}
-    {{- $maxFails := .UpstreamMaxFails }}
-    {{- $failTimeoutSecs := .UpstreamFailTimeoutSeconds }}
-    {{- $nextUpstreamErrors := .ProxyNextUpstreamErrors }}
     
 {{- range $upstream := .Upstreams }}
     upstream {{ $upstream.ID }} {
-{{- range $address := $upstream.Addresses }}
-        server {{ $address }}:{{ $upstream.Port }} max_fails={{ $maxFails }} fail_timeout={{ $failTimeoutSecs }}s;
-{{ end }}
+        server {{ $upstream.Server }};
         keepalive {{ $keepalive }};
-        # Keep connections balanced - especially useful for rolling deployments.
-        least_conn;
     }
 {{ end }}
 
@@ -114,10 +107,7 @@ http {
         server_name {{ $entry.ServerName }};
 
         # disable any limits to avoid HTTP 413 for large uploads
-        client_max_body_size 0;
-
-        # Retry next upstream if any of these errors are encountered.
-        proxy_next_upstream{{ range $nextUpstreamErrors }} {{ . }}{{ end }};
+        client_max_body_size 0; 
 
         {{- range $location := $entry.Locations }}
 
