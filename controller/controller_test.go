@@ -5,11 +5,11 @@ import (
 
 	"time"
 
+	"fmt"
+
 	"strings"
 
 	"strconv"
-
-	"fmt"
 
 	"github.com/sky-uk/feed/k8s"
 	fake "github.com/sky-uk/feed/util/test"
@@ -76,12 +76,12 @@ func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 	updater := new(fakeUpdater)
 	client := new(fake.FakeClient)
 	ingressWatcher, _ := createFakeWatcher()
-	endpointWatcher, _ := createFakeWatcher()
+	serviceWatcher, _ := createFakeWatcher()
 
 	client.On("GetIngresses").Return([]*v1beta1.Ingress{}, nil)
-	client.On("GetEndpoints").Return([]*v1.Endpoints{}, nil)
+	client.On("GetServices").Return([]*v1.Service{}, nil)
 	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchEndpoints").Return(endpointWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
 	updater.On("Update", mock.Anything).Return(nil)
@@ -95,7 +95,7 @@ func newController(lb Updater, client k8s.Client) Controller {
 		Updaters:                []Updater{lb},
 		KubernetesClient:        client,
 		DefaultAllow:            ingressDefaultAllow,
-		DefaultBackendKeepAlive: defaultBackendTimeout,
+		DefaultBackendKeepAlive: backendTimeout,
 	})
 }
 
@@ -128,7 +128,7 @@ func TestControllerStartsAndStopsUpdatersInCorrectOrder(t *testing.T) {
 		Updaters:                []Updater{updater1, updater2},
 		KubernetesClient:        client,
 		DefaultAllow:            ingressDefaultAllow,
-		DefaultBackendKeepAlive: defaultBackendTimeout,
+		DefaultBackendKeepAlive: backendTimeout,
 	})
 
 	// when
@@ -223,7 +223,7 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	controller := newController(updater, client)
 
 	ingressWatcher, updateCh := createFakeWatcher()
-	endpointWatcher, _ := createFakeWatcher()
+	serviceWatcher, _ := createFakeWatcher()
 
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
@@ -232,9 +232,9 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	updater.On("Health").Return(nil)
 
 	client.On("GetIngresses").Return([]*v1beta1.Ingress{}, nil)
-	client.On("GetEndpoints").Return([]*v1.Endpoints{}, nil)
+	client.On("GetServices").Return([]*v1.Service{}, nil)
 	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchEndpoints").Return(endpointWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
 	assert.NoError(controller.Start())
 
 	// expect
@@ -255,137 +255,142 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 	assert := assert.New(t)
 
 	var tests = []struct {
-		description    string
-		ingresses      []*v1beta1.Ingress
-		endpoints      []*v1.Endpoints
-		expectedUpdate IngressUpdate
+		description string
+		ingresses   []*v1beta1.Ingress
+		services    []*v1.Service
+		entries     IngressUpdate
 	}{
 		{
 			"ingress with corresponding service",
 			createDefaultIngresses(),
-			createDefaultEndpoints(),
-			createExpectedIngressUpdate(),
+			createDefaultServices(),
+			createLbEntriesFixture(),
 		},
 		{
 			"ingress with extra services",
 			createDefaultIngresses(),
-			append(createDefaultEndpoints(),
-				createEndpointsFixture("another one", ingressNamespace, []string{"1.1.1.1"}, []v1.EndpointPort{{Port: 5}})...),
-			createExpectedIngressUpdate(),
+			append(createDefaultServices(),
+				createServiceFixture("another one", ingressNamespace, serviceIP)...),
+			createLbEntriesFixture(),
 		},
 		{
 			"ingress without corresponding service",
 			createDefaultIngresses(),
-			[]*v1.Endpoints{},
+			[]*v1.Service{},
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with service with non-matching namespace",
 			createDefaultIngresses(),
-			createEndpointsFixture(serviceName, "lalala land", []string{"1.1.1.1"}, []v1.EndpointPort{{Port: 5}}),
+			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with service with non-matching name",
 			createDefaultIngresses(),
-			createEndpointsFixture("lalala service", ingressNamespace, []string{"1.1.1.1"}, []v1.EndpointPort{{Port: 5}}),
+			createServiceFixture("lalala service", ingressNamespace, serviceIP),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with missing host name",
-			createIngressesFixture("", serviceName, []int{serviceHTTPPort}, ingressAllow, stripPath, -1),
-			createDefaultEndpoints(),
+			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout),
+			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with missing service name",
-			createIngressesFixture(ingressHost, "", []int{serviceHTTPPort}, ingressAllow, stripPath, -1),
-			createDefaultEndpoints(),
+			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow, stripPath, backendTimeout),
+			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with missing service port",
-			createIngressesFixture(ingressHost, serviceName, []int{0}, ingressAllow, stripPath, -1),
-			createDefaultEndpoints(),
+			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow, stripPath, backendTimeout),
+			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
-			"ingress without any service endpoints",
+			"ingress with missing service IP",
 			createDefaultIngresses(),
-			createEndpointsFixture(serviceName, ingressNamespace, nil, []v1.EndpointPort{{Port: serviceHTTPPort}}),
+			createServiceFixture(ingressSvcName, ingressNamespace, ""),
 			IngressUpdate{Entries: []IngressEntry{}},
 		},
 		{
 			"ingress with default allow",
-			createIngressesFixture(ingressHost, serviceName, []int{serviceHTTPPort}, "MISSING", stripPath, -1),
-			createDefaultEndpoints(),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING", stripPath, backendTimeout),
+			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
-				Namespace: ingressNamespace,
-				Name:      ingressName,
-				Host:      ingressHost,
-				Path:      ingressPath,
-				Service:   Service{Name: serviceName, Port: serviceHTTPPort, Addresses: endpointAddresses},
-				Allow:     strings.Split(ingressDefaultAllow, ","),
-				BackendKeepAliveSeconds: defaultBackendTimeout,
+				Namespace:      ingressNamespace,
+				Name:           ingressName,
+				Host:           ingressHost,
+				Path:           ingressPath,
+				ServiceAddress: serviceIP,
+				ServicePort:    ingressSvcPort,
+				Allow:          strings.Split(ingressDefaultAllow, ","),
+				BackendKeepAliveSeconds: backendTimeout,
 			}}},
 		},
 		{
 			"ingress with empty allow",
-			createIngressesFixture(ingressHost, serviceName, []int{serviceHTTPPort}, "", stripPath, -1),
-			createDefaultEndpoints(),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", stripPath, backendTimeout),
+			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
-				Namespace: ingressNamespace,
-				Name:      ingressName,
-				Host:      ingressHost,
-				Path:      ingressPath,
-				Service:   Service{Name: serviceName, Port: serviceHTTPPort, Addresses: endpointAddresses},
-				ELbScheme: "internal",
-				Allow:     []string{},
-				BackendKeepAliveSeconds: defaultBackendTimeout,
+				Namespace:      ingressNamespace,
+				Name:           ingressName,
+				Host:           ingressHost,
+				Path:           ingressPath,
+				ServiceAddress: serviceIP,
+				ServicePort:    ingressSvcPort,
+				ELbScheme:      "internal",
+				Allow:          []string{},
+				BackendKeepAliveSeconds: backendTimeout,
 			}}},
 		},
 		{
 			"ingress with strip paths set to true",
-			createIngressesFixture(ingressHost, serviceName, []int{serviceHTTPPort}, "", "true", -1),
-			createDefaultEndpoints(),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "true", backendTimeout),
+			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
 				Namespace:               ingressNamespace,
 				Name:                    ingressName,
 				Host:                    ingressHost,
 				Path:                    ingressPath,
-				Service:                 Service{Name: serviceName, Port: serviceHTTPPort, Addresses: endpointAddresses},
+				ServiceAddress:          serviceIP,
+				ServicePort:             ingressSvcPort,
 				ELbScheme:               "internal",
 				Allow:                   []string{},
 				StripPaths:              true,
-				BackendKeepAliveSeconds: defaultBackendTimeout,
+				BackendKeepAliveSeconds: backendTimeout,
 			}}},
 		},
 		{
 			"ingress with strip paths set to false",
-			createIngressesFixture(ingressHost, serviceName, []int{serviceHTTPPort}, "", "false", -1),
-			createDefaultEndpoints(),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", backendTimeout),
+			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
 				Namespace:               ingressNamespace,
 				Name:                    ingressName,
 				Host:                    ingressHost,
 				Path:                    ingressPath,
-				Service:                 Service{Name: serviceName, Port: serviceHTTPPort, Addresses: endpointAddresses},
+				ServiceAddress:          serviceIP,
+				ServicePort:             ingressSvcPort,
 				ELbScheme:               "internal",
 				Allow:                   []string{},
 				StripPaths:              false,
-				BackendKeepAliveSeconds: defaultBackendTimeout,
+				BackendKeepAliveSeconds: backendTimeout,
 			}}},
 		},
 		{
 			"ingress with overridden backend timeout",
-			createIngressesFixture(ingressHost, serviceName, []int{serviceHTTPPort}, "", "false", 20),
-			createDefaultEndpoints(),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20),
+			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
 				Namespace:               ingressNamespace,
 				Name:                    ingressName,
 				Host:                    ingressHost,
 				Path:                    ingressPath,
-				Service:                 Service{Name: serviceName, Port: serviceHTTPPort, Addresses: endpointAddresses},
+				ServiceAddress:          serviceIP,
+				ServicePort:             ingressSvcPort,
 				ELbScheme:               "internal",
 				Allow:                   []string{},
 				StripPaths:              false,
@@ -394,18 +399,19 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default backend timeout",
-			createIngressesFixture(ingressHost, serviceName, []int{serviceHTTPPort}, "", "false", -1),
-			createDefaultEndpoints(),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", -1),
+			createDefaultServices(),
 			IngressUpdate{Entries: []IngressEntry{{
 				Namespace:               ingressNamespace,
 				Name:                    ingressName,
 				Host:                    ingressHost,
 				Path:                    ingressPath,
-				Service:                 Service{Name: serviceName, Port: serviceHTTPPort, Addresses: endpointAddresses},
+				ServiceAddress:          serviceIP,
+				ServicePort:             ingressSvcPort,
 				ELbScheme:               "internal",
 				Allow:                   []string{},
 				StripPaths:              false,
-				BackendKeepAliveSeconds: defaultBackendTimeout,
+				BackendKeepAliveSeconds: backendTimeout,
 			}}},
 		},
 	}
@@ -418,105 +424,73 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 
 		updater.On("Start").Return(nil)
 		updater.On("Stop").Return(nil)
-		updater.On("Update", mock.MatchedBy(func(u IngressUpdate) bool {
-			assert.Len(u.Entries, len(test.expectedUpdate.Entries), "Expected same number of entries in update")
-			for _, entry := range test.expectedUpdate.Entries {
-				assert.Contains(u.Entries, entry, "Expected entry in update")
-			}
-			return true
-		})).Return(nil)
+		// once for ingress update, once for service update
+		updater.On("Update", test.entries).Return(nil).Times(2)
 
 		client.On("GetIngresses").Return(test.ingresses, nil)
-		client.On("GetEndpoints").Return(test.endpoints, nil)
+		client.On("GetServices").Return(test.services, nil)
 
-		ingressWatcher, _ := createFakeWatcher()
-		endpointsWatcher, endpointsCh := createFakeWatcher()
+		ingressWatcher, ingressCh := createFakeWatcher()
+		serviceWatcher, serviceCh := createFakeWatcher()
 		client.On("WatchIngresses").Return(ingressWatcher)
-		client.On("WatchEndpoints").Return(endpointsWatcher)
+		client.On("WatchServices").Return(serviceWatcher)
 
 		//when
 		assert.NoError(controller.Start())
-		endpointsCh <- struct{}{}
+		ingressCh <- struct{}{}
+		serviceCh <- struct{}{}
 		time.Sleep(smallWaitTime)
 
 		//then
 		assert.NoError(controller.Stop())
 		time.Sleep(smallWaitTime)
 		updater.AssertExpectations(t)
-
-		if t.Failed() {
-			t.FailNow()
-		}
 	}
+}
+
+func createLbEntriesFixture() IngressUpdate {
+	return IngressUpdate{Entries: []IngressEntry{{
+		Namespace:               ingressNamespace,
+		Name:                    ingressName,
+		Host:                    ingressHost,
+		Path:                    ingressPath,
+		ServiceAddress:          serviceIP,
+		ServicePort:             ingressSvcPort,
+		Allow:                   strings.Split(ingressAllow, ","),
+		ELbScheme:               elbScheme,
+		BackendKeepAliveSeconds: backendTimeout,
+	}}}
 }
 
 const (
-	ingressHost           = "foo.sky.com"
-	ingressPath           = "/foo"
-	ingressName           = "foo-ingress"
-	serviceName           = "foo-svc"
-	serviceHTTPPort       = 8080
-	serviceAdminPort      = 8081
-	ingressNamespace      = "namespace"
-	ingressAllow          = "10.82.0.0/16,10.44.0.0/16"
-	ingressDefaultAllow   = "10.50.0.0/16,10.1.0.0/16"
-	elbScheme             = "internal"
-	stripPath             = "MISSING"
-	defaultBackendTimeout = 10
+	ingressHost         = "foo.sky.com"
+	ingressPath         = "/foo"
+	ingressName         = "foo-ingress"
+	ingressSvcName      = "foo-svc"
+	ingressSvcPort      = 80
+	ingressNamespace    = "happysky"
+	ingressAllow        = "10.82.0.0/16,10.44.0.0/16"
+	ingressDefaultAllow = "10.50.0.0/16,10.1.0.0/16"
+	serviceIP           = "10.254.0.82"
+	elbScheme           = "internal"
+	stripPath           = "MISSING"
+	backendTimeout      = 10
 )
 
-func createExpectedIngressUpdate() IngressUpdate {
-	return IngressUpdate{Entries: []IngressEntry{
-		{
-			Namespace: ingressNamespace,
-			Name:      ingressName,
-			Host:      ingressHost,
-			Path:      ingressPath,
-			Service: Service{
-				Name:      serviceName,
-				Port:      serviceHTTPPort,
-				Addresses: endpointAddresses,
-			},
-			Allow:                   strings.Split(ingressAllow, ","),
-			ELbScheme:               elbScheme,
-			BackendKeepAliveSeconds: defaultBackendTimeout,
-		},
-		{
-			Namespace: ingressNamespace,
-			Name:      ingressName,
-			Host:      ingressHost,
-			Path:      ingressPath,
-			Service: Service{
-				Name:      serviceName,
-				Port:      serviceAdminPort,
-				Addresses: endpointAddresses,
-			},
-			Allow:                   strings.Split(ingressAllow, ","),
-			ELbScheme:               elbScheme,
-			BackendKeepAliveSeconds: defaultBackendTimeout,
+func createDefaultIngresses() []*v1beta1.Ingress {
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout)
+}
+
+func createIngressesFixture(host string, serviceName string, servicePort int, allow string, stripPath string,
+	backendTimeout int) []*v1beta1.Ingress {
+
+	paths := []v1beta1.HTTPIngressPath{{
+		Path: ingressPath,
+		Backend: v1beta1.IngressBackend{
+			ServiceName: serviceName,
+			ServicePort: intstr.FromInt(servicePort),
 		},
 	}}
-}
-
-var endpointAddresses = []string{"1.1.1.1", "2.2.2.2"}
-
-func createDefaultIngresses() []*v1beta1.Ingress {
-	return createIngressesFixture(ingressHost, serviceName, []int{serviceHTTPPort, serviceAdminPort}, ingressAllow,
-		stripPath, -1)
-}
-
-func createIngressesFixture(host string, serviceName string, ports []int, allow string, stripPath string, backendTimeout int) []*v1beta1.Ingress {
-
-	var paths []v1beta1.HTTPIngressPath
-	for _, port := range ports {
-		paths = append(paths, v1beta1.HTTPIngressPath{
-			Path: ingressPath,
-			Backend: v1beta1.IngressBackend{
-				ServiceName: serviceName,
-				ServicePort: intstr.FromInt(port),
-			},
-		})
-	}
 
 	annotations := make(map[string]string)
 	if allow != "MISSING" {
@@ -550,47 +524,20 @@ func createIngressesFixture(host string, serviceName string, ports []int, allow 
 	}
 }
 
-func createDefaultEndpoints() []*v1.Endpoints {
-	return createEndpointsFixture(serviceName, ingressNamespace,
-		endpointAddresses,
-		[]v1.EndpointPort{
-			{
-				Name:     "foo-http",
-				Port:     serviceHTTPPort,
-				Protocol: v1.ProtocolTCP,
-			},
-			{
-				Name:     "foo-udp",
-				Port:     6060,
-				Protocol: v1.ProtocolUDP,
-			},
-			{
-				Name: "foo-admin",
-				Port: serviceAdminPort,
-			},
-		},
-	)
+func createDefaultServices() []*v1.Service {
+	return createServiceFixture(ingressSvcName, ingressNamespace, serviceIP)
 }
 
-func createEndpointsFixture(name string, namespace string, addresses []string, ports []v1.EndpointPort) []*v1.Endpoints {
-	var endpointAddresses []v1.EndpointAddress
-	for _, address := range addresses {
-		endpointAddresses = append(endpointAddresses, v1.EndpointAddress{IP: address})
-	}
-
-	return []*v1.Endpoints{
+func createServiceFixture(name string, namespace string, clusterIP string) []*v1.Service {
+	return []*v1.Service{
 		{
 			ObjectMeta: v1.ObjectMeta{
 				Name:      name,
 				Namespace: namespace,
 			},
-			Subsets: []v1.EndpointSubset{{
-				Addresses: endpointAddresses,
-				NotReadyAddresses: []v1.EndpointAddress{
-					{IP: "3.3.3.3"}, {IP: "4.4.4.4"},
-				},
-				Ports: ports,
-			}},
+			Spec: v1.ServiceSpec{
+				ClusterIP: clusterIP,
+			},
 		},
 	}
 }
