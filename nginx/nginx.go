@@ -297,7 +297,7 @@ func (n *nginxUpdater) diffAndUpdate(existing, updated []byte) (bool, error) {
 		return false, nil
 	}
 
-	log.Debugf("Updating nginx config: %s", string(diffOutput))
+	log.Infof("Updating nginx config: %s", string(diffOutput))
 	_, err = writeFile(n.nginxConfFile(), updated)
 
 	if err != nil {
