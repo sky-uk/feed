@@ -103,6 +103,7 @@ type loadBalancerTemplate struct {
 
 type server struct {
 	Name       string
+	Names      []string
 	ServerName string
 	Locations  []*location
 }
@@ -431,12 +432,14 @@ func createServerEntries(update controller.IngressUpdate) []*server {
 		}
 		paths[location.Path] = true
 
-		serverEntry.Name += " " + ingressEntry.NamespaceName()
+		serverEntry.Names = append(serverEntry.Names, ingressEntry.NamespaceName())
 		serverEntry.Locations = append(serverEntry.Locations, &location)
 	}
 
 	var serverEntries []*server
 	for _, serverEntry := range hostToNginxEntry {
+		sort.Strings(serverEntry.Names)
+		serverEntry.Name = strings.Join(serverEntry.Names, " ")
 		sort.Sort(locations(serverEntry.Locations))
 		serverEntries = append(serverEntries, serverEntry)
 	}
