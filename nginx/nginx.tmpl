@@ -101,7 +101,7 @@ http {
 {{ end }}
 
 {{- range $entry := .Servers }}
-    # ingress:{{ $entry.Name }}    
+    # ingress: {{ $entry.Name }}
     server {
         listen {{ $port }}{{ if $proxyprotocol }} proxy_protocol{{ end }};
         server_name {{ $entry.ServerName }};

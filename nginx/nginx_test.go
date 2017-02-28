@@ -678,6 +678,33 @@ func TestNginxIngressEntries(t *testing.T) {
 			nil,
 		},
 		{
+			"Ingress names are ordered in comment to prevent diff generation",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Namespace:      "core",
+					Name:           "02chris-ingress",
+					Path:           "/my-path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+
+				{
+					Host:           "chris.com",
+					Namespace:      "core",
+					Name:           "01chris-ingress",
+					Path:           "/my-path2",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+			},
+			nil,
+			[]string{
+				"# ingress: core/01chris-ingress core/02chris-ingress",
+			},
+		},
+		{
 			"Disabled path stripping should not put a trailing slash on proxy_pass",
 			defaultConf,
 			[]controller.IngressEntry{
