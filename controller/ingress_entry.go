@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // IngressUpdate data
@@ -33,6 +34,8 @@ type IngressEntry struct {
 	StripPaths bool
 	// BackendKeepAliveSeconds backend timeout
 	BackendKeepAliveSeconds int
+	// Ingress creation time
+	CreationTimestamp time.Time
 }
 
 // validate returns error if entry has invalid fields.

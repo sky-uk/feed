@@ -155,6 +155,7 @@ func (c *controller) updateIngresses() error {
 						ELbScheme:               ingress.Annotations[frontendElbSchemeAnnotation],
 						StripPaths:              c.defaultStripPath,
 						BackendKeepAliveSeconds: c.defaultBackendTimeout,
+						CreationTimestamp:       ingress.CreationTimestamp.Time,
 					}
 
 					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
