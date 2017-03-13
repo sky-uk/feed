@@ -406,31 +406,21 @@ type pathSet map[string]bool
 
 func createServerEntries(update controller.IngressUpdate) []*server {
 	hostToNginxEntry := make(map[string]*server)
-	hostToPaths := make(map[string]pathSet)
 
-	for _, ingressEntry := range update.Entries {
+	for _, ingressEntry := range uniqueIngressEntries(update.Entries) {
 		serverEntry, exists := hostToNginxEntry[ingressEntry.Host]
 		if !exists {
 			serverEntry = &server{ServerName: ingressEntry.Host}
 			hostToNginxEntry[ingressEntry.Host] = serverEntry
-			hostToPaths[ingressEntry.Host] = make(map[string]bool)
 		}
 
-		nginxPath := createNginxPath(ingressEntry.Path)
 		location := location{
-			Path:                    nginxPath,
+			Path:                    createNginxPath(ingressEntry.Path),
 			UpstreamID:              upstreamID(ingressEntry),
 			Allow:                   ingressEntry.Allow,
 			StripPath:               ingressEntry.StripPaths,
 			BackendKeepaliveSeconds: ingressEntry.BackendKeepAliveSeconds,
 		}
-
-		paths := hostToPaths[ingressEntry.Host]
-		if paths[location.Path] {
-			log.Infof("Ignoring '%s' because it duplicates the host/path of a previous entry", ingressEntry.NamespaceName())
-			continue
-		}
-		paths[location.Path] = true
 
 		serverEntry.Names = append(serverEntry.Names, ingressEntry.NamespaceName())
 		serverEntry.Locations = append(serverEntry.Locations, &location)
@@ -446,6 +436,42 @@ func createServerEntries(update controller.IngressUpdate) []*server {
 	sort.Sort(servers(serverEntries))
 
 	return serverEntries
+}
+
+type ingressKey struct {
+	Host, Path string
+}
+
+func uniqueIngressEntries(ingressEntries []controller.IngressEntry) []controller.IngressEntry {
+	uniqueIngress := make(map[ingressKey]controller.IngressEntry)
+	for _, ingressEntry := range ingressEntries {
+		key := ingressKey{ingressEntry.Host, ingressEntry.Path}
+		existingIngressEntry, exists := uniqueIngress[key]
+		if !exists {
+			uniqueIngress[key] = ingressEntry
+			continue
+		}
+		mostRecentIngress, olderIngress := orderByCreation(ingressEntry, existingIngressEntry)
+		log.Infof("Ignoring '%s' because it duplicates the host/path of a more recent entry '%s'", olderIngress.NamespaceName(), mostRecentIngress.NamespaceName())
+		uniqueIngress[key] = mostRecentIngress
+	}
+
+	uniqueIngressEntries := make([]controller.IngressEntry, 0, len(uniqueIngress))
+	for _, value := range uniqueIngress {
+		uniqueIngressEntries = append(uniqueIngressEntries, value)
+	}
+	return uniqueIngressEntries
+}
+
+func orderByCreation(entry1, entry2 controller.IngressEntry) (mostRecentIngress, olderIngress controller.IngressEntry) {
+	if entry1.CreationTimestamp.After(entry2.CreationTimestamp) {
+		mostRecentIngress = entry1
+		olderIngress = entry2
+		return
+	}
+	mostRecentIngress = entry2
+	olderIngress = entry1
+	return
 }
 
 func createNginxPath(rawPath string) string {

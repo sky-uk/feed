@@ -550,35 +550,38 @@ func TestNginxIngressEntries(t *testing.T) {
 			},
 		},
 		{
-			"Duplicate host and paths will only keep the first one",
+			"Duplicate host and paths will only keep the most recent one",
 			defaultConf,
 			[]controller.IngressEntry{
 				{
 					Host:                    "chris.com",
 					Namespace:               "core",
-					Name:                    "chris-ingress-first",
+					Name:                    "chris-ingress-old",
 					Path:                    "/my-path",
 					ServiceAddress:          "service1",
 					ServicePort:             9090,
 					BackendKeepAliveSeconds: 28,
+					CreationTimestamp:       time.Now().Add(-1 * time.Minute),
 				},
 				{
 					Host:                    "chris.com",
 					Namespace:               "core",
-					Name:                    "chris-ingress-second",
+					Name:                    "chris-ingress-most-recent",
 					Path:                    "/my-path",
 					ServiceAddress:          "service2",
 					ServicePort:             9090,
 					BackendKeepAliveSeconds: 28,
+					CreationTimestamp:       time.Now(),
 				},
 				{
 					Host:                    "chris.com",
 					Namespace:               "core",
-					Name:                    "chris-ingress-third",
+					Name:                    "chris-ingress-older",
 					Path:                    "/my-path",
 					ServiceAddress:          "service3",
 					ServicePort:             9090,
 					BackendKeepAliveSeconds: 28,
+					CreationTimestamp:       time.Now().Add(-2 * time.Minute),
 				},
 				{
 					Host:                    "chris-again.com",
@@ -588,6 +591,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					ServiceAddress:          "service4",
 					ServicePort:             9090,
 					BackendKeepAliveSeconds: 28,
+					CreationTimestamp:       time.Now(),
 				},
 			},
 			nil,
@@ -627,7 +631,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					"\n" +
 					"        location /my-path/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service1.9090;\n" +
+					"            proxy_pass http://core.service2.9090;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /my-path/::$proxy_host $server_name;\n" +
