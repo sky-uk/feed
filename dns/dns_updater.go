@@ -118,7 +118,7 @@ func (u *updater) initALBs() error {
 		}
 
 		for _, lb := range resp.LoadBalancers {
-			u.schemeToDNS[*lb.Scheme] = dnsDetails{dnsName: *lb.DNSName, hostedZoneID: *lb.CanonicalHostedZoneId}
+			u.schemeToDNS[*lb.Scheme] = dnsDetails{dnsName: *lb.DNSName + ".", hostedZoneID: *lb.CanonicalHostedZoneId}
 		}
 
 		if resp.NextMarker == nil {
@@ -226,7 +226,11 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 			continue
 		}
 
-		changes = append(changes, newChange("UPSERT", host, dnsDetails.dnsName, dnsDetails.hostedZoneID))
+		recordExists, matchingRecordSet := findMatchingRecord(host, originalRecords)
+		elbHasChanged := recordExists && dnsDetails.dnsName != *matchingRecordSet.AliasTarget.DNSName
+		if !recordExists || elbHasChanged {
+			changes = append(changes, newChange("UPSERT", host, dnsDetails.dnsName, dnsDetails.hostedZoneID))
+		}
 	}
 
 	for _, recordSet := range originalRecords {
@@ -240,6 +244,15 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 	}
 
 	return changes, skipped
+}
+
+func findMatchingRecord(host string, originalRecords []*route53.ResourceRecordSet) (bool, *route53.ResourceRecordSet) {
+	for _, recordSet := range originalRecords {
+		if host == *recordSet.Name {
+			return true, recordSet
+		}
+	}
+	return false, nil
 }
 
 func newChange(action string, host string, targetElbDNSName string, targetElbHostedZoneID string) *route53.Change {
