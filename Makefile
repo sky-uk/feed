@@ -43,8 +43,9 @@ test :
 # Docker build 
 ingress_build_dir := build/ingress
 template := ./nginx/nginx.tmpl
-git_rev := $(shell git rev-parse --short HEAD)
 builds := ingress dns
+REPOSITORY=skycirrus
+BUILD_VERSION=$(shell git rev-parse --short HEAD)
 
 clean :
 	@echo "== cleaning"
@@ -69,7 +70,7 @@ docker : copy
 	@echo "== build docker images"
 	@for build in $(builds) ; do \
 	  set -e; \
-	  tag=skycirrus/feed-$$build:$(git_rev) ; \
+	  tag=$(REPOSITORY)/feed-$$build:$(BUILD_VERSION) ; \
 	  docker build -t $$tag build/$${build}/. ; \
 	  echo "Built $$tag" ; \
 	done
@@ -79,8 +80,8 @@ release : docker
 	@docker login -e $(DOCKER_EMAIL) -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 	@for build in $(builds) ; do \
 	  set -e; \
-	  tag=skycirrus/feed-$$build:$(git_rev) ; \
-	  latest_tag=skycirrus/feed-$$build:latest ; \
+	  tag=$(REPOSITORY)/feed-$$build:$(BUILD_VERSION) ; \
+	  latest_tag=$(REPOSITORY)/feed-$$build:latest ; \
 	  docker tag $$tag $$latest_tag ; \
 	  docker push $$tag ; \
 	  docker push $$latest_tag ; \
