@@ -217,6 +217,10 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 
 	var skipped []string
 	changes := []*route53.Change{}
+	hostToRecords := make(map[string]*route53.ResourceRecordSet)
+	for _, recordSet := range originalRecords {
+		hostToRecords[*recordSet.Name] = recordSet
+	}
 
 	for host, entry := range hostToIngress {
 		dnsDetails, exists := u.schemeToDNS[entry.ELbScheme]
@@ -226,7 +230,7 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 			continue
 		}
 
-		recordExists, matchingRecordSet := findMatchingRecord(host, originalRecords)
+		matchingRecordSet, recordExists := hostToRecords[host]
 		elbHasChanged := recordExists && dnsDetails.dnsName != *matchingRecordSet.AliasTarget.DNSName
 		if !recordExists || elbHasChanged {
 			changes = append(changes, newChange("UPSERT", host, dnsDetails.dnsName, dnsDetails.hostedZoneID))
@@ -244,15 +248,6 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 	}
 
 	return changes, skipped
-}
-
-func findMatchingRecord(host string, originalRecords []*route53.ResourceRecordSet) (bool, *route53.ResourceRecordSet) {
-	for _, recordSet := range originalRecords {
-		if host == *recordSet.Name {
-			return true, recordSet
-		}
-	}
-	return false, nil
 }
 
 func newChange(action string, host string, targetElbDNSName string, targetElbHostedZoneID string) *route53.Change {
