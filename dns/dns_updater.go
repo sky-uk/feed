@@ -215,11 +215,12 @@ func (u *updater) indexByHost(entries []controller.IngressEntry) (hostToIngress,
 func (u *updater) createChanges(hostToIngress hostToIngress,
 	originalRecords []*route53.ResourceRecordSet) ([]*route53.Change, []string) {
 
+	type recordKey struct { host, elbDNSName string }
 	var skipped []string
 	changes := []*route53.Change{}
-	hostToRecords := make(map[string]*route53.ResourceRecordSet)
+	indexedRecords := make(map[recordKey]*route53.ResourceRecordSet)
 	for _, recordSet := range originalRecords {
-		hostToRecords[*recordSet.Name] = recordSet
+		indexedRecords[recordKey{*recordSet.Name, *recordSet.AliasTarget.DNSName}] = recordSet
 	}
 
 	for host, entry := range hostToIngress {
@@ -230,9 +231,8 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 			continue
 		}
 
-		matchingRecordSet, recordExists := hostToRecords[host]
-		elbHasChanged := recordExists && dnsDetails.dnsName != *matchingRecordSet.AliasTarget.DNSName
-		if !recordExists || elbHasChanged {
+		_, recordExists := indexedRecords[recordKey{host, dnsDetails.dnsName}]
+		if !recordExists {
 			changes = append(changes, newChange("UPSERT", host, dnsDetails.dnsName, dnsDetails.hostedZoneID))
 		}
 	}
