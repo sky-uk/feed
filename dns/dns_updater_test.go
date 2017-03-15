@@ -23,16 +23,18 @@ func init() {
 }
 
 const (
-	hostedZoneID       = "1234"
-	domain             = "james.com."
-	awsRegion          = "awsRegion"
-	lbHostedZoneID     = "lb-hosted-zone-id"
-	internalALBName    = "internal-alb"
-	externalALBName    = "external-alb"
-	internalALBDnsName = "internal-alb-dns-name"
-	externalALBDnsName = "external-alb-dns-name"
-	internalScheme     = "internal"
-	externalScheme     = "external"
+	hostedZoneID                 = "1234"
+	domain                       = "james.com."
+	awsRegion                    = "awsRegion"
+	lbHostedZoneID               = "lb-hosted-zone-id"
+	internalALBName              = "internal-alb"
+	externalALBName              = "external-alb"
+	internalALBDnsName           = "internal-alb-dns-name"
+	externalALBDnsName           = "external-alb-dns-name"
+	internalALBDnsNameWithPeriod = internalALBDnsName + "."
+	externalALBDnsNameWithPeriod = externalALBDnsName + "."
+	internalScheme               = "internal"
+	externalScheme               = "external"
 )
 
 var albNames = []string{internalALBName, externalALBName}
@@ -184,7 +186,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Name: aws.String("cats.james.com."),
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
-						DNSName:              aws.String(internalALBDnsName),
+						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
@@ -192,7 +194,7 @@ func TestRecordSetUpdates(t *testing.T) {
 			}},
 		},
 		{
-			"Updating existing record",
+			"Updating existing record to a new elb schema",
 			controller.IngressUpdate{Entries: []controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -203,7 +205,7 @@ func TestRecordSetUpdates(t *testing.T) {
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("foo.james.com."),
 				AliasTarget: &route53.AliasTarget{
-					DNSName:              aws.String(internalALBDnsName),
+					DNSName:              aws.String(internalALBDnsNameWithPeriod),
 					HostedZoneId:         aws.String(lbHostedZoneID),
 					EvaluateTargetHealth: aws.Bool(false),
 				},
@@ -214,7 +216,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Name: aws.String("foo.james.com."),
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
-						DNSName:              aws.String(externalALBDnsName),
+						DNSName:              aws.String(externalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
@@ -227,7 +229,7 @@ func TestRecordSetUpdates(t *testing.T) {
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("foo.com."),
 				AliasTarget: &route53.AliasTarget{
-					DNSName:              aws.String(internalALBDnsName),
+					DNSName:              aws.String(internalALBDnsNameWithPeriod),
 					HostedZoneId:         aws.String(lbHostedZoneID),
 					EvaluateTargetHealth: aws.Bool(false),
 				},
@@ -238,7 +240,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Name: aws.String("foo.com."),
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
-						DNSName:              aws.String(internalALBDnsName),
+						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
@@ -257,7 +259,7 @@ func TestRecordSetUpdates(t *testing.T) {
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("bar.james.com."),
 				AliasTarget: &route53.AliasTarget{
-					DNSName:              aws.String(internalALBDnsName),
+					DNSName:              aws.String(internalALBDnsNameWithPeriod),
 					HostedZoneId:         aws.String(lbHostedZoneID),
 					EvaluateTargetHealth: aws.Bool(false),
 				},
@@ -268,7 +270,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Name: aws.String("foo.james.com."),
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
-						DNSName:              aws.String(internalALBDnsName),
+						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
@@ -279,7 +281,7 @@ func TestRecordSetUpdates(t *testing.T) {
 						Name: aws.String("bar.james.com."),
 						Type: aws.String("A"),
 						AliasTarget: &route53.AliasTarget{
-							DNSName:              aws.String(internalALBDnsName),
+							DNSName:              aws.String(internalALBDnsNameWithPeriod),
 							HostedZoneId:         aws.String(lbHostedZoneID),
 							EvaluateTargetHealth: aws.Bool(false),
 						},
@@ -342,7 +344,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Name: aws.String("foo.james.com."),
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
-						DNSName:              aws.String(internalALBDnsName),
+						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
@@ -374,12 +376,31 @@ func TestRecordSetUpdates(t *testing.T) {
 					Name: aws.String("bar.james.com."),
 					Type: aws.String("A"),
 					AliasTarget: &route53.AliasTarget{
-						DNSName:              aws.String(externalALBDnsName),
+						DNSName:              aws.String(externalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
 						EvaluateTargetHealth: aws.Bool(false),
 					},
 				},
 			}},
+		},
+		{
+			"Does not update records when current and new entry are the same",
+			controller.IngressUpdate{Entries: []controller.IngressEntry{{
+				Name:        "test-entry",
+				Host:        "foo.james.com",
+				Path:        "/",
+				ELbScheme:   externalScheme,
+				ServicePort: 80,
+			}}},
+			[]*route53.ResourceRecordSet{{
+				Name: aws.String("foo.james.com."),
+				AliasTarget: &route53.AliasTarget{
+					DNSName:              aws.String(externalALBDnsNameWithPeriod),
+					HostedZoneId:         aws.String(lbHostedZoneID),
+					EvaluateTargetHealth: aws.Bool(false),
+				},
+			}},
+			[]*route53.Change{},
 		},
 	}
 

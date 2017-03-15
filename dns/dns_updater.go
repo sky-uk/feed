@@ -118,7 +118,7 @@ func (u *updater) initALBs() error {
 		}
 
 		for _, lb := range resp.LoadBalancers {
-			u.schemeToDNS[*lb.Scheme] = dnsDetails{dnsName: *lb.DNSName, hostedZoneID: *lb.CanonicalHostedZoneId}
+			u.schemeToDNS[*lb.Scheme] = dnsDetails{dnsName: *lb.DNSName + ".", hostedZoneID: *lb.CanonicalHostedZoneId}
 		}
 
 		if resp.NextMarker == nil {
@@ -215,8 +215,13 @@ func (u *updater) indexByHost(entries []controller.IngressEntry) (hostToIngress,
 func (u *updater) createChanges(hostToIngress hostToIngress,
 	originalRecords []*route53.ResourceRecordSet) ([]*route53.Change, []string) {
 
+	type recordKey struct{ host, elbDNSName string }
 	var skipped []string
 	changes := []*route53.Change{}
+	indexedRecords := make(map[recordKey]*route53.ResourceRecordSet)
+	for _, recordSet := range originalRecords {
+		indexedRecords[recordKey{*recordSet.Name, *recordSet.AliasTarget.DNSName}] = recordSet
+	}
 
 	for host, entry := range hostToIngress {
 		dnsDetails, exists := u.schemeToDNS[entry.ELbScheme]
@@ -226,7 +231,9 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 			continue
 		}
 
-		changes = append(changes, newChange("UPSERT", host, dnsDetails.dnsName, dnsDetails.hostedZoneID))
+		if _, recordExists := indexedRecords[recordKey{host, dnsDetails.dnsName}]; !recordExists {
+			changes = append(changes, newChange("UPSERT", host, dnsDetails.dnsName, dnsDetails.hostedZoneID))
+		}
 	}
 
 	for _, recordSet := range originalRecords {
