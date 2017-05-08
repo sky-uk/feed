@@ -10,6 +10,8 @@ import (
 
 	"sync"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
@@ -23,7 +25,7 @@ import (
 const ElbTag = "sky.uk/KubernetesClusterFrontend"
 
 // New  creates a new ELB frontend
-func New(region string, labelValue string, expectedNumber int) controller.Updater {
+func New(region string, labelValue string, expectedNumber int, drainTime time.Duration) controller.Updater {
 	initMetrics()
 	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, labelValue, expectedNumber)
 	metadata := ec2metadata.New(session.New())
@@ -34,6 +36,7 @@ func New(region string, labelValue string, expectedNumber int) controller.Update
 		region:         region,
 		expectedNumber: expectedNumber,
 		initialised:    initialised{},
+		drainTime:      drainTime,
 	}
 }
 
@@ -55,6 +58,7 @@ type elb struct {
 	elbs                map[string]LoadBalancerDetails
 	registeredFrontends int
 	initialised         initialised
+	drainTime           time.Duration
 }
 
 type initialised struct {
@@ -170,7 +174,7 @@ func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDet
 		}
 	}
 
-	log.Infof("Found %d loadbalancers. Checking for %s tag set to %s", len(lbNames), ElbTag, labelValue)
+	log.Debugf("Found %d loadbalancers. Checking for %s tag set to %s", len(lbNames), ElbTag, labelValue)
 	clusterFrontEnds := make(map[string]LoadBalancerDetails)
 	partitions := util.Partition(len(lbNames), maxTagQuery)
 	for _, partition := range partitions {
@@ -215,6 +219,9 @@ func (e *elb) Stop() error {
 	if failed {
 		return errors.New("at least one ELB failed to detach")
 	}
+
+	time.Sleep(e.drainTime)
+
 	return nil
 }
 

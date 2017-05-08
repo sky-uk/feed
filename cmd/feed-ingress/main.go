@@ -27,6 +27,7 @@ var (
 	elbLabelValue                  string
 	region                         string
 	elbExpectedNumber              int
+	elbDrainTime                   time.Duration
 	targetGroupNames               cmd.CommaSeparatedValues
 	targetGroupDeregistrationDelay time.Duration
 	pushgatewayURL                 string
@@ -60,6 +61,7 @@ func init() {
 		defaultNginxProxyProtocol                = false
 		defaultNginxUpdatePeriod                 = time.Second * 30
 		defaultElbLabelValue                     = ""
+		defaultElbDrainTime                      = time.Second * 30
 		defaultTargetGroupDeregistrationDelay    = time.Second * 30
 		defaultRegion                            = "eu-west-1"
 		defaultElbExpectedNumber                 = 0
@@ -141,13 +143,15 @@ func init() {
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
+	flag.DurationVar(&elbDrainTime, "elb-drain-time", defaultElbDrainTime, "Delay to wait"+
+		"for feed-ingress to drain from the ELB on shutdown. Should be slightly larger than the ELB's drain time.")
 
 	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
 	flag.DurationVar(&targetGroupDeregistrationDelay, "alb-target-group-deregistration-delay",
 		defaultTargetGroupDeregistrationDelay,
-		"Delay to wait for feed-ingress to deregister from the ALB target group on shutdown. Should match the target"+
-			" group setting in AWS.")
+		"Delay to wait for feed-ingress to deregister from the ALB target group on shutdown. Should be slightly larger"+
+			" than the target group setting in AWS.")
 
 	flag.StringVar(&pushgatewayURL, "pushgateway", "",
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
@@ -191,7 +195,7 @@ func createIngressUpdaters() []controller.Updater {
 	nginxConfig.LogHeaders = nginxLogHeaders
 	nginx := nginx.New(nginxConfig)
 
-	elbAttacher := elb.New(region, elbLabelValue, elbExpectedNumber)
+	elbAttacher := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainTime)
 	albAttacher := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
 	// update nginx before attaching to front ends
 	return []controller.Updater{nginx, elbAttacher, albAttacher}

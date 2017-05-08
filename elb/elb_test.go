@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
@@ -128,7 +130,7 @@ func mockInstanceMetadata(mockMd *fakeMetadata, instanceID string) {
 }
 
 func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
-	e := New(region, clusterName, 1)
+	e := New(region, clusterName, 1, 0)
 	mockElb := &fakeElb{}
 	mockMetadata := &fakeMetadata{}
 	e.(*elb).awsElb = mockElb
@@ -360,6 +362,9 @@ func TestTagCallsPage(t *testing.T) {
 func TestDeregistersWithAttachedELBs(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
+	e.(*elb).expectedNumber = 2
+	e.(*elb).drainTime = time.Millisecond * 100
+
 	instanceID := "cow"
 	mockInstanceMetadata(mockMetadata, instanceID)
 	clusterFrontEnd := "cluster-frontend"
@@ -390,13 +395,16 @@ func TestDeregistersWithAttachedELBs(t *testing.T) {
 	}, nil)
 
 	//when
-	e.Start()
-	e.Update(controller.IngressUpdate{})
-	err := e.Stop()
+	assert.NoError(t, e.Start())
+	assert.NoError(t, e.Update(controller.IngressUpdate{}))
+	beforeStop := time.Now()
+	assert.NoError(t, e.Stop())
+	stopDuration := time.Now().Sub(beforeStop)
 
 	//then
-	assert.NoError(t, err)
 	mockElb.AssertExpectations(t)
+	assert.True(t, stopDuration.Nanoseconds() > time.Millisecond.Nanoseconds()*50,
+		"Drain time should have caused stop to take at least 50ms.")
 }
 
 func TestRegisterInstanceError(t *testing.T) {
