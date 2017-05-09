@@ -363,7 +363,7 @@ func TestDeregistersWithAttachedELBs(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()
 	e.(*elb).expectedNumber = 2
-	e.(*elb).drainTime = time.Millisecond * 100
+	e.(*elb).drainDelay = time.Millisecond * 100
 
 	instanceID := "cow"
 	mockInstanceMetadata(mockMetadata, instanceID)

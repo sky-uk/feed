@@ -24,8 +24,8 @@ import (
 // ElbTag is the tag key used for identifying ELBs to attach to.
 const ElbTag = "sky.uk/KubernetesClusterFrontend"
 
-// New  creates a new ELB frontend
-func New(region string, labelValue string, expectedNumber int, drainTime time.Duration) controller.Updater {
+// New creates a new ELB frontend
+func New(region string, labelValue string, expectedNumber int, drainDelay time.Duration) controller.Updater {
 	initMetrics()
 	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, labelValue, expectedNumber)
 	metadata := ec2metadata.New(session.New())
@@ -36,7 +36,7 @@ func New(region string, labelValue string, expectedNumber int, drainTime time.Du
 		region:         region,
 		expectedNumber: expectedNumber,
 		initialised:    initialised{},
-		drainTime:      drainTime,
+		drainDelay:     drainDelay,
 	}
 }
 
@@ -58,7 +58,7 @@ type elb struct {
 	elbs                map[string]LoadBalancerDetails
 	registeredFrontends int
 	initialised         initialised
-	drainTime           time.Duration
+	drainDelay          time.Duration
 }
 
 type initialised struct {
@@ -220,7 +220,7 @@ func (e *elb) Stop() error {
 		return errors.New("at least one ELB failed to detach")
 	}
 
-	time.Sleep(e.drainTime)
+	time.Sleep(e.drainDelay)
 
 	return nil
 }
