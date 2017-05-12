@@ -11,6 +11,7 @@ import (
 	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
+	"github.com/sky-uk/feed/haproxy"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
@@ -37,6 +38,7 @@ var (
 	nginxConfig                    nginx.Conf
 	nginxLogHeaders                cmd.CommaSeparatedValues
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
+	useHaproxy                     bool
 )
 
 func init() {
@@ -159,6 +161,9 @@ func init() {
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
+
+	flag.BoolVar(&useHaproxy, "haproxy", false,
+		"Experimental: Enable haproxy implementation instead of nginx.")
 }
 
 func main() {
@@ -189,14 +194,20 @@ func main() {
 }
 
 func createIngressUpdaters() []controller.Updater {
-	nginxConfig.IngressPort = ingressPort
-	nginxConfig.HealthPort = ingressHealthPort
-	nginxConfig.TrustedFrontends = nginxTrustedFrontends
-	nginxConfig.LogHeaders = nginxLogHeaders
-	nginx := nginx.New(nginxConfig)
+	var proxy controller.Updater
+
+	if !useHaproxy {
+		nginxConfig.IngressPort = ingressPort
+		nginxConfig.HealthPort = ingressHealthPort
+		nginxConfig.TrustedFrontends = nginxTrustedFrontends
+		nginxConfig.LogHeaders = nginxLogHeaders
+		proxy = nginx.New(nginxConfig)
+	} else {
+		proxy = haproxy.New()
+	}
 
 	elbAttacher := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
 	albAttacher := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
-	// update nginx before attaching to front ends
-	return []controller.Updater{nginx, elbAttacher, albAttacher}
+	// update ingress proxy before attaching to front ends
+	return []controller.Updater{proxy, elbAttacher, albAttacher}
 }
