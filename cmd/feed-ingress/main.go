@@ -203,7 +203,7 @@ func createIngressUpdaters() []controller.Updater {
 		nginxConfig.LogHeaders = nginxLogHeaders
 		proxy = nginx.New(nginxConfig)
 	} else {
-		proxy = haproxy.New()
+		proxy = haproxy.New(haproxy.Config{})
 	}
 
 	elbAttacher := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
