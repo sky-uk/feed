@@ -16,7 +16,10 @@ install:
 services:
   - docker
 
-after_success:
-  - if [[ "$TRAVIS_BRANCH" == "master" && "$TRAVIS_PULL_REQUEST" == "false" ]]; then make release; fi
-
 script: make travis
+
+deploy:
+- provider: script
+  script: make release
+  on:
+    tags: true

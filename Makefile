@@ -41,48 +41,32 @@ test :
 	@go test -race $(pkgs)
 
 # Docker build 
-ingress_build_dir := build/ingress
-template := ./nginx/nginx.tmpl
-builds := ingress dns
-REPOSITORY=skycirrus
-BUILD_VERSION=$(shell git rev-parse --short HEAD)
+git_rev := $(shell git rev-parse --short HEAD)
+git_tag := $(shell git tag --points-at=$(git_rev))
+image_prefix := skycirrus/feed
 
-clean :
-	@echo "== cleaning"
-	rm -rf build
-
-copy : build
-	@echo "== copy docker files to build/"
-	
-	@for build in $(builds) ; do \
-	  set -e; \
-	  build_dir="build/$$build"; \
-	  mkdir -p $$build_dir; \
-	  cp build-nginx.sh $$build_dir; \
-	  cp -R scripts $$build_dir; \
-	  cp Dockerfile_$$build $${build_dir}/Dockerfile; \
-	  cp $(GOPATH)/bin/feed-$$build $$build_dir; \
-	done
-
-	cp ${template} ${ingress_build_dir}
-
-docker : copy
+docker : build
 	@echo "== build docker images"
-	@for build in $(builds) ; do \
-	  set -e; \
-	  tag=$(REPOSITORY)/feed-$$build:$(BUILD_VERSION) ; \
-	  docker build -t $$tag build/$${build}/. ; \
-	  echo "Built $$tag" ; \
-	done
+	cp $(GOPATH)/bin/feed-dns docker/dns
+	cp $(GOPATH)/bin/feed-ingress docker/ingress
+	cp nginx/nginx.tmpl docker/ingress
+	docker build -t $(image_prefix)-ingress:latest docker/ingress/
+	docker build -t $(image_prefix)-dns:latest docker/dns/
+	rm -f docker/dns/feed-dns
+	rm -f docker/ingress/feed-ingress
+	rm -f docker/ingress/nginx.tmpl
 
 release : docker
-	@echo "== release docker image"
-	@docker login -e $(DOCKER_EMAIL) -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
-	@for build in $(builds) ; do \
-	  set -e; \
-	  tag=$(REPOSITORY)/feed-$$build:$(BUILD_VERSION) ; \
-	  latest_tag=$(REPOSITORY)/feed-$$build:latest ; \
-	  docker tag $$tag $$latest_tag ; \
-	  docker push $$tag ; \
-	  docker push $$latest_tag ; \
-	done
+	@echo "== release docker images"
+ifeq ($(strip $(git_tag)),)
+	@echo "no tag on $(git_rev), skipping release"
+else
+	@echo "releasing $(image)-(dns|ingress):$(git_tag)"
+	@docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
+	docker tag $(image_prefix)-ingress:latest $(image_prefix)-ingress:$(git_tag)
+	docker tag $(image_prefix)-dns:latest $(image_prefix)-dns:$(git_tag)
+	docker push $(image_prefix)-ingress:$(git_tag)
+	docker push $(image_prefix)-ingress:latest
+	docker push $(image_prefix)-dns:$(git_tag)
+	docker push $(image_prefix)-dns:latest
+endif
