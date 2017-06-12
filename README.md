@@ -84,7 +84,7 @@ The controllers support several annotations on ingress resources:
 - `sky.uk/backend-keepalive-seconds: 28` - Idle seconds for keepalive connections to the backend service. Usually
    this should be less than the idle timeout in the service itself.
 
-An example is in [examples](examples/pod.yml).
+We also provide an [example ingress](examples/ingress.yml).
 
 # ALB Support
 
