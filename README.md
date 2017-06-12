@@ -21,9 +21,12 @@ can be applied to a cluster.
 
 ## Known Limitations
 
-* SSL termination is not supported directly, it is expected the ELB or something else will be terminating SSL.
+* SSL termination is not supported directly. It is expected the ELB or something else will be terminating SSL.
 * nginx reloads can be disruptive. On reload, nginx will finish in-flight requests, then abruptly
-  close all server connections. This is a limitation of nginx, and affects all nginx solutions.
+  close all server connections. This is a limitation of nginx, and affects all nginx solutions. We mitigate this by:
+    * Rate limiting reloads. This is user configurable.
+    * Using service IPs, which are stable. Reloads will only happen if an ingress or service changes, which is rare
+      compared to pod changes.
 * feed-dns only supports a single hosted zone at this time, but this should be straightforward to add support for.
   PRs are welcome.
 
@@ -43,7 +46,7 @@ See the command line options with:
 
     docker run skycirrus/feed-ingress:v1.0.0 -h
 
-## SSL
+## SSL/TLS
 
 `feed-ingress` expects your ELBs to terminate SSL traffic. We believe this is the safest and best performing
 approach for production usage. Unfortunately, ELBs don't support SNI at this time, so this limits SSL usage to
