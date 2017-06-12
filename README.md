@@ -2,42 +2,32 @@
 
 # Feed
 
-Kubernetes controllers for managing external ingress with AWS. There are two controllers provided, `feed-ingress` which runs an nginx instance, and `feed-dns` which manages route53 entries.
+Kubernetes controllers for managing external ingress with AWS. There are two controllers provided, `feed-ingress`
+which runs an nginx instance, and `feed-dns` which manages route53 entries. They can be run independently as needed,
+or together to provide a full ingress solution.
 
-Feed is not yet production ready. It's actively used and should be stable enough for development environments. New docker images are produced on every PR merge and pushed to https://hub.docker.com/r/skycirrus.
+Feed is actively used in production and should be stable enough for general usage. We can scale to many thousands of
+requests per second with only a handful of replicas.
 
-## Ingress annotations
+# Using
 
-The controllers support several annotations on ingress resources:
+Docker images are released using semantic versioning. See the [examples](examples/) for deployment yaml files that
+can be applied to a cluster.
 
-- `sky.uk/allow: 10.10.10.10/32` - Restrict access to the specified CIDR block or IP.
-- `sky.uk/frontend-elb-scheme: internal` - Use the ELB with matching scheme. Can be either `internal` or `internet-facing`.
-- `sky.uk/strip-path: true` - Strip the ingress path when sending the request to the backend service. Can be either `true` or `false`. Note that nginx may break some url encoded values when enabled.
-- `sky.uk/backend-keepalive-seconds: 28` - Idle seconds for keepalive connections to the backend service. Usually this should be less than the idle timeout in the service itself.
+## Requirements
 
-An example is at https://github.com/sky-uk/feed/blob/master/examples/ingress.yml.
+* An internal and internet-facing ELB has been created and can reach your kubernetes cluster.
+* A Route53 hosted zone has been created to match your ingress resources.
 
-## feed-ingress
+## Known Limitations
 
-`feed-ingress` manages an nginx instance for load balancing ingress traffic to Kubernetes services.
-It's intended to be replicated to scale.
+* SSL termination is not supported directly, it is expected the ELB or something else will be terminating SSL.
+* nginx reloads can be disruptive, unfortunately. On reload, nginx will finish in flight requests, then abruptly
+  close all server connections. This is a limitation of nginx, and affects all nginx solutions.
+* feed-dns only supports a single hosted zone at this time, but this should be straightforward to add support for.
+  PRs are welcome.
 
-An example pod.yml is at https://github.com/sky-uk/feed/blob/master/examples/pod.yml.
-
-See the command line options with:
-
-    docker run skycirrus/feed-ingress:latest -h
-
-## feed-dns
-
-`feed-dns` manages a Route53 zone, updating entries to point to the correct ELBs. It is designed to be run as a single
-instance per zone in your cluster.
-
-See the command line options with:
-
-    docker run skycirrus/feed-dns:latest -h
-   
-### Discovering ELBs
+## Discovering ELBs
 
 ELBs are discovered that have the `sky.uk/KubernetesClusterFrontend` tag set to the value passed in
 with the value passed in with the `-elb-label-value` option.
@@ -45,6 +35,31 @@ with the value passed in with the `-elb-label-value` option.
 It is assumed that there is at most one internal ELB and at most one internet facing ELB and they route traffic
 to a `feed-ingress` instance.
 
+# feed-ingress
+
+`feed-ingress` manages an nginx instance, updating its configuration dynamically for ingress resources. It attaches to
+ELBs which are intended to be the frontend for all traffic.
+
+See the command line options with:
+
+    docker run skycirrus/feed-ingress:v1.0.0 -h
+
+## SSL
+
+`feed-ingress` expects your ELBs to terminate SSL traffic. We believe this is the safest and best performing
+approach for production usage. Unfortunately, ELBs don't support SNI at this time, so this limits SSL usage to
+a single domain. One workaround is to use a wildcard certificate for the entire zone that `feed-dns` manages.
+Another is to place an SSL termination EC2 instance in front of the ELBs.
+
+# feed-dns
+
+`feed-dns` manages a Route53 hosted zone, updating entries to point to the correct ELBs. It is designed to be run as a
+single instance per zone in your cluster.
+
+See the command line options with:
+
+    docker run skycirrus/feed-dns:v1.0.0 -h
+   
 ### DNS records
 
 The feed-dns controller assumes that it controls an entire Route53 HostedZone and manages an ALIAS records per
@@ -56,16 +71,26 @@ configured hosted zone.
 Any resource sets that do not have an ingress entry are deleted and for any new ingress entry an ALIAS record is created
 to point to the correct ELB.
 
-Each ingress must have the following tag `sky.uk/frontend-elb-scheme` set to `internal` or `internet-facing` so the A record can be set to the correct
-ELB.
+Each ingress must have the following tag `sky.uk/frontend-elb-scheme` set to `internal` or `internet-facing` so the A
+record can be set to the correct ELB.
 
-# Remaining TODOs for production
+## Ingress annotations
 
-There are a few known issues that we need to address before we consider feed production ready.
+The controllers support several annotations on ingress resources:
 
-- Move to ALBs to fix 504s caused by nginx reloads.
-- Move to endpoints to support zero downtime during pod deployments.
-- Expose upstream data as prometheus metrics.
+- `sky.uk/allow: 10.10.10.10/32` - Restrict access to the specified CIDR block or IP.
+- `sky.uk/frontend-elb-scheme: internal` - Use the ELB with matching scheme. Can be either `internal` or `internet-facing`.
+- `sky.uk/strip-path: true` - Strip the ingress path when sending the request to the backend service. Can be either `true`
+   or `false`. Note that nginx may break some url encoded values when enabled.
+- `sky.uk/backend-keepalive-seconds: 28` - Idle seconds for keepalive connections to the backend service. Usually
+   this should be less than the idle timeout in the service itself.
+
+An example is in [examples](examples/pod.yml).
+
+# ALB Support
+
+feed has support for ALBs. Unfortunately, ALBs have a bug that prevents non-disruptive deployments of feed (specifically,
+they don't respect the deregistration delay). As a result, we don't recommend using ALBs at this time.
 
 # Building
 
@@ -80,7 +105,7 @@ Build and test with:
     
 # Releasing
 
-Travis is configured to build the Docker image and push it to Dockerhub for each merge to master.
+Tag the commit in master and push it to release it. Only maintainers can do this.
 
 # Dependencies
 
