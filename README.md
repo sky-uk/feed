@@ -2,9 +2,9 @@
 
 # Feed
 
-Kubernetes controllers for managing external ingress with AWS. There are two controllers provided, `feed-ingress`
-which runs an nginx instance, and `feed-dns` which manages route53 entries. They can be run independently as needed,
-or together to provide a full ingress solution.
+This project contains Kubernetes controllers for managing external ingress with AWS. There are two controllers provided,
+`feed-ingress` which runs an nginx instance, and `feed-dns` which manages route53 entries. They can be run independently
+as needed, or together to provide a full ingress solution.
 
 Feed is actively used in production and should be stable enough for general usage. We can scale to many thousands of
 requests per second with only a handful of replicas.
@@ -22,7 +22,7 @@ can be applied to a cluster.
 ## Known Limitations
 
 * SSL termination is not supported directly, it is expected the ELB or something else will be terminating SSL.
-* nginx reloads can be disruptive, unfortunately. On reload, nginx will finish in flight requests, then abruptly
+* nginx reloads can be disruptive. On reload, nginx will finish in-flight requests, then abruptly
   close all server connections. This is a limitation of nginx, and affects all nginx solutions.
 * feed-dns only supports a single hosted zone at this time, but this should be straightforward to add support for.
   PRs are welcome.
@@ -30,10 +30,9 @@ can be applied to a cluster.
 ## Discovering ELBs
 
 ELBs are discovered that have the `sky.uk/KubernetesClusterFrontend` tag set to the value passed in
-with the value passed in with the `-elb-label-value` option.
+to the `-elb-label-value` option on both `feed-ingress` and `feed-dns`.
 
-It is assumed that there is at most one internal ELB and at most one internet facing ELB and they route traffic
-to a `feed-ingress` instance.
+It is required that there is at most one internal ELB and at most one internet facing ELB with this tag value.
 
 # feed-ingress
 
