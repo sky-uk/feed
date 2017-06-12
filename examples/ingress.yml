@@ -1,13 +1,20 @@
-# Example ingress yaml
-
+# Example ingress yaml with annotations.
+#
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: test-ingress
   annotations:
+    # Set to internal or internet-facing, so feed-dns will point to the correct ELB.
     sky.uk/frontend-elb-scheme: internal
+
+    # nginx allow clause for this ingress.
     sky.uk/allow: 10.10.82.0/24
+
+    # Strip the path from the path passed to the backend service.
     sky.uk/strip-path: "true"
+
+    # Max timeout for requests, as well as max idle timeout.
     sky.uk/backend-keepalive-seconds: 20
 spec:
   rules:

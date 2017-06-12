@@ -1,0 +1,79 @@
+# Example deployment for launching feed-dns, the route53 ingress controller.
+#
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: feed-dns
+  namespace: kube-system
+  labels:
+    app: feed-dns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feed-dns
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: feed-dns
+    spec:
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+      containers:
+      - image: skycirrus/feed-dns:v1.0.0
+        name: feed-dns
+
+        resources:
+          limits:
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+
+        ports:
+        - containerPort: 12082
+          name: http
+          protocol: TCP
+
+        args:
+        # Point DNS records to the two ELBs with label sky.uk/KubernetesClusterFrontend set to this value.
+        # There should only be two such ELBs, one internet-facing and one internal.
+        - -elb-label-value=dev
+
+        # AWS region of the ELBs.
+        - -elb-region=eu-west-1
+
+        # Hosted zone ID to manage records in.
+        - -r53-hosted-zone=Z1234ABCDEFG
+
+        # Use pushgateway for prometheus metrics. Optional - metrics available at /metrics on health port.
+        - -pushgateway=http://mypushgateway.com
+        - -pushgateway-interval=20
+        - -pushgateway-label=k8s_cluster=dev
+        - -pushgateway-label=environment=dev
+        - -pushgateway-label=version=v1.0.0
+
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 12082
+            scheme: HTTP
+          initialDelaySeconds: 1
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /alive
+            port: 12082
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
