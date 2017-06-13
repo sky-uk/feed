@@ -16,7 +16,7 @@ can be applied to a cluster.
 
 ## Requirements
 
-* An internal and internet-facing ELB has been created and can reach your kubernetes cluster.
+* An internal and internet-facing ELB has been created and can reach your kubernetes cluster. The ELBs should be tagged with `sky.uk/KubernetesClusterFrontend=<name>` which is used by feed to discover them.
 * A Route53 hosted zone has been created to match your ingress resources.
 
 ## Known Limitations
@@ -30,14 +30,9 @@ can be applied to a cluster.
 * feed-dns only supports a single hosted zone at this time, but this should be straightforward to add support for.
   PRs are welcome.
 
-## Discovering ELBs
+# Overview
 
-ELBs are discovered that have the `sky.uk/KubernetesClusterFrontend` tag set to the value passed in
-to the `-elb-label-value` option on both `feed-ingress` and `feed-dns`.
-
-It is required that there is at most one internal ELB and at most one internet facing ELB with this tag value.
-
-# feed-ingress
+## feed-ingress
 
 `feed-ingress` manages an nginx instance, updating its configuration dynamically for ingress resources. It attaches to
 ELBs which are intended to be the frontend for all traffic.
@@ -46,14 +41,14 @@ See the command line options with:
 
     docker run skycirrus/feed-ingress:v1.0.0 -h
 
-## SSL/TLS
+### SSL/TLS
 
 `feed-ingress` expects your ELBs to terminate SSL traffic. We believe this is the safest and best performing
 approach for production usage. Unfortunately, ELBs don't support SNI at this time, so this limits SSL usage to
 a single domain. One workaround is to use a wildcard certificate for the entire zone that `feed-dns` manages.
 Another is to place an SSL termination EC2 instance in front of the ELBs.
 
-# feed-dns
+## feed-dns
 
 `feed-dns` manages a Route53 hosted zone, updating entries to point to the correct ELBs. It is designed to be run as a
 single instance per zone in your cluster.
@@ -80,12 +75,12 @@ record can be set to the correct ELB.
 
 The controllers support several annotations on ingress resources. See the [example ingress](examples/ingress.yml) for details.
 
-# ALB Support
+## ALB Support
 
 feed has support for ALBs. Unfortunately, ALBs have a bug that prevents non-disruptive deployments of feed (specifically,
 they don't respect the deregistration delay). As a result, we don't recommend using ALBs at this time.
 
-# Building
+# Development
 
 Requires these tools:
 
@@ -96,11 +91,11 @@ Build and test with:
 
     make
     
-# Releasing
+## Releasing
 
 Tag the commit in master and push it to release it. Only maintainers can do this.
 
-# Dependencies
+## Dependencies
 
 Dependencies are managed with [govendor](https://github.com/kardianos/govendor). 
 This is a thin wrapper for golang 1.6 support of a `vendor` directory.
