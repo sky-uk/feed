@@ -24,7 +24,7 @@ spec:
       # Time to wait for requests to gracefully terminate when updating the deployment.
       # Needs to be at least as long as the -elb-drain-delay setting below, with a buffer for other teardown.
       # Recommend to set this to 2x -elb-drain-delay.
-      terminationGracePeriodSeconds: 60s
+      terminationGracePeriodSeconds: 60
 
       # Always restart on death.
       restartPolicy: Always
