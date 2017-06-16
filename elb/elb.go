@@ -59,6 +59,7 @@ type elb struct {
 	registeredFrontends int
 	initialised         initialised
 	drainDelay          time.Duration
+	readyForHealthCheck	util.SafeBool
 }
 
 type initialised struct {
@@ -225,18 +226,25 @@ func (e *elb) Stop() error {
 	return nil
 }
 
-// Health is a no-op atm. Could be updated in the future to check all the ELBs are still attached
 func (e *elb) Health() error {
-	return nil
+	if !e.readyForHealthCheck.Get() || e.expectedNumber == e.registeredFrontends {
+		return nil
+	}
+
+	return fmt.Errorf("expected ELBs: %d actual: %d", e.expectedNumber, e.registeredFrontends)
 }
 
 func (e *elb) Update(controller.IngressUpdate) error {
 	e.initialised.Lock()
 	defer e.initialised.Unlock()
+	defer func() { e.readyForHealthCheck.Set(true) }()
+
 	if !e.initialised.done {
 		log.Info("First update. Attaching to front ends.")
+		if err := e.attachToFrontEnds() ; err != nil {
+			return err
+		}
 		e.initialised.done = true
-		return e.attachToFrontEnds()
 	}
 	return nil
 }
