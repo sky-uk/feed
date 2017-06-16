@@ -298,3 +298,54 @@ func TestStopWaitsForDeregisterDelay(t *testing.T) {
 	//then
 	assert.True(t, stopDuration.Nanoseconds() > time.Millisecond.Nanoseconds()*50)
 }
+
+func TestHealthReportsHealthyBeforeFirstUpdate(t *testing.T) {
+	// given
+	a, _, _ := setup("internal", "external")
+
+	// when
+	err := a.Start()
+
+	// then
+	assert.NoError(t, err)
+	assert.Nil(t, a.Health())
+}
+
+func TestHealthReportsHealthyAfterSuccessfulFirstUpdate(t *testing.T) {
+	//given
+	a, mockALB, mockMetadata := setup("internal", "external")
+	instanceID := "cow"
+	mockMetadata.mockInstanceMetadata(instanceID)
+	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"internal-arn", "external-arn"},
+		nil, nil, nil)
+	mockALB.mockRegisterInstances("internal-arn", instanceID, nil)
+	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
+
+	//when
+	err := a.Start()
+	updateErr := a.Update(controller.IngressUpdate{})
+
+	//then
+	assert.NoError(t, err)
+	assert.NoError(t, updateErr)
+	assert.Nil(t, a.Health())
+}
+
+func TestHealthReportsUnhealthyAfterUnsuccessfulFirstUpdate(t *testing.T) {
+	//given
+	a, mockALB, mockMetadata := setup("internal", "external")
+	instanceID := "cow"
+	mockMetadata.mockInstanceMetadata(instanceID)
+	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"", "external-arn"},
+		nil, nil, nil)
+	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
+
+	//when
+	err := a.Start()
+	updateErr := a.Update(controller.IngressUpdate{})
+
+	//then
+	assert.NoError(t, err)
+	assert.Error(t, updateErr)
+	assert.Error(t, a.Health())
+}
