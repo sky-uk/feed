@@ -59,7 +59,7 @@ type elb struct {
 	registeredFrontends int
 	initialised         initialised
 	drainDelay          time.Duration
-	readyForHealthCheck	util.SafeBool
+	readyForHealthCheck util.SafeBool
 }
 
 type initialised struct {
@@ -241,7 +241,7 @@ func (e *elb) Update(controller.IngressUpdate) error {
 
 	if !e.initialised.done {
 		log.Info("First update. Attaching to front ends.")
-		if err := e.attachToFrontEnds() ; err != nil {
+		if err := e.attachToFrontEnds(); err != nil {
 			return err
 		}
 		e.initialised.done = true

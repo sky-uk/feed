@@ -493,7 +493,7 @@ func TestHealthReportsHealthyAfterSuccessfulFirstUpdate(t *testing.T) {
 	mockLoadBalancers(mockElb,
 		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
 	mockClusterTags(mockElb,
-	    lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
+		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
 	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
 
 	// when
