@@ -231,7 +231,7 @@ func (e *elb) Health() error {
 		return nil
 	}
 
-	return fmt.Errorf("expected ELBs: %d actual: %d", e.expectedNumber, e.registeredFrontends)
+	return fmt.Errorf("expected ELBs: %d actual: %d", e.expectedNumber, e.registeredFrontends.Get())
 }
 
 func (e *elb) Update(controller.IngressUpdate) error {
