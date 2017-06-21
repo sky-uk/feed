@@ -42,7 +42,7 @@ type alb struct {
 	region                         string
 	instanceID                     string
 	albARNs                        []*string
-	registeredFrontends            int
+	registeredFrontends            util.SafeInt
 	initialised                    initialised
 	readyForHealthCheck            util.SafeBool
 }
@@ -110,7 +110,7 @@ func (a *alb) Stop() error {
 
 // Health returns nil if attached to all frontends.
 func (a *alb) Health() error {
-	if !a.readyForHealthCheck.Get() || len(a.targetGroupNames) == a.registeredFrontends {
+	if !a.readyForHealthCheck.Get() || len(a.targetGroupNames) == a.registeredFrontends.Get() {
 		return nil
 	}
 	return fmt.Errorf("have not attached to all frontends %v yet", a.targetGroupNames)
@@ -157,7 +157,7 @@ func (a *alb) attachToFrontEnds() error {
 	}
 
 	attachedFrontendGauge.Set(float64(registered))
-	a.registeredFrontends = registered
+	a.registeredFrontends.Set(registered)
 
 	if len(a.targetGroupNames) != registered {
 		return fmt.Errorf("only attached to %d ALBs, expected %d", registered, len(a.targetGroupNames))

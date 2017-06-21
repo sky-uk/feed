@@ -56,7 +56,7 @@ type elb struct {
 	expectedNumber      int
 	instanceID          string
 	elbs                map[string]LoadBalancerDetails
-	registeredFrontends int
+	registeredFrontends util.SafeInt
 	initialised         initialised
 	drainDelay          time.Duration
 	readyForHealthCheck util.SafeBool
@@ -131,7 +131,7 @@ func (e *elb) attachToFrontEnds() error {
 	}
 
 	attachedFrontendGauge.Set(float64(registered))
-	e.registeredFrontends = registered
+	e.registeredFrontends.Set(registered)
 
 	if e.expectedNumber > 0 && registered != e.expectedNumber {
 		return fmt.Errorf("expected ELBs: %d actual: %d", e.expectedNumber, registered)
@@ -227,7 +227,7 @@ func (e *elb) Stop() error {
 }
 
 func (e *elb) Health() error {
-	if !e.readyForHealthCheck.Get() || e.expectedNumber == e.registeredFrontends {
+	if !e.readyForHealthCheck.Get() || e.expectedNumber == e.registeredFrontends.Get() {
 		return nil
 	}
 

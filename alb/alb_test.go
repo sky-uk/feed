@@ -150,6 +150,7 @@ func TestRegisterInstance(t *testing.T) {
 	mockMetadata.AssertExpectations(t)
 	assert.NoError(t, err)
 	assert.NoError(t, updateErr)
+	assert.NoError(t, a.Health())
 }
 
 func TestReportsErrorIfDidntRegisterAllTargetGroups(t *testing.T) {
@@ -308,26 +309,6 @@ func TestHealthReportsHealthyBeforeFirstUpdate(t *testing.T) {
 
 	// then
 	assert.NoError(t, err)
-	assert.Nil(t, a.Health())
-}
-
-func TestHealthReportsHealthyAfterSuccessfulFirstUpdate(t *testing.T) {
-	//given
-	a, mockALB, mockMetadata := setup("internal", "external")
-	instanceID := "cow"
-	mockMetadata.mockInstanceMetadata(instanceID)
-	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"internal-arn", "external-arn"},
-		nil, nil, nil)
-	mockALB.mockRegisterInstances("internal-arn", instanceID, nil)
-	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
-
-	//when
-	err := a.Start()
-	updateErr := a.Update(controller.IngressUpdate{})
-
-	//then
-	assert.NoError(t, err)
-	assert.NoError(t, updateErr)
 	assert.Nil(t, a.Health())
 }
 

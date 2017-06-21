@@ -458,9 +458,11 @@ func TestRetriesUpdateIfFirstAttemptFails(t *testing.T) {
 	mockLoadBalancers(mockElb,
 		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
 	mockClusterTags(mockElb,
-		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
-	)
-	mockElb.On("RegisterInstancesWithLoadBalancer", mock.Anything).Return(&aws_elb.RegisterInstancesWithLoadBalancerOutput{}, errors.New("no register for you"))
+		lbTags{
+			name: clusterFrontEnd,
+			tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
+	mockElb.On("RegisterInstancesWithLoadBalancer", mock.Anything).Return(
+		&aws_elb.RegisterInstancesWithLoadBalancerOutput{}, errors.New("no register for you"))
 
 	// when
 	e.Start()
@@ -482,28 +484,6 @@ func TestHealthReportsHealthyBeforeFirstUpdate(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 	assert.Nil(t, e.Health())
-}
-
-func TestHealthReportsHealthyAfterSuccessfulFirstUpdate(t *testing.T) {
-	// given
-	e, mockElb, mockMetadata := setup()
-	instanceID := "cow"
-	mockInstanceMetadata(mockMetadata, instanceID)
-	clusterFrontEnd := "cluster-frontend"
-	mockLoadBalancers(mockElb,
-		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
-	mockClusterTags(mockElb,
-		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
-	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
-
-	// when
-	err := e.Start()
-	updateErr := e.Update(controller.IngressUpdate{})
-
-	// then
-	assert.NoError(t, err)
-	assert.NoError(t, updateErr)
-	assert.NoError(t, e.Health())
 }
 
 func TestHealthReportsUnhealthyAfterUnsuccessfulFirstUpdate(t *testing.T) {
