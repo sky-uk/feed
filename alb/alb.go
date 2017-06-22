@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/sky-uk/feed/controller"
+	"github.com/sky-uk/feed/util"
 )
 
 // New creates a controller.Updater for attaching to ALB target groups on first update.
@@ -41,8 +42,9 @@ type alb struct {
 	region                         string
 	instanceID                     string
 	albARNs                        []*string
-	registeredFrontends            int
+	registeredFrontends            util.SafeInt
 	initialised                    initialised
+	readyForHealthCheck            util.SafeBool
 }
 
 type initialised struct {
@@ -72,6 +74,8 @@ func (a *alb) Start() error {
 func (a *alb) Update(controller.IngressUpdate) error {
 	a.initialised.Lock()
 	defer a.initialised.Unlock()
+	defer func() { a.readyForHealthCheck.Set(true) }()
+
 	if !a.initialised.done {
 		log.Info("Attaching to ALB target groups: %v", a.targetGroupNames)
 		if err := a.attachToFrontEnds(); err != nil {
@@ -106,7 +110,7 @@ func (a *alb) Stop() error {
 
 // Health returns nil if attached to all frontends.
 func (a *alb) Health() error {
-	if len(a.targetGroupNames) == a.registeredFrontends {
+	if !a.readyForHealthCheck.Get() || len(a.targetGroupNames) == a.registeredFrontends.Get() {
 		return nil
 	}
 	return fmt.Errorf("have not attached to all frontends %v yet", a.targetGroupNames)
@@ -153,7 +157,7 @@ func (a *alb) attachToFrontEnds() error {
 	}
 
 	attachedFrontendGauge.Set(float64(registered))
-	a.registeredFrontends = registered
+	a.registeredFrontends.Set(registered)
 
 	if len(a.targetGroupNames) != registered {
 		return fmt.Errorf("only attached to %d ALBs, expected %d", registered, len(a.targetGroupNames))

@@ -448,3 +448,65 @@ func TestDeRegisterInstanceError(t *testing.T) {
 	// then
 	assert.EqualError(t, err, "at least one ELB failed to detach")
 }
+
+func TestRetriesUpdateIfFirstAttemptFails(t *testing.T) {
+	// given
+	e, mockElb, mockMetadata := setup()
+	instanceID := "cow"
+	mockInstanceMetadata(mockMetadata, instanceID)
+	clusterFrontEnd := "cluster-frontend"
+	mockLoadBalancers(mockElb,
+		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
+	mockClusterTags(mockElb,
+		lbTags{
+			name: clusterFrontEnd,
+			tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
+	mockElb.On("RegisterInstancesWithLoadBalancer", mock.Anything).Return(
+		&aws_elb.RegisterInstancesWithLoadBalancerOutput{}, errors.New("no register for you"))
+
+	// when
+	e.Start()
+	firstErr := e.Update(controller.IngressUpdate{})
+	secondErr := e.Update(controller.IngressUpdate{})
+
+	// then
+	assert.Error(t, firstErr)
+	assert.Error(t, secondErr)
+}
+
+func TestHealthReportsHealthyBeforeFirstUpdate(t *testing.T) {
+	// given
+	e, _, _ := setup()
+
+	// when
+	err := e.Start()
+
+	// then
+	assert.NoError(t, err)
+	assert.Nil(t, e.Health())
+}
+
+func TestHealthReportsUnhealthyAfterUnsuccessfulFirstUpdate(t *testing.T) {
+	// given
+	e, mockElb, mockMetadata := setup()
+	e.(*elb).expectedNumber = 2
+
+	// and
+	instanceID := "cow"
+	mockInstanceMetadata(mockMetadata, instanceID)
+	clusterFrontEnd := "cluster-frontend"
+	mockLoadBalancers(mockElb,
+		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
+	mockClusterTags(mockElb,
+		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
+	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
+
+	// when
+	err := e.Start()
+	updateErr := e.Update(controller.IngressUpdate{})
+
+	// then
+	assert.NoError(t, err)
+	assert.Error(t, updateErr)
+	assert.Error(t, e.Health())
+}
