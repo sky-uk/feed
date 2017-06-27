@@ -13,6 +13,7 @@ import (
 
 	"time"
 
+	"sync"
 	"syscall"
 
 	"errors"
@@ -88,10 +89,15 @@ type nginxUpdater struct {
 	running              util.SafeBool
 	lastErr              util.SafeError
 	metricsUnhealthy     util.SafeBool
-	initialUpdateApplied util.SafeBool
+	initialUpdateApplied initialUpdateApplied
 	doneCh               chan struct{}
 	nginx                *nginx
 	updateRequired       util.SafeBool
+}
+
+type initialUpdateApplied struct {
+	sync.Mutex
+	done bool
 }
 
 // Used for generating nginx config
@@ -157,21 +163,6 @@ func (n *nginxUpdater) Start() error {
 		return fmt.Errorf("unable to initialise nginx config: %v", err)
 	}
 
-	if err := n.nginx.Start(); err != nil {
-		return fmt.Errorf("unable to start nginx: %v", err)
-	}
-
-	n.running.Set(true)
-	go n.waitForNginxToFinish()
-
-	time.Sleep(nginxStartDelay)
-	if !n.running.Get() {
-		return errors.New("nginx died shortly after starting")
-	}
-
-	go n.periodicallyUpdateMetrics()
-	go n.backgroundSignaller()
-
 	return nil
 }
 
@@ -189,6 +180,35 @@ func (n *nginxUpdater) initialiseNginxConf() error {
 	}
 	_, err = n.update(controller.IngressUpdate{Entries: []controller.IngressEntry{}})
 	return err
+}
+
+func (n *nginxUpdater) ensureNginxRunning() error {
+	// Guard against the (hopefully unlikely) event that two updates could be
+	// received concurrently and attempt to start Nginx twice.
+	n.initialUpdateApplied.Lock()
+	defer n.initialUpdateApplied.Unlock()
+
+	if !n.initialUpdateApplied.done {
+		log.Info("Starting nginx with initial configuration")
+		if err := n.nginx.Start(); err != nil {
+			return fmt.Errorf("unable to start nginx: %v", err)
+		}
+
+		n.running.Set(true)
+		go n.waitForNginxToFinish()
+
+		time.Sleep(nginxStartDelay)
+		if !n.running.Get() {
+			return errors.New("nginx died shortly after starting")
+		}
+
+		go n.periodicallyUpdateMetrics()
+		go n.backgroundSignaller()
+
+		n.initialUpdateApplied.done = true
+	}
+
+	return nil
 }
 
 func (n *nginxUpdater) waitForNginxToFinish() {
@@ -242,12 +262,16 @@ func (n *nginxUpdater) updateMetrics() {
 }
 
 func (n *nginxUpdater) Stop() error {
-	log.Info("Shutting down nginx process")
-	if err := n.nginx.sigquit(); err != nil {
-		return fmt.Errorf("error shutting down nginx: %v", err)
+	if n.running.Get() {
+		log.Info("Shutting down nginx process")
+		if err := n.nginx.sigquit(); err != nil {
+			return fmt.Errorf("error shutting down nginx: %v", err)
+		}
+		<-n.doneCh
+		return n.lastErr.Get()
 	}
-	<-n.doneCh
-	return n.lastErr.Get()
+
+	return nil
 }
 
 // This is called by a single go routine from the controller
@@ -258,13 +282,10 @@ func (n *nginxUpdater) Update(entries controller.IngressUpdate) error {
 	}
 
 	if updated {
-		if !n.initialUpdateApplied.Get() {
-			log.Info("Loading nginx configuration for the first time.")
-			n.nginx.sighup()
-			n.initialUpdateApplied.Set(true)
-		} else {
-			n.signalRequired()
+		if nginxStartErr := n.ensureNginxRunning(); nginxStartErr != nil {
+			return nginxStartErr
 		}
+		n.signalRequired()
 	}
 
 	return nil
@@ -487,9 +508,6 @@ func createNginxPath(rawPath string) string {
 func (n *nginxUpdater) Health() error {
 	if !n.running.Get() {
 		return errors.New("nginx is not running")
-	}
-	if !n.initialUpdateApplied.Get() {
-		return errors.New("waiting for initial update")
 	}
 	if n.metricsUnhealthy.Get() {
 		return errors.New("nginx metrics are failing to update")
