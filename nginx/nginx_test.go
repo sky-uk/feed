@@ -58,7 +58,7 @@ func newUpdaterWithBinary(tmpDir string, binary string) *nginxUpdater {
 }
 
 func newNginxWithConf(conf Conf) *nginxUpdater {
-	lb := New(conf)
+	lb := updaterFromConf(conf)
 	return lb
 }
 

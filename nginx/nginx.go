@@ -132,7 +132,11 @@ func (c *Conf) nginxConfFile() string {
 }
 
 // New creates an nginx updater.
-func New(nginxConf Conf) *nginxUpdater {
+func New(nginxConf Conf) controller.Updater {
+	return updaterFromConf(nginxConf)
+}
+
+func updaterFromConf(nginxConf Conf) *nginxUpdater {
 	initMetrics()
 
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
