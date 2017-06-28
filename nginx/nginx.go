@@ -132,7 +132,7 @@ func (c *Conf) nginxConfFile() string {
 }
 
 // New creates an nginx updater.
-func New(nginxConf Conf) controller.Updater {
+func New(nginxConf Conf) *nginxUpdater {
 	initMetrics()
 
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
@@ -189,7 +189,7 @@ func (n *nginxUpdater) ensureNginxRunning() error {
 	defer n.initialUpdateApplied.Unlock()
 
 	if !n.initialUpdateApplied.done {
-		log.Info("Starting nginx with initial configuration")
+		log.Info("Starting nginx for the first time")
 		if err := n.nginx.Start(); err != nil {
 			return fmt.Errorf("unable to start nginx: %v", err)
 		}
@@ -506,6 +506,12 @@ func createNginxPath(rawPath string) string {
 }
 
 func (n *nginxUpdater) Health() error {
+	n.initialUpdateApplied.Lock()
+	defer n.initialUpdateApplied.Unlock()
+
+	if !n.initialUpdateApplied.done {
+		return errors.New("waiting for initial update")
+	}
 	if !n.running.Get() {
 		return errors.New("nginx is not running")
 	}

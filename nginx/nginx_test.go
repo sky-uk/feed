@@ -48,16 +48,16 @@ func newConf(tmpDir string, binary string) Conf {
 	}
 }
 
-func newUpdater(tmpDir string) controller.Updater {
+func newUpdater(tmpDir string) *nginxUpdater {
 	return newUpdaterWithBinary(tmpDir, fakeNginx)
 }
 
-func newUpdaterWithBinary(tmpDir string, binary string) controller.Updater {
+func newUpdaterWithBinary(tmpDir string, binary string) *nginxUpdater {
 	conf := newConf(tmpDir, binary)
 	return newNginxWithConf(conf)
 }
 
-func newNginxWithConf(conf Conf) controller.Updater {
+func newNginxWithConf(conf Conf) *nginxUpdater {
 	lb := New(conf)
 	return lb
 }
@@ -100,6 +100,25 @@ func TestStopWaitsForGracefulShutdownOfNginx(t *testing.T) {
 	assert.Error(lb.Health(), "should have waited for nginx to gracefully stop")
 }
 
+func TestNginxNotStartedUntilFirstUpdate(t *testing.T) {
+	tmpDir := setupWorkDir(t)
+	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
+
+	assert.NoError(t, lb.Start())
+	assert.Nil(t, lb.nginx.Process)
+}
+
+func TestNginxStartedAfterFirstUpdate(t *testing.T) {
+	tmpDir := setupWorkDir(t)
+	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
+
+	assert.NoError(t, lb.Start())
+	assert.NoError(t, lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+		Host: "james.com",
+	}}}))
+	assert.NotNil(t, lb.nginx.Process.Pid)
+}
+
 func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
@@ -124,10 +143,11 @@ func TestUnhealthyUntilInitialUpdate(t *testing.T) {
 	conf.HealthPort = getPort(ts)
 	lb := newNginxWithConf(conf)
 
-	assert.EqualError(lb.Health(), "nginx is not running")
+	assert.EqualError(lb.Health(), "waiting for initial update")
 	assert.NoError(lb.Start())
 
-	assert.EqualError(lb.Health(), "nginx is not running")
+	time.Sleep(smallWaitTime)
+	assert.EqualError(lb.Health(), "waiting for initial update")
 	lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
 		Host: "james.com",
 	}}})
