@@ -48,17 +48,17 @@ func newConf(tmpDir string, binary string) Conf {
 	}
 }
 
-func newUpdater(tmpDir string) *nginxUpdater {
+func newUpdater(tmpDir string) controller.Updater {
 	return newUpdaterWithBinary(tmpDir, fakeNginx)
 }
 
-func newUpdaterWithBinary(tmpDir string, binary string) *nginxUpdater {
+func newUpdaterWithBinary(tmpDir string, binary string) controller.Updater {
 	conf := newConf(tmpDir, binary)
 	return newNginxWithConf(conf)
 }
 
-func newNginxWithConf(conf Conf) *nginxUpdater {
-	lb := updaterFromConf(conf)
+func newNginxWithConf(conf Conf) controller.Updater {
+	lb := New(conf)
 	return lb
 }
 
@@ -100,23 +100,15 @@ func TestStopWaitsForGracefulShutdownOfNginx(t *testing.T) {
 	assert.Error(lb.Health(), "should have waited for nginx to gracefully stop")
 }
 
-func TestNginxNotStartedUntilFirstUpdate(t *testing.T) {
-	tmpDir := setupWorkDir(t)
-	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
-
-	assert.NoError(t, lb.Start())
-	assert.Nil(t, lb.nginx.Process)
-}
-
 func TestNginxStartedAfterFirstUpdate(t *testing.T) {
 	tmpDir := setupWorkDir(t)
-	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
+	lb := newUpdaterWithBinary(tmpDir, "./fake_failing_nginx.sh")
 
-	assert.NoError(t, lb.Start())
-	assert.NoError(t, lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+	lb.Start()
+	err := lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
 		Host: "james.com",
-	}}}))
-	assert.NotNil(t, lb.nginx.Process.Pid)
+	}}})
+	assert.EqualError(t, err, "nginx died shortly after starting")
 }
 
 func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
@@ -165,7 +157,10 @@ func TestFailsIfNginxDiesEarly(t *testing.T) {
 	lb := newUpdaterWithBinary(tmpDir, "./fake_failing_nginx.sh")
 
 	assert.Error(lb.Start())
-	assert.Error(lb.Health())
+	lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+		Host: "james.com",
+	}}})
+	assert.EqualError(lb.Health(), "nginx is not running")
 }
 
 func TestNginxConfig(t *testing.T) {

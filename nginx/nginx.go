@@ -133,10 +133,6 @@ func (c *Conf) nginxConfFile() string {
 
 // New creates an nginx updater.
 func New(nginxConf Conf) controller.Updater {
-	return updaterFromConf(nginxConf)
-}
-
-func updaterFromConf(nginxConf Conf) *nginxUpdater {
 	initMetrics()
 
 	nginxConf.WorkingDir = strings.TrimSuffix(nginxConf.WorkingDir, "/")
@@ -182,7 +178,7 @@ func (n *nginxUpdater) initialiseNginxConf() error {
 	if err != nil {
 		log.Debugf("Can't remove nginx.conf: %v", err)
 	}
-	_, err = n.update(controller.IngressUpdate{Entries: []controller.IngressEntry{}})
+	_, err = n.updateNginxConf(controller.IngressUpdate{Entries: []controller.IngressEntry{}})
 	return err
 }
 
@@ -198,6 +194,8 @@ func (n *nginxUpdater) ensureNginxRunning() error {
 			return fmt.Errorf("unable to start nginx: %v", err)
 		}
 
+		n.initialUpdateApplied.done = true
+
 		n.running.Set(true)
 		go n.waitForNginxToFinish()
 
@@ -208,8 +206,6 @@ func (n *nginxUpdater) ensureNginxRunning() error {
 
 		go n.periodicallyUpdateMetrics()
 		go n.backgroundSignaller()
-
-		n.initialUpdateApplied.done = true
 	}
 
 	return nil
@@ -280,7 +276,7 @@ func (n *nginxUpdater) Stop() error {
 
 // This is called by a single go routine from the controller
 func (n *nginxUpdater) Update(entries controller.IngressUpdate) error {
-	updated, err := n.update(entries)
+	updated, err := n.updateNginxConf(entries)
 	if err != nil {
 		return fmt.Errorf("unable to update nginx: %v", err)
 	}
@@ -295,7 +291,7 @@ func (n *nginxUpdater) Update(entries controller.IngressUpdate) error {
 	return nil
 }
 
-func (n *nginxUpdater) update(entries controller.IngressUpdate) (bool, error) {
+func (n *nginxUpdater) updateNginxConf(entries controller.IngressUpdate) (bool, error) {
 	updatedConfig, err := n.createConfig(entries)
 	if err != nil {
 		return false, err
