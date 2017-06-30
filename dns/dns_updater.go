@@ -33,6 +33,7 @@ type updater struct {
 	elbLabelValue string
 	domain        string
 	findELBs      findELBsFunc
+	onlyDelAssoc  bool
 }
 
 // ALB represents the subset of AWS operations needed for dns_updater.go
@@ -41,7 +42,7 @@ type ALB interface {
 }
 
 // New creates an updater for dns
-func New(hostedZoneID, region string, elbLabelValue string, albNames []string, retries int) controller.Updater {
+func New(hostedZoneID, region string, elbLabelValue string, albNames []string, retries int, onlyDelAssoc bool) controller.Updater {
 	initMetrics()
 	session := session.New(&aws.Config{Region: &region})
 	return &updater{
@@ -52,6 +53,7 @@ func New(hostedZoneID, region string, elbLabelValue string, albNames []string, r
 		albNames:      albNames,
 		elbLabelValue: elbLabelValue,
 		findELBs:      elb.FindFrontEndElbs,
+		onlyDelAssoc:  onlyDelAssoc,
 	}
 }
 
@@ -146,6 +148,10 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 		failedCount.Inc()
 		return err
 	}
+
+	if u.onlyDelAssoc {
+		aRecords = u.filterUnassociated(aRecords)
+	}
 	recordsGauge.Set(float64(len(aRecords)))
 
 	changes := u.calculateChanges(aRecords, update)
@@ -159,6 +165,24 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 	}
 
 	return nil
+}
+
+func (u *updater) filterUnassociated(aRecords []*route53.ResourceRecordSet) []*route53.ResourceRecordSet {
+	managedLBs := make(map[string]bool)
+	for _, dns := range u.schemeToDNS {
+		managedLBs[dns.dnsName] = true
+	}
+	filtered := make([]*route53.ResourceRecordSet, 0)
+	for _, rec := range aRecords {
+		if rec.AliasTarget != nil && rec.AliasTarget.DNSName != nil && managedLBs[*rec.AliasTarget.DNSName] {
+			log.Debugf("Keeping managed A record %s", *rec.Name)
+			filtered = append(filtered, rec)
+		} else {
+			log.Infof("Filtering non-managed A record %s", *rec.Name)
+		}
+	}
+
+	return filtered
 }
 
 func (u *updater) calculateChanges(originalRecords []*route53.ResourceRecordSet,

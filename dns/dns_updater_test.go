@@ -31,8 +31,10 @@ const (
 	externalALBName              = "external-alb"
 	internalALBDnsName           = "internal-alb-dns-name"
 	externalALBDnsName           = "external-alb-dns-name"
+	unassocALBDnsName            = "unassoc-alb-dns-name"
 	internalALBDnsNameWithPeriod = internalALBDnsName + "."
 	externalALBDnsNameWithPeriod = externalALBDnsName + "."
+	unassocALBDnsNameWithPeriod  = unassocALBDnsName + "."
 	internalScheme               = "internal"
 	externalScheme               = "external"
 )
@@ -108,8 +110,8 @@ func (m *mockR53Client) mockGetHostedZoneDomain() {
 	m.On("GetHostedZoneDomain").Return(domain, nil)
 }
 
-func setup() (*updater, *mockR53Client, *mockALB) {
-	dnsUpdater := New(hostedZoneID, awsRegion, "", albNames, 1).(*updater)
+func setup(onlyDelAssoc bool) (*updater, *mockR53Client, *mockALB) {
+	dnsUpdater := New(hostedZoneID, awsRegion, "", albNames, 1, onlyDelAssoc).(*updater)
 	mockR53 := &mockR53Client{}
 	dnsUpdater.r53 = mockR53
 	mockALB := &mockALB{}
@@ -118,7 +120,7 @@ func setup() (*updater, *mockR53Client, *mockALB) {
 }
 
 func TestFailsToQueryFrontends(t *testing.T) {
-	dnsUpdater, mockR53, mockALB := setup()
+	dnsUpdater, mockR53, mockALB := setup(false)
 	mockALB.mockDescribeLoadBalancers(albNames, nil, errors.New("doh"))
 	mockR53.mockGetHostedZoneDomain()
 
@@ -128,7 +130,7 @@ func TestFailsToQueryFrontends(t *testing.T) {
 }
 
 func TestGetsDomainNameFails(t *testing.T) {
-	dnsUpdater, mockR53, mockALB := setup()
+	dnsUpdater, mockR53, mockALB := setup(false)
 	mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
 	mockR53.On("GetHostedZoneDomain").Return("", errors.New("No domain for you"))
 
@@ -139,7 +141,7 @@ func TestGetsDomainNameFails(t *testing.T) {
 
 func TestUpdateRecordSetFail(t *testing.T) {
 	// given
-	dnsUpdater, mockR53, mockALB := setup()
+	dnsUpdater, mockR53, mockALB := setup(false)
 	mockR53.mockGetHostedZoneDomain()
 	mockR53.mockGetARecords(nil, nil)
 	mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
@@ -160,18 +162,21 @@ func TestUpdateRecordSetFail(t *testing.T) {
 func TestRecordSetUpdates(t *testing.T) {
 	var tests = []struct {
 		name            string
+		onlyDelAssoc    bool
 		update          controller.IngressUpdate
 		records         []*route53.ResourceRecordSet
 		expectedChanges []*route53.Change
 	}{
 		{
 			"Empty update has no change",
+			false,
 			controller.IngressUpdate{},
 			[]*route53.ResourceRecordSet{},
 			[]*route53.Change{},
 		},
 		{
 			"Add new record",
+			false,
 			controller.IngressUpdate{Entries: []controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "cats.james.com",
@@ -195,6 +200,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Updating existing record to a new elb schema",
+			false,
 			controller.IngressUpdate{Entries: []controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -225,15 +231,75 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Deleting existing record",
+			false,
 			controller.IngressUpdate{},
-			[]*route53.ResourceRecordSet{{
-				Name: aws.String("foo.com."),
-				AliasTarget: &route53.AliasTarget{
-					DNSName:              aws.String(internalALBDnsNameWithPeriod),
-					HostedZoneId:         aws.String(lbHostedZoneID),
-					EvaluateTargetHealth: aws.Bool(false),
+			[]*route53.ResourceRecordSet{
+				{
+					Name: aws.String("foo.com."),
+					AliasTarget: &route53.AliasTarget{
+						DNSName:              aws.String(internalALBDnsNameWithPeriod),
+						HostedZoneId:         aws.String(lbHostedZoneID),
+						EvaluateTargetHealth: aws.Bool(false),
+					},
 				},
-			}},
+				{
+					Name: aws.String("bar.com."),
+					AliasTarget: &route53.AliasTarget{
+						DNSName:              aws.String(unassocALBDnsNameWithPeriod),
+						HostedZoneId:         aws.String(lbHostedZoneID),
+						EvaluateTargetHealth: aws.Bool(false),
+					},
+				},
+			},
+			[]*route53.Change{
+				{
+					Action: aws.String("DELETE"),
+					ResourceRecordSet: &route53.ResourceRecordSet{
+						Name: aws.String("foo.com."),
+						Type: aws.String("A"),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:              aws.String(internalALBDnsNameWithPeriod),
+							HostedZoneId:         aws.String(lbHostedZoneID),
+							EvaluateTargetHealth: aws.Bool(false),
+						},
+					},
+				},
+				{
+					Action: aws.String("DELETE"),
+					ResourceRecordSet: &route53.ResourceRecordSet{
+						Name: aws.String("bar.com."),
+						Type: aws.String("A"),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:              aws.String(unassocALBDnsNameWithPeriod),
+							HostedZoneId:         aws.String(lbHostedZoneID),
+							EvaluateTargetHealth: aws.Bool(false),
+						},
+					},
+				},
+			},
+		},
+		{
+			"Does not deleted unassociated existing record",
+			true,
+			controller.IngressUpdate{},
+			[]*route53.ResourceRecordSet{
+				{
+					Name: aws.String("foo.com."),
+					AliasTarget: &route53.AliasTarget{
+						DNSName:              aws.String(internalALBDnsNameWithPeriod),
+						HostedZoneId:         aws.String(lbHostedZoneID),
+						EvaluateTargetHealth: aws.Bool(false),
+					},
+				},
+				{
+					Name: aws.String("bar.com."),
+					AliasTarget: &route53.AliasTarget{
+						DNSName:              aws.String(unassocALBDnsNameWithPeriod),
+						HostedZoneId:         aws.String(lbHostedZoneID),
+						EvaluateTargetHealth: aws.Bool(false),
+					},
+				},
+			},
 			[]*route53.Change{{
 				Action: aws.String("DELETE"),
 				ResourceRecordSet: &route53.ResourceRecordSet{
@@ -249,6 +315,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Adding and deleting records",
+			false,
 			controller.IngressUpdate{Entries: []controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -291,6 +358,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Non-matching schemes and domains are ignored",
+			false,
 			controller.IngressUpdate{Entries: []controller.IngressEntry{
 				// host doesn't match james.com.
 				{
@@ -314,6 +382,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Duplicate hosts are not duplicated in changeset",
+			false,
 			controller.IngressUpdate{Entries: []controller.IngressEntry{
 				{
 					Name:        "test-entry",
@@ -353,6 +422,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Should choose first conflicting scheme",
+			false,
 			controller.IngressUpdate{Entries: []controller.IngressEntry{
 				{
 					Name:        "test-entry",
@@ -385,6 +455,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Does not update records when current and new entry are the same",
+			false,
 			controller.IngressUpdate{Entries: []controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -407,7 +478,7 @@ func TestRecordSetUpdates(t *testing.T) {
 	for _, test := range tests {
 		fmt.Printf("=== test: %s\n", test.name)
 
-		dnsUpdater, mockR53, mockALB := setup()
+		dnsUpdater, mockR53, mockALB := setup(test.onlyDelAssoc)
 		mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
 		mockR53.mockGetHostedZoneDomain()
 		mockR53.mockGetARecords(test.records, nil)

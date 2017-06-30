@@ -29,6 +29,7 @@ var (
 	pushgatewayIntervalSeconds int
 	pushgatewayLabels          cmd.KeyValues
 	awsAPIRetries              int
+	r53DelAssocOnly            bool
 )
 
 func init() {
@@ -67,6 +68,8 @@ func init() {
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
 	flag.IntVar(&awsAPIRetries, "aws-api-retries", defaultAwsAPIRetries,
 		"Number of times a request to the AWS API is retried.")
+	flag.BoolVar(&r53DelAssocOnly, "del-assoc-only", false,
+		"Only delete Route53 entries associated with ELBs/ALBs configured with this controller.")
 }
 
 func main() {
@@ -81,7 +84,7 @@ func main() {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
 
-	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue, albNames, awsAPIRetries)
+	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue, albNames, awsAPIRetries, r53DelAssocOnly)
 
 	controller := controller.New(controller.Config{
 		KubernetesClient: client,
