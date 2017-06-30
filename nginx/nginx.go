@@ -89,14 +89,14 @@ type nginxUpdater struct {
 	running                util.SafeBool
 	lastErr                util.SafeError
 	metricsUnhealthy       util.SafeBool
-	initialUpdateApplied   initialUpdateApplied
+	nginxStarted           nginxStarted
 	initialUpdateAttempted util.SafeBool
 	doneCh                 chan struct{}
 	nginx                  *nginx
 	updateRequired         util.SafeBool
 }
 
-type initialUpdateApplied struct {
+type nginxStarted struct {
 	sync.Mutex
 	done bool
 }
@@ -186,10 +186,10 @@ func (n *nginxUpdater) initialiseNginxConf() error {
 func (n *nginxUpdater) ensureNginxRunning() error {
 	// Guard against the (hopefully unlikely) event that two updates could be
 	// received concurrently and attempt to start Nginx twice.
-	n.initialUpdateApplied.Lock()
-	defer n.initialUpdateApplied.Unlock()
+	n.nginxStarted.Lock()
+	defer n.nginxStarted.Unlock()
 
-	if !n.initialUpdateApplied.done {
+	if !n.nginxStarted.done {
 		log.Info("Starting nginx for the first time")
 		if err := n.nginx.Start(); err != nil {
 			return fmt.Errorf("unable to start nginx: %v", err)
@@ -206,7 +206,7 @@ func (n *nginxUpdater) ensureNginxRunning() error {
 		go n.periodicallyUpdateMetrics()
 		go n.backgroundSignaller()
 
-		n.initialUpdateApplied.done = true
+		n.nginxStarted.done = true
 	}
 
 	return nil
@@ -508,9 +508,6 @@ func createNginxPath(rawPath string) string {
 }
 
 func (n *nginxUpdater) Health() error {
-	n.initialUpdateApplied.Lock()
-	defer n.initialUpdateApplied.Unlock()
-
 	if !n.initialUpdateAttempted.Get() {
 		return errors.New("waiting for initial update")
 	}

@@ -137,7 +137,6 @@ func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
 	}}}))
 
 	time.Sleep(smallWaitTime)
-
 	assert.EqualError(lb.Health(), "nginx metrics are failing to update")
 }
 
