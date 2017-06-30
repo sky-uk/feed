@@ -86,13 +86,14 @@ func (n *nginxUpdater) signalIfRequired() {
 // Nginx implementation
 type nginxUpdater struct {
 	Conf
-	running              util.SafeBool
-	lastErr              util.SafeError
-	metricsUnhealthy     util.SafeBool
-	initialUpdateApplied initialUpdateApplied
-	doneCh               chan struct{}
-	nginx                *nginx
-	updateRequired       util.SafeBool
+	running              	util.SafeBool
+	lastErr              	util.SafeError
+	metricsUnhealthy     	util.SafeBool
+	initialUpdateApplied 	initialUpdateApplied
+	initialUpdateAttempted	util.SafeBool
+	doneCh               	chan struct{}
+	nginx                	*nginx
+	updateRequired       	util.SafeBool
 }
 
 type initialUpdateApplied struct {
@@ -194,8 +195,6 @@ func (n *nginxUpdater) ensureNginxRunning() error {
 			return fmt.Errorf("unable to start nginx: %v", err)
 		}
 
-		n.initialUpdateApplied.done = true
-
 		n.running.Set(true)
 		go n.waitForNginxToFinish()
 
@@ -206,6 +205,8 @@ func (n *nginxUpdater) ensureNginxRunning() error {
 
 		go n.periodicallyUpdateMetrics()
 		go n.backgroundSignaller()
+
+		n.initialUpdateApplied.done = true
 	}
 
 	return nil
@@ -276,6 +277,7 @@ func (n *nginxUpdater) Stop() error {
 
 // This is called by a single go routine from the controller
 func (n *nginxUpdater) Update(entries controller.IngressUpdate) error {
+	n.initialUpdateAttempted.Set(true)
 	updated, err := n.updateNginxConf(entries)
 	if err != nil {
 		return fmt.Errorf("unable to update nginx: %v", err)
@@ -509,7 +511,7 @@ func (n *nginxUpdater) Health() error {
 	n.initialUpdateApplied.Lock()
 	defer n.initialUpdateApplied.Unlock()
 
-	if !n.initialUpdateApplied.done {
+	if !n.initialUpdateAttempted.Get() {
 		return errors.New("waiting for initial update")
 	}
 	if !n.running.Get() {

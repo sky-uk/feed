@@ -90,7 +90,7 @@ func TestStopWaitsForGracefulShutdownOfNginx(t *testing.T) {
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
 
-	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
+	lb := newUpdater(tmpDir)
 
 	assert.NoError(lb.Start())
 	assert.NoError(lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
@@ -102,13 +102,26 @@ func TestStopWaitsForGracefulShutdownOfNginx(t *testing.T) {
 
 func TestNginxStartedAfterFirstUpdate(t *testing.T) {
 	tmpDir := setupWorkDir(t)
-	lb := newUpdaterWithBinary(tmpDir, "./fake_failing_nginx.sh")
+	defer os.Remove(tmpDir)
+	lb := newUpdater(tmpDir)
 
 	lb.Start()
 	err := lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
 		Host: "james.com",
 	}}})
-	assert.EqualError(t, err, "nginx died shortly after starting")
+	assert.NoError(t, err)
+
+	assert.True(t, nginxStartedSuccessfully(tmpDir))
+}
+
+func nginxStartedSuccessfully(nginxDir string) bool {
+	filename := fmt.Sprintf("%s/nginx-started", nginxDir)
+	file, _ := os.Open(filename)
+	defer file.Close()
+
+	buf := make([]byte, 8)
+	file.Read(buf)
+	return string(buf) == "started!"
 }
 
 func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
@@ -119,9 +132,13 @@ func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
 	lb := newUpdater(tmpDir)
 
 	assert.NoError(lb.Start())
+	assert.NoError(lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+		Host: "james.com",
+	}}}))
 
 	time.Sleep(smallWaitTime)
-	assert.Error(lb.Health(), "should be unhealthy")
+
+	assert.EqualError(lb.Health(), "nginx metrics are failing to update")
 }
 
 func TestUnhealthyUntilInitialUpdate(t *testing.T) {
@@ -140,9 +157,9 @@ func TestUnhealthyUntilInitialUpdate(t *testing.T) {
 
 	time.Sleep(smallWaitTime)
 	assert.EqualError(lb.Health(), "waiting for initial update")
-	lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+	assert.NoError(lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
 		Host: "james.com",
-	}}})
+	}}}))
 	assert.NoError(lb.Health(), "should be healthy")
 
 	assert.NoError(lb.Stop())
@@ -156,10 +173,10 @@ func TestFailsIfNginxDiesEarly(t *testing.T) {
 
 	lb := newUpdaterWithBinary(tmpDir, "./fake_failing_nginx.sh")
 
-	assert.Error(lb.Start())
-	lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+	assert.NoError(lb.Start())
+	assert.Error(lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
 		Host: "james.com",
-	}}})
+	}}}))
 	assert.EqualError(lb.Health(), "nginx is not running")
 }
 
