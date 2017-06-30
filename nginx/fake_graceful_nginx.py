@@ -29,6 +29,11 @@ signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGQUIT, signal.SIGHUP})
 signal.signal(signal.SIGQUIT, sigquit_handler)
 signal.signal(signal.SIGHUP, sighup_handler)
 signal.pause
+
+startup_marker_file_name = str.join('/', sys.argv[2].split('/')[:-1]) + '/nginx-started'
+with open(startup_marker_file_name, 'w') as f:
+    f.write('started!')
+
 time.sleep(5)
 print('Quit after 5 seconds of nada')
 sys.exit(-1)
