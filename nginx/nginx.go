@@ -86,14 +86,14 @@ func (n *nginxUpdater) signalIfRequired() {
 // Nginx implementation
 type nginxUpdater struct {
 	Conf
-	running              	util.SafeBool
-	lastErr              	util.SafeError
-	metricsUnhealthy     	util.SafeBool
-	initialUpdateApplied 	initialUpdateApplied
-	initialUpdateAttempted	util.SafeBool
-	doneCh               	chan struct{}
-	nginx                	*nginx
-	updateRequired       	util.SafeBool
+	running                util.SafeBool
+	lastErr                util.SafeError
+	metricsUnhealthy       util.SafeBool
+	initialUpdateApplied   initialUpdateApplied
+	initialUpdateAttempted util.SafeBool
+	doneCh                 chan struct{}
+	nginx                  *nginx
+	updateRequired         util.SafeBool
 }
 
 type initialUpdateApplied struct {
