@@ -39,7 +39,7 @@ ELBs which are intended to be the frontend for all traffic.
 
 See the command line options with:
 
-    docker run skycirrus/feed-ingress:v1.0.0 -h
+    docker run skycirrus/feed-ingress:v1.0.2 -h
 
 ### SSL/TLS
 
@@ -55,7 +55,7 @@ single instance per zone in your cluster.
 
 See the command line options with:
 
-    docker run skycirrus/feed-dns:v1.0.0 -h
+    docker run skycirrus/feed-dns:v1.0.2 -h
    
 ### DNS records
 
