@@ -215,9 +215,8 @@ func TestUpdateRecordSetFail(t *testing.T) {
 	mockR53.mockGetARecords(nil, nil)
 	mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
 
-	ingressUpdate := controller.IngressUpdate{
-		Entries: []controller.IngressEntry{{Host: "verification.james.com", ELbScheme: internalScheme}},
-	}
+	ingressUpdate := []controller.IngressEntry{{Host: "verification.james.com", ELbScheme: internalScheme}}
+
 	mockR53.On("UpdateRecordSets", mock.Anything).Return(errors.New("no updates for you"))
 
 	// when
@@ -231,25 +230,25 @@ func TestUpdateRecordSetFail(t *testing.T) {
 func TestRecordSetUpdates(t *testing.T) {
 	var tests = []struct {
 		name            string
-		update          controller.IngressUpdate
+		update          controller.IngressEntries
 		records         []*route53.ResourceRecordSet
 		expectedChanges []*route53.Change
 	}{
 		{
 			"Empty update has no change",
-			controller.IngressUpdate{},
+			controller.IngressEntries{},
 			[]*route53.ResourceRecordSet{},
 			[]*route53.Change{},
 		},
 		{
 			"Add new record",
-			controller.IngressUpdate{Entries: []controller.IngressEntry{{
+			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "cats.james.com",
 				Path:        "/",
 				ELbScheme:   internalScheme,
 				ServicePort: 80,
-			}}},
+			}},
 			nil,
 			[]*route53.Change{{
 				Action: aws.String("UPSERT"),
@@ -266,13 +265,13 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Updating existing record to a new elb schema",
-			controller.IngressUpdate{Entries: []controller.IngressEntry{{
+			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
 				Path:        "/",
 				ELbScheme:   externalScheme,
 				ServicePort: 80,
-			}}},
+			}},
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("foo.james.com."),
 				AliasTarget: &route53.AliasTarget{
@@ -296,7 +295,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Deleting existing record",
-			controller.IngressUpdate{},
+			controller.IngressEntries{},
 			[]*route53.ResourceRecordSet{
 				{
 					Name: aws.String("foo.com."),
@@ -330,13 +329,13 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Adding and deleting records",
-			controller.IngressUpdate{Entries: []controller.IngressEntry{{
+			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
 				Path:        "/",
 				ELbScheme:   internalScheme,
 				ServicePort: 80,
-			}}},
+			}},
 			[]*route53.ResourceRecordSet{
 				{
 					Name: aws.String("bar.james.com."),
@@ -382,7 +381,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Non-matching schemes and domains are ignored",
-			controller.IngressUpdate{Entries: []controller.IngressEntry{
+			[]controller.IngressEntry{
 				// host doesn't match james.com.
 				{
 					Name:        "test-entry",
@@ -399,13 +398,13 @@ func TestRecordSetUpdates(t *testing.T) {
 					ELbScheme:   "invalidscheme",
 					ServicePort: 80,
 				},
-			}},
+			},
 			nil,
 			[]*route53.Change{},
 		},
 		{
 			"Duplicate hosts are not duplicated in changeset",
-			controller.IngressUpdate{Entries: []controller.IngressEntry{
+			[]controller.IngressEntry{
 				{
 					Name:        "test-entry",
 					Host:        "foo.james.com",
@@ -427,7 +426,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					ELbScheme:   internalScheme,
 					ServicePort: 80,
 				},
-			}},
+			},
 			nil,
 			[]*route53.Change{{
 				Action: aws.String("UPSERT"),
@@ -444,7 +443,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Should choose first conflicting scheme",
-			controller.IngressUpdate{Entries: []controller.IngressEntry{
+			[]controller.IngressEntry{
 				{
 					Name:        "test-entry",
 					Host:        "bar.james.com",
@@ -459,7 +458,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					ELbScheme:   internalScheme,
 					ServicePort: 80,
 				},
-			}},
+			},
 			nil,
 			[]*route53.Change{{
 				Action: aws.String("UPSERT"),
@@ -476,13 +475,13 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Does not update records when current and new entry are the same",
-			controller.IngressUpdate{Entries: []controller.IngressEntry{{
+			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
 				Path:        "/",
 				ELbScheme:   externalScheme,
 				ServicePort: 80,
-			}}},
+			}},
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("foo.james.com."),
 				AliasTarget: &route53.AliasTarget{

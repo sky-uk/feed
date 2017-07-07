@@ -145,7 +145,7 @@ func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
 
 	//when
 	e.Start()
-	e.Update(controller.IngressUpdate{})
+	e.Update(controller.IngressEntries{})
 	e.Stop()
 
 	//then
@@ -174,7 +174,7 @@ func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
 	err := e.Start()
 
 	//when
-	e.Update(controller.IngressUpdate{})
+	e.Update(controller.IngressEntries{})
 
 	//then
 	assert.NoError(t, e.Health())
@@ -204,7 +204,7 @@ func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 
 	//when
 	e.Start()
-	err := e.Update(controller.IngressUpdate{})
+	err := e.Update(controller.IngressEntries{})
 
 	//then
 	assert.EqualError(t, err, "expected ELBs: 2 actual: 1")
@@ -249,7 +249,7 @@ func TestAttachWithInternalAndInternetFacing(t *testing.T) {
 
 	//when
 	err := e.Start()
-	e.Update(controller.IngressUpdate{})
+	e.Update(controller.IngressEntries{})
 
 	//then
 	mockElb.AssertExpectations(t)
@@ -261,7 +261,7 @@ func TestErrorGettingMetadata(t *testing.T) {
 	e, _, mockMetadata := setup()
 	mockMetadata.On("GetInstanceIdentityDocument").Return(ec2metadata.EC2InstanceIdentityDocument{}, fmt.Errorf("No metadata for you"))
 
-	err := e.Update(controller.IngressUpdate{})
+	err := e.Update(controller.IngressEntries{})
 
 	assert.EqualError(t, err, "unable to query ec2 metadata service for InstanceId: No metadata for you")
 }
@@ -273,7 +273,7 @@ func TestErrorDescribingInstances(t *testing.T) {
 	mockElb.On("DescribeLoadBalancers", mock.AnythingOfType("*elb.DescribeLoadBalancersInput")).Return(&aws_elb.DescribeLoadBalancersOutput{}, errors.New("oh dear oh dear"))
 
 	e.Start()
-	err := e.Update(controller.IngressUpdate{})
+	err := e.Update(controller.IngressEntries{})
 
 	assert.EqualError(t, err, "unable to describe load balancers: oh dear oh dear")
 }
@@ -286,7 +286,7 @@ func TestErrorDescribingTags(t *testing.T) {
 	mockElb.On("DescribeTags", mock.AnythingOfType("*elb.DescribeTagsInput")).Return(&aws_elb.DescribeTagsOutput{}, errors.New("oh dear oh dear"))
 
 	e.Start()
-	err := e.Update(controller.IngressUpdate{})
+	err := e.Update(controller.IngressEntries{})
 
 	assert.EqualError(t, err, "unable to describe tags: oh dear oh dear")
 }
@@ -303,7 +303,7 @@ func TestNoMatchingElbs(t *testing.T) {
 
 	// when
 	e.Start()
-	err := e.Update(controller.IngressUpdate{})
+	err := e.Update(controller.IngressEntries{})
 
 	// then
 	assert.Error(t, err, "expected ELBs: 1 actual: 0")
@@ -327,7 +327,7 @@ func TestGetLoadBalancerPages(t *testing.T) {
 	mockRegisterInstances(mockElb, loadBalancerName, instanceID)
 
 	// when
-	err := e.Update(controller.IngressUpdate{})
+	err := e.Update(controller.IngressEntries{})
 
 	// then
 	assert.NoError(t, err)
@@ -352,7 +352,7 @@ func TestTagCallsPage(t *testing.T) {
 	mockRegisterInstances(mockElb, loadBalancerName2, instanceID)
 
 	// when
-	err := e.Update(controller.IngressUpdate{})
+	err := e.Update(controller.IngressEntries{})
 
 	// then
 	assert.NoError(t, err)
@@ -396,7 +396,7 @@ func TestDeregistersWithAttachedELBs(t *testing.T) {
 
 	//when
 	assert.NoError(t, e.Start())
-	assert.NoError(t, e.Update(controller.IngressUpdate{}))
+	assert.NoError(t, e.Update(controller.IngressEntries{}))
 	beforeStop := time.Now()
 	assert.NoError(t, e.Stop())
 	stopDuration := time.Now().Sub(beforeStop)
@@ -420,7 +420,7 @@ func TestRegisterInstanceError(t *testing.T) {
 	mockElb.On("RegisterInstancesWithLoadBalancer", mock.Anything).Return(&aws_elb.RegisterInstancesWithLoadBalancerOutput{}, errors.New("no register for you"))
 
 	// when
-	err := e.Update(controller.IngressUpdate{})
+	err := e.Update(controller.IngressEntries{})
 
 	// then
 	assert.EqualError(t, err, "unable to register instance cow with elb cluster-frontend: no register for you")
@@ -442,7 +442,7 @@ func TestDeRegisterInstanceError(t *testing.T) {
 
 	// when
 	e.Start()
-	e.Update(controller.IngressUpdate{})
+	e.Update(controller.IngressEntries{})
 	err := e.Stop()
 
 	// then
@@ -466,8 +466,8 @@ func TestRetriesUpdateIfFirstAttemptFails(t *testing.T) {
 
 	// when
 	e.Start()
-	firstErr := e.Update(controller.IngressUpdate{})
-	secondErr := e.Update(controller.IngressUpdate{})
+	firstErr := e.Update(controller.IngressEntries{})
+	secondErr := e.Update(controller.IngressEntries{})
 
 	// then
 	assert.Error(t, firstErr)
@@ -503,7 +503,7 @@ func TestHealthReportsUnhealthyAfterUnsuccessfulFirstUpdate(t *testing.T) {
 
 	// when
 	err := e.Start()
-	updateErr := e.Update(controller.IngressUpdate{})
+	updateErr := e.Update(controller.IngressEntries{})
 
 	// then
 	assert.NoError(t, err)

@@ -179,7 +179,7 @@ func (n *nginxUpdater) initialiseNginxConf() error {
 	if err != nil {
 		log.Debugf("Can't remove nginx.conf: %v", err)
 	}
-	_, err = n.updateNginxConf(controller.IngressUpdate{Entries: []controller.IngressEntry{}})
+	_, err = n.updateNginxConf([]controller.IngressEntry{})
 	return err
 }
 
@@ -276,7 +276,7 @@ func (n *nginxUpdater) Stop() error {
 }
 
 // This is called by a single go routine from the controller
-func (n *nginxUpdater) Update(entries controller.IngressUpdate) error {
+func (n *nginxUpdater) Update(entries controller.IngressEntries) error {
 	n.initialUpdateAttempted.Set(true)
 	updated, err := n.updateNginxConf(entries)
 	if err != nil {
@@ -293,7 +293,7 @@ func (n *nginxUpdater) Update(entries controller.IngressUpdate) error {
 	return nil
 }
 
-func (n *nginxUpdater) updateNginxConf(entries controller.IngressUpdate) (bool, error) {
+func (n *nginxUpdater) updateNginxConf(entries controller.IngressEntries) (bool, error) {
 	updatedConfig, err := n.createConfig(entries)
 	if err != nil {
 		return false, err
@@ -349,14 +349,14 @@ func (n *nginxUpdater) checkNginxConfig() error {
 	return nil
 }
 
-func (n *nginxUpdater) createConfig(update controller.IngressUpdate) ([]byte, error) {
+func (n *nginxUpdater) createConfig(entries controller.IngressEntries) ([]byte, error) {
 	tmpl, err := template.New("nginx.tmpl").ParseFiles(n.WorkingDir + "/nginx.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
-	serverEntries := createServerEntries(update)
-	upstreamEntries := createUpstreamEntries(update)
+	serverEntries := createServerEntries(entries)
+	upstreamEntries := createUpstreamEntries(entries)
 
 	n.AccessLogHeaders = n.getNginxLogHeaders()
 	var output bytes.Buffer
@@ -389,10 +389,10 @@ func (u upstreams) Len() int           { return len(u) }
 func (u upstreams) Less(i, j int) bool { return u[i].ID < u[j].ID }
 func (u upstreams) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
 
-func createUpstreamEntries(update controller.IngressUpdate) []*upstream {
+func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 	idToUpstream := make(map[string]*upstream)
 
-	for _, ingressEntry := range update.Entries {
+	for _, ingressEntry := range entries {
 		upstream := &upstream{
 			ID:     upstreamID(ingressEntry),
 			Server: fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
@@ -427,10 +427,10 @@ func (l locations) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
 
 type pathSet map[string]bool
 
-func createServerEntries(update controller.IngressUpdate) []*server {
+func createServerEntries(entries controller.IngressEntries) []*server {
 	hostToNginxEntry := make(map[string]*server)
 
-	for _, ingressEntry := range uniqueIngressEntries(update.Entries) {
+	for _, ingressEntry := range uniqueIngressEntries(entries) {
 		serverEntry, exists := hostToNginxEntry[ingressEntry.Host]
 		if !exists {
 			serverEntry = &server{ServerName: ingressEntry.Host}
@@ -465,7 +465,9 @@ type ingressKey struct {
 	Host, Path string
 }
 
-func uniqueIngressEntries(ingressEntries []controller.IngressEntry) []controller.IngressEntry {
+func uniqueIngressEntries(ingressEntries controller.IngressEntries) []controller.IngressEntry {
+	sort.Sort(ingressEntries)
+
 	uniqueIngress := make(map[ingressKey]controller.IngressEntry)
 	for _, ingressEntry := range ingressEntries {
 		key := ingressKey{ingressEntry.Host, ingressEntry.Path}
@@ -474,27 +476,15 @@ func uniqueIngressEntries(ingressEntries []controller.IngressEntry) []controller
 			uniqueIngress[key] = ingressEntry
 			continue
 		}
-		mostRecentIngress, olderIngress := orderByCreation(ingressEntry, existingIngressEntry)
-		log.Infof("Ignoring '%s' because it duplicates the host/path of a more recent entry '%s'", olderIngress.NamespaceName(), mostRecentIngress.NamespaceName())
-		uniqueIngress[key] = mostRecentIngress
+		log.Infof("Ignoring '%s' because it duplicates the host/path of '%s'", ingressEntry.NamespaceName(), existingIngressEntry.NamespaceName())
 	}
 
 	uniqueIngressEntries := make([]controller.IngressEntry, 0, len(uniqueIngress))
 	for _, value := range uniqueIngress {
 		uniqueIngressEntries = append(uniqueIngressEntries, value)
 	}
-	return uniqueIngressEntries
-}
 
-func orderByCreation(entry1, entry2 controller.IngressEntry) (mostRecentIngress, olderIngress controller.IngressEntry) {
-	if entry1.CreationTimestamp.After(entry2.CreationTimestamp) {
-		mostRecentIngress = entry1
-		olderIngress = entry2
-		return
-	}
-	mostRecentIngress = entry2
-	olderIngress = entry1
-	return
+	return uniqueIngressEntries
 }
 
 func createNginxPath(rawPath string) string {

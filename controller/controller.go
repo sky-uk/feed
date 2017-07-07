@@ -198,9 +198,8 @@ func (c *controller) updateIngresses() error {
 		log.Infof("Skipped %d invalid: %s", len(skipped), strings.Join(skipped, ", "))
 	}
 
-	update := IngressUpdate{Entries: entries}
 	for _, u := range c.updaters {
-		if err := u.Update(update); err != nil {
+		if err := u.Update(entries); err != nil {
 			return err
 		}
 	}

@@ -26,7 +26,7 @@ type fakeUpdater struct {
 	mock.Mock
 }
 
-func (lb *fakeUpdater) Update(update IngressUpdate) error {
+func (lb *fakeUpdater) Update(update IngressEntries) error {
 	r := lb.Called(update)
 	return r.Error(0)
 }
@@ -258,7 +258,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		description string
 		ingresses   []*v1beta1.Ingress
 		services    []*v1.Service
-		entries     IngressUpdate
+		entries     IngressEntries
 	}{
 		{
 			"ingress with corresponding service",
@@ -277,49 +277,49 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			"ingress without corresponding service",
 			createDefaultIngresses(),
 			[]*v1.Service{},
-			IngressUpdate{Entries: []IngressEntry{}},
+			[]IngressEntry{},
 		},
 		{
 			"ingress with service with non-matching namespace",
 			createDefaultIngresses(),
 			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
-			IngressUpdate{Entries: []IngressEntry{}},
+			[]IngressEntry{},
 		},
 		{
 			"ingress with service with non-matching name",
 			createDefaultIngresses(),
 			createServiceFixture("lalala service", ingressNamespace, serviceIP),
-			IngressUpdate{Entries: []IngressEntry{}},
+			[]IngressEntry{},
 		},
 		{
 			"ingress with missing host name",
 			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout),
 			createDefaultServices(),
-			IngressUpdate{Entries: []IngressEntry{}},
+			[]IngressEntry{},
 		},
 		{
 			"ingress with missing service name",
 			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow, stripPath, backendTimeout),
 			createDefaultServices(),
-			IngressUpdate{Entries: []IngressEntry{}},
+			[]IngressEntry{},
 		},
 		{
 			"ingress with missing service port",
 			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow, stripPath, backendTimeout),
 			createDefaultServices(),
-			IngressUpdate{Entries: []IngressEntry{}},
+			[]IngressEntry{},
 		},
 		{
 			"ingress with missing service IP",
 			createDefaultIngresses(),
 			createServiceFixture(ingressSvcName, ingressNamespace, ""),
-			IngressUpdate{Entries: []IngressEntry{}},
+			[]IngressEntry{},
 		},
 		{
 			"ingress with default allow",
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING", stripPath, backendTimeout),
 			createDefaultServices(),
-			IngressUpdate{Entries: []IngressEntry{{
+			[]IngressEntry{{
 				Namespace:      ingressNamespace,
 				Name:           ingressName,
 				Host:           ingressHost,
@@ -328,13 +328,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServicePort:    ingressSvcPort,
 				Allow:          strings.Split(ingressDefaultAllow, ","),
 				BackendKeepAliveSeconds: backendTimeout,
-			}}},
+			}},
 		},
 		{
 			"ingress with empty allow",
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", stripPath, backendTimeout),
 			createDefaultServices(),
-			IngressUpdate{Entries: []IngressEntry{{
+			[]IngressEntry{{
 				Namespace:      ingressNamespace,
 				Name:           ingressName,
 				Host:           ingressHost,
@@ -344,13 +344,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ELbScheme:      "internal",
 				Allow:          []string{},
 				BackendKeepAliveSeconds: backendTimeout,
-			}}},
+			}},
 		},
 		{
 			"ingress with strip paths set to true",
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "true", backendTimeout),
 			createDefaultServices(),
-			IngressUpdate{Entries: []IngressEntry{{
+			[]IngressEntry{{
 				Namespace:               ingressNamespace,
 				Name:                    ingressName,
 				Host:                    ingressHost,
@@ -361,13 +361,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Allow:                   []string{},
 				StripPaths:              true,
 				BackendKeepAliveSeconds: backendTimeout,
-			}}},
+			}},
 		},
 		{
 			"ingress with strip paths set to false",
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", backendTimeout),
 			createDefaultServices(),
-			IngressUpdate{Entries: []IngressEntry{{
+			[]IngressEntry{{
 				Namespace:               ingressNamespace,
 				Name:                    ingressName,
 				Host:                    ingressHost,
@@ -378,13 +378,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Allow:                   []string{},
 				StripPaths:              false,
 				BackendKeepAliveSeconds: backendTimeout,
-			}}},
+			}},
 		},
 		{
 			"ingress with overridden backend timeout",
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20),
 			createDefaultServices(),
-			IngressUpdate{Entries: []IngressEntry{{
+			[]IngressEntry{{
 				Namespace:               ingressNamespace,
 				Name:                    ingressName,
 				Host:                    ingressHost,
@@ -395,13 +395,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Allow:                   []string{},
 				StripPaths:              false,
 				BackendKeepAliveSeconds: 20,
-			}}},
+			}},
 		},
 		{
 			"ingress with default backend timeout",
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", -1),
 			createDefaultServices(),
-			IngressUpdate{Entries: []IngressEntry{{
+			[]IngressEntry{{
 				Namespace:               ingressNamespace,
 				Name:                    ingressName,
 				Host:                    ingressHost,
@@ -412,7 +412,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Allow:                   []string{},
 				StripPaths:              false,
 				BackendKeepAliveSeconds: backendTimeout,
-			}}},
+			}},
 		},
 	}
 
@@ -448,8 +448,8 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 	}
 }
 
-func createLbEntriesFixture() IngressUpdate {
-	return IngressUpdate{Entries: []IngressEntry{{
+func createLbEntriesFixture() IngressEntries {
+	return []IngressEntry{{
 		Namespace:               ingressNamespace,
 		Name:                    ingressName,
 		Host:                    ingressHost,
@@ -459,7 +459,7 @@ func createLbEntriesFixture() IngressUpdate {
 		Allow:                   strings.Split(ingressAllow, ","),
 		ELbScheme:               elbScheme,
 		BackendKeepAliveSeconds: backendTimeout,
-	}}}
+	}}
 }
 
 const (

@@ -234,7 +234,7 @@ func (e *elb) Health() error {
 	return fmt.Errorf("expected ELBs: %d actual: %d", e.expectedNumber, e.registeredFrontends.Get())
 }
 
-func (e *elb) Update(controller.IngressUpdate) error {
+func (e *elb) Update(controller.IngressEntries) error {
 	e.initialised.Lock()
 	defer e.initialised.Unlock()
 	defer func() { e.readyForHealthCheck.Set(true) }()

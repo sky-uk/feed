@@ -143,7 +143,7 @@ func (u *updater) Health() error {
 	return nil
 }
 
-func (u *updater) Update(update controller.IngressUpdate) error {
+func (u *updater) Update(entries controller.IngressEntries) error {
 	aRecords, err := u.r53.GetARecords()
 	if err != nil {
 		log.Warn("Unable to get A records from Route53. Not updating Route53.", err)
@@ -154,7 +154,7 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 	aRecords = u.determineManagedRecordSets(aRecords)
 	recordsGauge.Set(float64(len(aRecords)))
 
-	changes := u.calculateChanges(aRecords, update)
+	changes := u.calculateChanges(aRecords, entries)
 
 	updateCount.Add(float64(len(changes)))
 
@@ -190,12 +190,12 @@ func (u *updater) determineManagedRecordSets(rrs []*route53.ResourceRecordSet) [
 }
 
 func (u *updater) calculateChanges(originalRecords []*route53.ResourceRecordSet,
-	update controller.IngressUpdate) []*route53.Change {
+	entries controller.IngressEntries) []*route53.Change {
 
 	log.Infof("Current %s records: %v", u.domain, originalRecords)
-	log.Debug("Processing ingress update: ", update)
+	log.Debug("Processing ingress update: ", entries)
 
-	hostToIngress, skipped := u.indexByHost(update.Entries)
+	hostToIngress, skipped := u.indexByHost(entries)
 	changes, skipped2 := u.createChanges(hostToIngress, originalRecords)
 
 	skipped = append(skipped, skipped2...)
