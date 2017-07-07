@@ -30,7 +30,7 @@ spec:
       restartPolicy: Always
 
       containers:
-      - image: skycirrus/feed-ingress:v1.0.0
+      - image: skycirrus/feed-ingress:v1.0.2
         name: feed-ingress
 
         resources:
@@ -79,7 +79,7 @@ spec:
         - -pushgateway-interval=20
         - -pushgateway-label=k8s_cluster=dev
         - -pushgateway-label=environment=dev
-        - -pushgateway-label=version=v1.0.0
+        - -pushgateway-label=version=v1.0.2
 
         # Attach to the ELBs with label sky.uk/KubernetesClusterFrontend set to this value.
         - -elb-expected-number=2
