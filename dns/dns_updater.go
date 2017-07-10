@@ -97,6 +97,10 @@ func (u *updater) initELBs() error {
 
 	u.schemeToDNS = make(map[string]dnsDetails)
 	for scheme, lbDetails := range elbs {
+		if strings.HasSuffix(lbDetails.DNSName, ".") {
+			return fmt.Errorf("unexpected trailing dot on load balancer DNS name: %s", lbDetails.DNSName)
+		}
+
 		u.schemeToDNS[scheme] = dnsDetails{dnsName: lbDetails.DNSName + ".", hostedZoneID: lbDetails.HostedZoneID}
 	}
 
