@@ -9,23 +9,6 @@ import (
 // IngressEntries type
 type IngressEntries []IngressEntry
 
-// allows us to sort ingress entries.
-func (entries IngressEntries) Len() int {
-	return len(entries)
-}
-
-// allows us to sort ingress entries.
-func (entries IngressEntries) Less(i, j int) bool {
-	iEntry := fmt.Sprintf("%s:%s:%s:%s", entries[i].Namespace, entries[i].Name, entries[i].Host, entries[i].Path)
-	jEntry := fmt.Sprintf("%s:%s:%s:%s", entries[j].Namespace, entries[j].Name, entries[j].Host, entries[j].Path)
-	return iEntry < jEntry
-}
-
-// allows us to sort ingress entries.
-func (entries IngressEntries) Swap(i, j int) {
-	entries[i], entries[j] = entries[j], entries[i]
-}
-
 // IngressEntry describes the ingress for a single host, path, and service.
 type IngressEntry struct {
 	// Namespace of the ingress.

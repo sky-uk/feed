@@ -465,11 +465,17 @@ type ingressKey struct {
 	Host, Path string
 }
 
-func uniqueIngressEntries(ingressEntries controller.IngressEntries) []controller.IngressEntry {
-	sort.Sort(ingressEntries)
+func uniqueIngressEntries(entries controller.IngressEntries) []controller.IngressEntry {
+	sort.Slice(entries, func(i, j int) bool {
+		iEntry := entries[i]
+		jEntry := entries[j]
+		iString := strings.Join([]string{iEntry.Namespace, iEntry.Name, iEntry.Host, iEntry.Path}, "")
+		jString := strings.Join([]string{jEntry.Namespace, jEntry.Name, jEntry.Host, jEntry.Path}, "")
+		return iString < jString
+	})
 
 	uniqueIngress := make(map[ingressKey]controller.IngressEntry)
-	for _, ingressEntry := range ingressEntries {
+	for _, ingressEntry := range entries {
 		key := ingressKey{ingressEntry.Host, ingressEntry.Path}
 		existingIngressEntry, exists := uniqueIngress[key]
 		if !exists {
