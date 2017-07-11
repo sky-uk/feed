@@ -65,7 +65,8 @@ records per ingress.
 On startup, all ingress entries are queried and compared to all the Record Sets in the configured hosted zone.
 
 Any ALIAS records pointing to one of the ELBs associated with this controller that do not have an ingress
-entry are deleted. For any new ingress entry, an ALIAS record is created to point to the correct ELB.
+entry are deleted. For any new ingress entry, an ALIAS record is created to point to the correct ELB. Existing
+records which do not meet these conditions remain untouched.
 
 Each ingress must have the following tag `sky.uk/frontend-elb-scheme` set to `internal` or `internet-facing` so the A
 record can be set to the correct ELB.
