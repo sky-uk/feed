@@ -1,4 +1,4 @@
-# v2.0.0
+# v1.1.0
 
 * Do not delete unassociated resource record sets (http://github.com/sky-uk/feed/pull/144)
 
