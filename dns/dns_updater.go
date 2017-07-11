@@ -97,7 +97,11 @@ func (u *updater) initELBs() error {
 
 	u.schemeToDNS = make(map[string]dnsDetails)
 	for scheme, lbDetails := range elbs {
-		u.schemeToDNS[scheme] = dnsDetails{dnsName: lbDetails.DNSName, hostedZoneID: lbDetails.HostedZoneID}
+		if strings.HasSuffix(lbDetails.DNSName, ".") {
+			return fmt.Errorf("unexpected trailing dot on load balancer DNS name: %s", lbDetails.DNSName)
+		}
+
+		u.schemeToDNS[scheme] = dnsDetails{dnsName: lbDetails.DNSName + ".", hostedZoneID: lbDetails.HostedZoneID}
 	}
 
 	return nil
@@ -146,6 +150,8 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 		failedCount.Inc()
 		return err
 	}
+
+	aRecords = u.determineManagedRecordSets(aRecords)
 	recordsGauge.Set(float64(len(aRecords)))
 
 	changes := u.calculateChanges(aRecords, update)
@@ -159,6 +165,28 @@ func (u *updater) Update(update controller.IngressUpdate) error {
 	}
 
 	return nil
+}
+
+func (u *updater) determineManagedRecordSets(rrs []*route53.ResourceRecordSet) []*route53.ResourceRecordSet {
+	managedLBs := make(map[string]bool)
+	for _, dns := range u.schemeToDNS {
+		managedLBs[dns.dnsName] = true
+	}
+	managed := make([]*route53.ResourceRecordSet, 0)
+	nonManaged := make([]string, 0)
+	for _, rec := range rrs {
+		if rec.AliasTarget != nil && rec.AliasTarget.DNSName != nil && managedLBs[*rec.AliasTarget.DNSName] {
+			managed = append(managed, rec)
+		} else {
+			nonManaged = append(nonManaged, *rec.Name)
+		}
+	}
+
+	if len(nonManaged) > 0 {
+		log.Infof("Filtered %d non-managed resource record sets: %v", len(nonManaged), nonManaged)
+	}
+
+	return managed
 }
 
 func (u *updater) calculateChanges(originalRecords []*route53.ResourceRecordSet,
