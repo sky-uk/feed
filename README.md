@@ -59,14 +59,13 @@ See the command line options with:
    
 ### DNS records
 
-The feed-dns controller assumes that it controls an entire Route53 HostedZone and manages an ALIAS records per
-ingress.
+The feed-dns controller assumes that it can overwrite any entry in the supplied DNS zone and manages ALIAS
+records per ingress.
 
-On startup all ingress entries are queried and compared to all the Record Sets in the
-configured hosted zone.
+On startup, all ingress entries are queried and compared to all the Record Sets in the configured hosted zone.
 
-Any resource sets that do not have an ingress entry are deleted and for any new ingress entry an ALIAS record is created
-to point to the correct ELB.
+Any ALIAS records pointing to one of the ELBs associated with this controller that do not have an ingress
+entry are deleted. For any new ingress entry, an ALIAS record is created to point to the correct ELB.
 
 Each ingress must have the following tag `sky.uk/frontend-elb-scheme` set to `internal` or `internet-facing` so the A
 record can be set to the correct ELB.
