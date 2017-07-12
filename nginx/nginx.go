@@ -469,8 +469,8 @@ func uniqueIngressEntries(entries controller.IngressEntries) []controller.Ingres
 	sort.Slice(entries, func(i, j int) bool {
 		iEntry := entries[i]
 		jEntry := entries[j]
-		iString := strings.Join([]string{iEntry.Namespace, iEntry.Name, iEntry.Host, iEntry.Path}, ":^^:")
-		jString := strings.Join([]string{jEntry.Namespace, jEntry.Name, jEntry.Host, jEntry.Path}, ":^^:")
+		iString := strings.Join([]string{iEntry.Namespace, iEntry.Name, iEntry.Host, iEntry.Path}, ":")
+		jString := strings.Join([]string{jEntry.Namespace, jEntry.Name, jEntry.Host, jEntry.Path}, ":")
 		return iString < jString
 	})
 
