@@ -71,7 +71,7 @@ func (a *alb) Start() error {
 	return nil
 }
 
-func (a *alb) Update(controller.IngressUpdate) error {
+func (a *alb) Update(controller.IngressEntries) error {
 	a.initialised.Lock()
 	defer a.initialised.Unlock()
 	defer func() { a.readyForHealthCheck.Set(true) }()

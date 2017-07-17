@@ -123,7 +123,7 @@ func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
 
 	//when
 	a.Start()
-	a.Update(controller.IngressUpdate{})
+	a.Update(controller.IngressEntries{})
 	a.Stop()
 
 	//then
@@ -143,7 +143,7 @@ func TestRegisterInstance(t *testing.T) {
 
 	//when
 	err := a.Start()
-	updateErr := a.Update(controller.IngressUpdate{})
+	updateErr := a.Update(controller.IngressEntries{})
 
 	//then
 	mockALB.AssertExpectations(t)
@@ -165,7 +165,7 @@ func TestReportsErrorIfDidntRegisterAllTargetGroups(t *testing.T) {
 
 	//when
 	err := a.Start()
-	updateErr := a.Update(controller.IngressUpdate{})
+	updateErr := a.Update(controller.IngressEntries{})
 
 	//then
 	assert.NoError(t, err)
@@ -177,7 +177,7 @@ func TestErrorGettingMetadata(t *testing.T) {
 	mockMetadata.On("GetInstanceIdentityDocument").
 		Return(ec2metadata.EC2InstanceIdentityDocument{}, errors.New("no metadata for you"))
 
-	err := e.Update(controller.IngressUpdate{})
+	err := e.Update(controller.IngressEntries{})
 
 	assert.Error(t, err)
 }
@@ -191,7 +191,7 @@ func TestErrorDescribingTargetGroups(t *testing.T) {
 
 	//when
 	a.Start()
-	updateErr := a.Update(controller.IngressUpdate{})
+	updateErr := a.Update(controller.IngressEntries{})
 
 	//then
 	assert.Error(t, updateErr)
@@ -208,7 +208,7 @@ func TestMissingTargetGroups(t *testing.T) {
 
 	//when
 	err := a.Start()
-	updateErr := a.Update(controller.IngressUpdate{})
+	updateErr := a.Update(controller.IngressEntries{})
 
 	//then
 	assert.NoError(t, err)
@@ -229,7 +229,7 @@ func TestDescribeTargetGroupPages(t *testing.T) {
 
 	//when
 	err := a.Start()
-	updateErr := a.Update(controller.IngressUpdate{})
+	updateErr := a.Update(controller.IngressEntries{})
 
 	//then
 	mockALB.AssertExpectations(t)
@@ -252,7 +252,7 @@ func TestDeregistersOnStop(t *testing.T) {
 
 	//when
 	a.Start()
-	a.Update(controller.IngressUpdate{})
+	a.Update(controller.IngressEntries{})
 	stopErr := a.Stop()
 
 	//then
@@ -275,7 +275,7 @@ func TestDeregisterErrorIsHandledInStop(t *testing.T) {
 
 	//when
 	a.Start()
-	a.Update(controller.IngressUpdate{})
+	a.Update(controller.IngressEntries{})
 	stopErr := a.Stop()
 
 	//then
@@ -323,7 +323,7 @@ func TestHealthReportsUnhealthyAfterUnsuccessfulFirstUpdate(t *testing.T) {
 
 	//when
 	err := a.Start()
-	updateErr := a.Update(controller.IngressUpdate{})
+	updateErr := a.Update(controller.IngressEntries{})
 
 	//then
 	assert.NoError(t, err)

@@ -69,9 +69,9 @@ func TestCanStartThenStop(t *testing.T) {
 	lb := newUpdater(tmpDir)
 
 	assert.NoError(t, lb.Start())
-	assert.NoError(t, lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+	assert.NoError(t, lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
-	}}}))
+	}}))
 	assert.NoError(t, lb.Stop())
 }
 
@@ -93,9 +93,9 @@ func TestStopWaitsForGracefulShutdownOfNginx(t *testing.T) {
 	lb := newUpdater(tmpDir)
 
 	assert.NoError(lb.Start())
-	assert.NoError(lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+	assert.NoError(lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
-	}}}))
+	}}))
 	assert.NoError(lb.Stop())
 	assert.Error(lb.Health(), "should have waited for nginx to gracefully stop")
 }
@@ -106,9 +106,9 @@ func TestNginxStartedAfterFirstUpdate(t *testing.T) {
 	lb := newUpdater(tmpDir)
 
 	lb.Start()
-	err := lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+	err := lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
-	}}})
+	}})
 	assert.NoError(t, err)
 
 	assert.True(t, nginxStartedSuccessfully(tmpDir))
@@ -132,9 +132,9 @@ func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
 	lb := newUpdater(tmpDir)
 
 	assert.NoError(lb.Start())
-	assert.NoError(lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+	assert.NoError(lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
-	}}}))
+	}}))
 
 	time.Sleep(smallWaitTime)
 	assert.EqualError(lb.Health(), "nginx metrics are failing to update")
@@ -156,9 +156,9 @@ func TestUnhealthyUntilInitialUpdate(t *testing.T) {
 
 	time.Sleep(smallWaitTime)
 	assert.EqualError(lb.Health(), "waiting for initial update")
-	assert.NoError(lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+	assert.NoError(lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
-	}}}))
+	}}))
 	assert.NoError(lb.Health(), "should be healthy")
 
 	assert.NoError(lb.Stop())
@@ -173,9 +173,9 @@ func TestFailsIfNginxDiesEarly(t *testing.T) {
 	lb := newUpdaterWithBinary(tmpDir, "./fake_failing_nginx.sh")
 
 	assert.NoError(lb.Start())
-	assert.Error(lb.Update(controller.IngressUpdate{Entries: []controller.IngressEntry{{
+	assert.Error(lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
-	}}}))
+	}}))
 	assert.EqualError(lb.Health(), "nginx is not running")
 }
 
@@ -316,7 +316,7 @@ func TestNginxConfig(t *testing.T) {
 		lb := newNginxWithConf(test.conf)
 
 		assert.NoError(lb.Start())
-		err := lb.Update(controller.IngressUpdate{})
+		err := lb.Update(controller.IngressEntries{})
 		assert.NoError(err)
 
 		config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
@@ -519,6 +519,44 @@ func TestNginxIngressEntries(t *testing.T) {
 			},
 		},
 		{
+			"Duplicate host/path entries are ignored, the first one is kept order by Namepace,Name,Host,Path",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Namespace:         "core",
+					Name:              "2-last-ingress",
+					Host:              "foo-0.com",
+					Path:              "/",
+					ServiceAddress:    "foo",
+					ServicePort:       8080,
+					Allow:             []string{"10.82.0.0/16"},
+					CreationTimestamp: time.Now(),
+				},
+				{
+					Namespace:         "core",
+					Name:              "0-first-ingress",
+					Host:              "foo-0.com",
+					Path:              "/",
+					ServiceAddress:    "foo",
+					ServicePort:       8080,
+					Allow:             []string{"10.82.0.0/16"},
+					CreationTimestamp: time.Now().Add(-1 * time.Minute),
+				},
+				{
+					Namespace:         "core",
+					Name:              "1-next-ingress",
+					Host:              "foo-0.com",
+					Path:              "/",
+					ServiceAddress:    "foo",
+					ServicePort:       8080,
+					Allow:             []string{"10.82.0.0/16"},
+					CreationTimestamp: time.Now(),
+				},
+			},
+			nil,
+			[]string{"# ingress: core/0-first-ingress"},
+		},
+		{
 			"Check path slashes are added correctly",
 			defaultConf,
 			[]controller.IngressEntry{
@@ -593,107 +631,6 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            allow 10.99.0.0/16;\n" +
 					"            \n" +
 					"            deny all;\n",
-			},
-		},
-		{
-			"Duplicate host and paths will only keep the most recent one",
-			defaultConf,
-			[]controller.IngressEntry{
-				{
-					Host:                    "chris.com",
-					Namespace:               "core",
-					Name:                    "chris-ingress-old",
-					Path:                    "/my-path",
-					ServiceAddress:          "service1",
-					ServicePort:             9090,
-					BackendKeepAliveSeconds: 28,
-					CreationTimestamp:       time.Now().Add(-1 * time.Minute),
-				},
-				{
-					Host:                    "chris.com",
-					Namespace:               "core",
-					Name:                    "chris-ingress-most-recent",
-					Path:                    "/my-path",
-					ServiceAddress:          "service2",
-					ServicePort:             9090,
-					BackendKeepAliveSeconds: 28,
-					CreationTimestamp:       time.Now(),
-				},
-				{
-					Host:                    "chris.com",
-					Namespace:               "core",
-					Name:                    "chris-ingress-older",
-					Path:                    "/my-path",
-					ServiceAddress:          "service3",
-					ServicePort:             9090,
-					BackendKeepAliveSeconds: 28,
-					CreationTimestamp:       time.Now().Add(-2 * time.Minute),
-				},
-				{
-					Host:                    "chris-again.com",
-					Namespace:               "core",
-					Name:                    "chris-ingress-again",
-					Path:                    "/my-path",
-					ServiceAddress:          "service4",
-					ServicePort:             9090,
-					BackendKeepAliveSeconds: 28,
-					CreationTimestamp:       time.Now(),
-				},
-			},
-			nil,
-			[]string{
-				"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name chris-again.com;\n" +
-					"\n" +
-					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
-					"        client_max_body_size 0;\n" +
-					"\n" +
-					"        location /my-path/ {\n" +
-					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service4.9090;\n" +
-					"\n" +
-					"            # Set display name for vhost stats.\n" +
-					"            vhost_traffic_status_filter_by_set_key /my-path/::$proxy_host $server_name;\n" +
-					"\n" +
-					"            # Close proxy connections after backend keepalive time.\n" +
-					"            proxy_read_timeout 28s;\n" +
-					"            proxy_send_timeout 28s;\n" +
-					"\n" +
-					"            # Allow localhost for debugging\n" +
-					"            allow 127.0.0.1;\n" +
-					"\n" +
-					"            # Restrict clients\n" +
-					"            \n" +
-					"            deny all;\n" +
-					"        }\n" +
-					"    }",
-				"    server {\n" +
-					"        listen 9090;\n" +
-					"        server_name chris.com;\n" +
-					"\n" +
-					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
-					"        client_max_body_size 0;\n" +
-					"\n" +
-					"        location /my-path/ {\n" +
-					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service2.9090;\n" +
-					"\n" +
-					"            # Set display name for vhost stats.\n" +
-					"            vhost_traffic_status_filter_by_set_key /my-path/::$proxy_host $server_name;\n" +
-					"\n" +
-					"            # Close proxy connections after backend keepalive time.\n" +
-					"            proxy_read_timeout 28s;\n" +
-					"            proxy_send_timeout 28s;\n" +
-					"\n" +
-					"            # Allow localhost for debugging\n" +
-					"            allow 127.0.0.1;\n" +
-					"\n" +
-					"            # Restrict clients\n" +
-					"            \n" +
-					"            deny all;\n" +
-					"        }\n" +
-					"    }",
 			},
 		},
 		{
@@ -891,7 +828,7 @@ func TestNginxIngressEntries(t *testing.T) {
 
 		assert.NoError(lb.Start())
 		entries := test.entries
-		err := lb.Update(controller.IngressUpdate{Entries: entries})
+		err := lb.Update(entries)
 		assert.NoError(err)
 
 		config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
@@ -961,12 +898,12 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 		},
 	}
 
-	assert.NoError(lb.Update(controller.IngressUpdate{Entries: entries}))
+	assert.NoError(lb.Update(entries))
 
 	config1, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
 	assert.NoError(err)
 
-	assert.NoError(lb.Update(controller.IngressUpdate{Entries: entries}))
+	assert.NoError(lb.Update(entries))
 	config2, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
 	assert.NoError(err)
 
@@ -1003,11 +940,11 @@ func TestRateLimitedForUpdates(t *testing.T) {
 	}
 
 	// initial one should go through synchronously
-	assert.NoError(lb.Update(controller.IngressUpdate{Entries: entries}))
+	assert.NoError(lb.Update(entries))
 
 	// these two should be merged into one
-	assert.NoError(lb.Update(controller.IngressUpdate{Entries: updatedEntries}))
-	assert.NoError(lb.Update(controller.IngressUpdate{Entries: updatedEntries}))
+	assert.NoError(lb.Update(updatedEntries))
+	assert.NoError(lb.Update(updatedEntries))
 	time.Sleep(1 * time.Second)
 
 	assert.NoError(lb.Stop())
@@ -1144,7 +1081,7 @@ func TestFailsToUpdateIfConfigurationIsBroken(t *testing.T) {
 		},
 	}
 
-	err := lb.Update(controller.IngressUpdate{Entries: entries})
+	err := lb.Update(entries)
 	assert.Contains(err.Error(), "Config check failed")
 	assert.Contains(err.Error(), "./fake_nginx_failing_reload.sh -t")
 }
