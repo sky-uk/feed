@@ -1,3 +1,18 @@
+# v1.1.1
+
+Make deduping ingress entries deterministic.
+
+The previous approach tried to order ingress by CreationTimestamp before
+picking the most recent ingress.  This did not work because multiple
+duplicate ingresses could be created at the same time.
+
+This fix orders ingress entries by Namespace,Name,Host,Path and only
+uses the first ingress 'Host/Path' encountered to dedupe.  Kubernetes
+guarentees unique ingress for a given 'Namespace/Name' which will make
+this deduping deterministic.
+
+fixes: https://github.com/sky-uk/umc-core/issues/3793
+
 # v1.1.0
 
 * Do not delete unassociated resource record sets (http://github.com/sky-uk/feed/pull/144)
