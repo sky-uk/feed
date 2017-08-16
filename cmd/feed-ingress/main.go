@@ -24,8 +24,8 @@ var (
 	ingressPort                    int
 	ingressHealthPort              int
 	healthPort                     int
-	elbLabelValue                  string
 	region                         string
+	elbLabelValue                  string
 	elbExpectedNumber              int
 	elbDrainDelay                  time.Duration
 	targetGroupNames               cmd.CommaSeparatedValues
@@ -139,9 +139,9 @@ func init() {
 		"AWS region for frontend attachment.")
 
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
-		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
+		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Required if 'elb-enabled' is true.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
-		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
+		"Expected number of ELBs to attach to. If less or equal 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
 	flag.DurationVar(&elbDrainDelay, "elb-drain-delay", defaultElbDrainDelay, "Delay to wait"+
 		" for feed-ingress to drain from the ELB on shutdown. Should match the ELB's drain time.")
@@ -171,16 +171,20 @@ func main() {
 	if err != nil {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
-
 	controllerConfig.KubernetesClient = client
-	controllerConfig.Updaters = createIngressUpdaters()
-	controller := controller.New(controllerConfig)
 
-	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
-	cmd.AddHealthPort(controller, healthPort)
-	cmd.AddSignalHandler(controller)
+	controllerConfig.Updaters, err = createIngressUpdaters()
+	if err != nil {
+		log.Fatal("Unable to create ingress updaters: ", err)
+	}
 
-	if err = controller.Start(); err != nil {
+	feedController := controller.New(controllerConfig)
+
+	cmd.AddHealthMetrics(feedController, metrics.PrometheusIngressSubsystem)
+	cmd.AddHealthPort(feedController, healthPort)
+	cmd.AddSignalHandler(feedController)
+
+	if err = feedController.Start(); err != nil {
 		log.Fatal("Error while starting controller: ", err)
 	}
 	log.Info("Controller started")
@@ -188,15 +192,24 @@ func main() {
 	select {}
 }
 
-func createIngressUpdaters() []controller.Updater {
+func createIngressUpdaters() ([]controller.Updater, error) {
 	nginxConfig.IngressPort = ingressPort
 	nginxConfig.HealthPort = ingressHealthPort
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
-	nginx := nginx.New(nginxConfig)
+	nginxUpdater := nginx.New(nginxConfig)
 
-	elbAttacher := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
+	updaters := []controller.Updater{nginxUpdater}
+
+	if elbLabelValue != "" {
+		elbAttacher, err := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
+		if err != nil {
+			return nil, err
+		}
+		updaters = append(updaters, elbAttacher)
+	}
 	albAttacher := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
+	updaters = append(updaters, albAttacher)
 	// update nginx before attaching to front ends
-	return []controller.Updater{nginx, elbAttacher, albAttacher}
+	return updaters, nil
 }
