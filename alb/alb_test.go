@@ -286,6 +286,31 @@ func TestDeregisterErrorIsHandledInStop(t *testing.T) {
 
 func TestStopWaitsForDeregisterDelay(t *testing.T) {
 	//given
+	a, mockALB, mockMetadata := setup("internal", "external")
+	instanceID := "cow"
+	mockMetadata.mockInstanceMetadata(instanceID)
+	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"internal-arn", "external-arn"},
+		nil, nil, nil)
+	mockALB.mockRegisterInstances("internal-arn", instanceID, nil)
+	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
+	mockALB.mockDeregisterInstances("internal-arn", instanceID, nil)
+	mockALB.mockDeregisterInstances("external-arn", instanceID, nil)
+	a.(*alb).targetGroupDeregistrationDelay = time.Millisecond * 50
+
+	//when
+	a.Start()
+	a.Update(controller.IngressEntries{})
+	beforeStop := time.Now()
+	a.Stop()
+	stopDuration := time.Now().Sub(beforeStop)
+
+	//then
+	assert.True(t, stopDuration.Nanoseconds() > time.Millisecond.Nanoseconds()*50,
+		"Drain time should have caused stop to take at least 50ms.")
+}
+
+func TestStopDoesNotWaitForDeregisterDelayIfNoInstancesRegistered(t *testing.T) {
+	//given
 	a, _, _ := setup()
 	a.(*alb).targetGroupNames = nil
 	a.(*alb).targetGroupDeregistrationDelay = time.Millisecond * 50
@@ -297,7 +322,8 @@ func TestStopWaitsForDeregisterDelay(t *testing.T) {
 	stopDuration := time.Now().Sub(beforeStop)
 
 	//then
-	assert.True(t, stopDuration.Nanoseconds() > time.Millisecond.Nanoseconds()*50)
+	assert.True(t, stopDuration.Nanoseconds() < time.Millisecond.Nanoseconds()*10,
+		"No drain time expected as no deregistration needed.")
 }
 
 func TestHealthReportsHealthyBeforeFirstUpdate(t *testing.T) {

@@ -407,6 +407,26 @@ func TestDeregistersWithAttachedELBs(t *testing.T) {
 		"Drain time should have caused stop to take at least 50ms.")
 }
 
+func TestDoesNotWaitToDeregisterIfNoExpectedFrontEnds(t *testing.T) {
+	//given
+	e, mockElb, mockMetadata := setup()
+	e.(*elb).labelValue = ""
+	e.(*elb).drainDelay = time.Millisecond * 100
+
+	//when
+	e.Start()
+	e.Update(controller.IngressEntries{})
+	beforeStop := time.Now()
+	e.Stop()
+	stopDuration := time.Now().Sub(beforeStop)
+
+	//then
+	mockElb.AssertExpectations(t)
+	mockMetadata.AssertExpectations(t)
+	assert.True(t, stopDuration.Nanoseconds() < time.Millisecond.Nanoseconds()*10,
+		"No drain time expected as no deregistration needed.")
+}
+
 func TestRegisterInstanceError(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()

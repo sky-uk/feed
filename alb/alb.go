@@ -103,7 +103,10 @@ func (a *alb) Stop() error {
 		}
 	}
 
-	time.Sleep(a.targetGroupDeregistrationDelay)
+	if len(a.albARNs) > 0 {
+		log.Infof("Waiting %vs to finish ALB target group deregistration", a.targetGroupDeregistrationDelay)
+		time.Sleep(a.targetGroupDeregistrationDelay)
+	}
 
 	return nil
 }

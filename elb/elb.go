@@ -221,8 +221,10 @@ func (e *elb) Stop() error {
 		return errors.New("at least one ELB failed to detach")
 	}
 
-	time.Sleep(e.drainDelay)
-
+	if len(e.elbs) > 0 {
+		log.Infof("Waiting %vs to finish ELB deregistration", e.drainDelay)
+		time.Sleep(e.drainDelay)
+	}
 	return nil
 }
 
