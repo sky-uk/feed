@@ -1,3 +1,10 @@
+# v1.1.2
+
+* Fix bug where feed-ingress would wait for `elb-drain-delay` and `alb-target-group-deregistration-delay`
+  even if no instances where attached.
+* Do not create ELB or ALB updater when `elb-label-value` or `alb-target-group-names`,
+  respectively, are empty.
+
 # v1.1.1
 
 Make deduping ingress entries deterministic.
@@ -10,8 +17,6 @@ This fix orders ingress entries by Namespace,Name,Host,Path and only
 uses the first ingress 'Host/Path' encountered to dedupe.  Kubernetes
 guarentees unique ingress for a given 'Namespace/Name' which will make
 this deduping deterministic.
-
-fixes: https://github.com/sky-uk/umc-core/issues/3793
 
 # v1.1.0
 

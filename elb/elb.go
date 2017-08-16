@@ -27,7 +27,7 @@ const ElbTag = "sky.uk/KubernetesClusterFrontend"
 // New creates a new ELB frontend
 func New(region string, labelValue string, expectedNumber int, drainDelay time.Duration) (controller.Updater, error) {
 	if labelValue == "" {
-		return nil, fmt.Errorf("Unable to create Elb Updater: Missing label value for the tag %v", ElbTag)
+		return nil, fmt.Errorf("unable to create ELB updater: missing label value for the tag %v", ElbTag)
 	}
 	initMetrics()
 	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, labelValue, expectedNumber)
@@ -220,7 +220,7 @@ func (e *elb) Stop() error {
 		return errors.New("at least one ELB failed to detach")
 	}
 
-	log.Infof("Waiting %vs to finish ELB deregistration", e.drainDelay)
+	log.Infof("Waiting %v to finish ELB deregistration", e.drainDelay)
 	time.Sleep(e.drainDelay)
 
 	return nil

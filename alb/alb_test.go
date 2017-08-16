@@ -121,7 +121,7 @@ func TestCanNotCreateUpdaterWithoutLabelValue(t *testing.T) {
 	_, err := New(region, []string{}, time.Nanosecond)
 
 	//then
-	assert.EqualError(t, err, "Unable to create Alb Updater: missing target group names")
+	assert.Error(t, err)
 }
 
 func TestRegisterInstance(t *testing.T) {

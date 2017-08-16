@@ -143,7 +143,7 @@ func TestCanNotCreateUpdaterWithoutLabelValue(t *testing.T) {
 	_, err := New(region, "", 1, 0)
 
 	//then
-	assert.EqualError(t, err, "Unable to create Elb Updater: Missing label value for the tag "+ElbTag)
+	assert.Error(t, err)
 }
 
 func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
