@@ -20,7 +20,10 @@ import (
 )
 
 // New creates a controller.Updater for attaching to ALB target groups on first update.
-func New(region string, targetGroupNames []string, targetGroupDeregistrationDelay time.Duration) controller.Updater {
+func New(region string, targetGroupNames []string, targetGroupDeregistrationDelay time.Duration) (controller.Updater, error) {
+	if len(targetGroupNames) == 0 {
+		return nil, fmt.Errorf("Unable to create Alb Updater: missing target group names")
+	}
 	initMetrics()
 	log.Infof("ALB frontend region: %s target groups: %v", region, targetGroupNames)
 	session := session.New(&aws.Config{Region: &region})
@@ -31,7 +34,7 @@ func New(region string, targetGroupNames []string, targetGroupDeregistrationDela
 		targetGroupDeregistrationDelay: targetGroupDeregistrationDelay,
 		region:      region,
 		initialised: initialised{},
-	}
+	}, nil
 }
 
 type alb struct {
@@ -103,10 +106,8 @@ func (a *alb) Stop() error {
 		}
 	}
 
-	if len(a.albARNs) > 0 {
-		log.Infof("Waiting %vs to finish ALB target group deregistration", a.targetGroupDeregistrationDelay)
-		time.Sleep(a.targetGroupDeregistrationDelay)
-	}
+	log.Infof("Waiting %vs to finish ALB target group deregistration", a.targetGroupDeregistrationDelay)
+	time.Sleep(a.targetGroupDeregistrationDelay)
 
 	return nil
 }

@@ -108,7 +108,7 @@ func (m *mockMetadata) mockInstanceMetadata(instanceID string) {
 }
 
 func setup(targetGroupNames ...string) (controller.Updater, *mockALB, *mockMetadata) {
-	a := New(region, targetGroupNames, time.Nanosecond)
+	a, _ := New(region, targetGroupNames, time.Nanosecond)
 	mockALB := &mockALB{}
 	mockMetadata := &mockMetadata{}
 	a.(*alb).awsALB = mockALB
@@ -116,19 +116,12 @@ func setup(targetGroupNames ...string) (controller.Updater, *mockALB, *mockMetad
 	return a, mockALB, mockMetadata
 }
 
-func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
-	//given
-	a, mockElb, mockMetadata := setup()
-	a.(*alb).targetGroupNames = nil
-
+func TestCanNotCreateUpdaterWithoutLabelValue(t *testing.T) {
 	//when
-	a.Start()
-	a.Update(controller.IngressEntries{})
-	a.Stop()
+	_, err := New(region, []string{}, time.Nanosecond)
 
 	//then
-	mockElb.AssertExpectations(t)
-	mockMetadata.AssertExpectations(t)
+	assert.EqualError(t, err, "Unable to create Alb Updater: missing target group names")
 }
 
 func TestRegisterInstance(t *testing.T) {
@@ -307,23 +300,6 @@ func TestStopWaitsForDeregisterDelay(t *testing.T) {
 	//then
 	assert.True(t, stopDuration.Nanoseconds() > time.Millisecond.Nanoseconds()*50,
 		"Drain time should have caused stop to take at least 50ms.")
-}
-
-func TestStopDoesNotWaitForDeregisterDelayIfNoInstancesRegistered(t *testing.T) {
-	//given
-	a, _, _ := setup()
-	a.(*alb).targetGroupNames = nil
-	a.(*alb).targetGroupDeregistrationDelay = time.Millisecond * 50
-
-	//when
-	a.Start()
-	beforeStop := time.Now()
-	a.Stop()
-	stopDuration := time.Now().Sub(beforeStop)
-
-	//then
-	assert.True(t, stopDuration.Nanoseconds() < time.Millisecond.Nanoseconds()*10,
-		"No drain time expected as no deregistration needed.")
 }
 
 func TestHealthReportsHealthyBeforeFirstUpdate(t *testing.T) {

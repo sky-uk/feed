@@ -91,10 +91,6 @@ func (e *elb) Start() error {
 }
 
 func (e *elb) attachToFrontEnds() error {
-	if e.labelValue == "" {
-		return nil
-	}
-
 	id, err := e.metadata.GetInstanceIdentityDocument()
 	if err != nil {
 		return fmt.Errorf("unable to query ec2 metadata service for InstanceId: %v", err)

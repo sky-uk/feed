@@ -146,21 +146,6 @@ func TestCanNotCreateUpdaterWithoutLabelValue(t *testing.T) {
 	assert.EqualError(t, err, "Unable to create Elb Updater: Missing label value for the tag "+ElbTag)
 }
 
-func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
-	//given
-	e, mockElb, mockMetadata := setup()
-	e.(*elb).labelValue = ""
-
-	//when
-	e.Start()
-	e.Update(controller.IngressEntries{})
-	e.Stop()
-
-	//then
-	mockElb.AssertExpectations(t)
-	mockMetadata.AssertExpectations(t)
-}
-
 func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()

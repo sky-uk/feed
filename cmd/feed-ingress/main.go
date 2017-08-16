@@ -139,9 +139,9 @@ func init() {
 		"AWS region for frontend attachment.")
 
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
-		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Required if 'elb-enabled' is true.")
+		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
-		"Expected number of ELBs to attach to. If less or equal 0 the controller will not check,"+
+		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
 	flag.DurationVar(&elbDrainDelay, "elb-drain-delay", defaultElbDrainDelay, "Delay to wait"+
 		" for feed-ingress to drain from the ELB on shutdown. Should match the ELB's drain time.")
@@ -201,15 +201,21 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 
 	updaters := []controller.Updater{nginxUpdater}
 
-	if elbLabelValue != "" {
-		elbAttacher, err := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
+	if elbLabelValue == "" {
+		elbUpdater, err := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
 		if err != nil {
-			return nil, err
+			return updaters, err
 		}
-		updaters = append(updaters, elbAttacher)
+		updaters = append(updaters, elbUpdater)
 	}
-	albAttacher := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
-	updaters = append(updaters, albAttacher)
+
+	if len(targetGroupNames) != 0 {
+		albUpdater, err := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
+		if err != nil {
+			return updaters, err
+		}
+		updaters = append(updaters, albUpdater)
+	}
 	// update nginx before attaching to front ends
 	return updaters, nil
 }
