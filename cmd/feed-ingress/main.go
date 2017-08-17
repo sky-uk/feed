@@ -24,8 +24,8 @@ var (
 	ingressPort                    int
 	ingressHealthPort              int
 	healthPort                     int
-	elbLabelValue                  string
 	region                         string
+	elbLabelValue                  string
 	elbExpectedNumber              int
 	elbDrainDelay                  time.Duration
 	targetGroupNames               cmd.CommaSeparatedValues
@@ -171,16 +171,20 @@ func main() {
 	if err != nil {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
-
 	controllerConfig.KubernetesClient = client
-	controllerConfig.Updaters = createIngressUpdaters()
-	controller := controller.New(controllerConfig)
 
-	cmd.AddHealthMetrics(controller, metrics.PrometheusIngressSubsystem)
-	cmd.AddHealthPort(controller, healthPort)
-	cmd.AddSignalHandler(controller)
+	controllerConfig.Updaters, err = createIngressUpdaters()
+	if err != nil {
+		log.Fatal("Unable to create ingress updaters: ", err)
+	}
 
-	if err = controller.Start(); err != nil {
+	feedController := controller.New(controllerConfig)
+
+	cmd.AddHealthMetrics(feedController, metrics.PrometheusIngressSubsystem)
+	cmd.AddHealthPort(feedController, healthPort)
+	cmd.AddSignalHandler(feedController)
+
+	if err = feedController.Start(); err != nil {
 		log.Fatal("Error while starting controller: ", err)
 	}
 	log.Info("Controller started")
@@ -188,15 +192,30 @@ func main() {
 	select {}
 }
 
-func createIngressUpdaters() []controller.Updater {
+func createIngressUpdaters() ([]controller.Updater, error) {
 	nginxConfig.IngressPort = ingressPort
 	nginxConfig.HealthPort = ingressHealthPort
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
-	nginx := nginx.New(nginxConfig)
+	nginxUpdater := nginx.New(nginxConfig)
 
-	elbAttacher := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
-	albAttacher := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
+	updaters := []controller.Updater{nginxUpdater}
+
+	if elbLabelValue == "" {
+		elbUpdater, err := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
+		if err != nil {
+			return updaters, err
+		}
+		updaters = append(updaters, elbUpdater)
+	}
+
+	if len(targetGroupNames) != 0 {
+		albUpdater, err := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
+		if err != nil {
+			return updaters, err
+		}
+		updaters = append(updaters, albUpdater)
+	}
 	// update nginx before attaching to front ends
-	return []controller.Updater{nginx, elbAttacher, albAttacher}
+	return updaters, nil
 }

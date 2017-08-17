@@ -130,7 +130,7 @@ func mockInstanceMetadata(mockMd *fakeMetadata, instanceID string) {
 }
 
 func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
-	e := New(region, clusterName, 1, 0)
+	e, _ := New(region, clusterName, 1, 0)
 	mockElb := &fakeElb{}
 	mockMetadata := &fakeMetadata{}
 	e.(*elb).awsElb = mockElb
@@ -138,19 +138,12 @@ func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
 	return e, mockElb, mockMetadata
 }
 
-func TestNoopIfNoExpectedFrontEnds(t *testing.T) {
-	//given
-	e, mockElb, mockMetadata := setup()
-	e.(*elb).labelValue = ""
-
+func TestCanNotCreateUpdaterWithoutLabelValue(t *testing.T) {
 	//when
-	e.Start()
-	e.Update(controller.IngressEntries{})
-	e.Stop()
+	_, err := New(region, "", 1, 0)
 
 	//then
-	mockElb.AssertExpectations(t)
-	mockMetadata.AssertExpectations(t)
+	assert.Error(t, err)
 }
 
 func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {

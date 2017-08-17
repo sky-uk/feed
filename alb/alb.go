@@ -4,6 +4,7 @@ Package alb provides an updater for an ALB frontend to attach nginx to.
 package alb
 
 import (
+	"errors"
 	"fmt"
 
 	"sync"
@@ -20,7 +21,10 @@ import (
 )
 
 // New creates a controller.Updater for attaching to ALB target groups on first update.
-func New(region string, targetGroupNames []string, targetGroupDeregistrationDelay time.Duration) controller.Updater {
+func New(region string, targetGroupNames []string, targetGroupDeregistrationDelay time.Duration) (controller.Updater, error) {
+	if len(targetGroupNames) == 0 {
+		return nil, errors.New("unable to create ALB updater: missing target group names")
+	}
 	initMetrics()
 	log.Infof("ALB frontend region: %s target groups: %v", region, targetGroupNames)
 	session := session.New(&aws.Config{Region: &region})
@@ -31,7 +35,7 @@ func New(region string, targetGroupNames []string, targetGroupDeregistrationDela
 		targetGroupDeregistrationDelay: targetGroupDeregistrationDelay,
 		region:      region,
 		initialised: initialised{},
-	}
+	}, nil
 }
 
 type alb struct {
@@ -103,6 +107,7 @@ func (a *alb) Stop() error {
 		}
 	}
 
+	log.Infof("Waiting %v to finish ALB target group deregistration", a.targetGroupDeregistrationDelay)
 	time.Sleep(a.targetGroupDeregistrationDelay)
 
 	return nil

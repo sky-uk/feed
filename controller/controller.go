@@ -235,7 +235,7 @@ func (c *controller) Stop() error {
 	close(c.doneCh)
 
 	for i := range c.updaters {
-		u := c.updaters[len(c.updaters)-i-1]
+		u := c.updaters[len(c.updaters)-1-i]
 		if err := u.Stop(); err != nil {
 			log.Warnf("Error while stopping %v: %v", u, err)
 		}
