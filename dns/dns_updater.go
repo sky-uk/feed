@@ -41,9 +41,15 @@ type ALB interface {
 }
 
 // New creates an updater for dns
-func New(hostedZoneID, region string, elbLabelValue string, albNames []string, retries int) controller.Updater {
+func New(hostedZoneID, region string, addressesWithScheme map[string]string, elbLabelValue string, albNames []string, retries int) controller.Updater {
 	initMetrics()
 	session := session.New(&aws.Config{Region: &region})
+
+	schemeToDNS := make(map[string]dnsDetails)
+	for scheme, address := range addressesWithScheme {
+		schemeToDNS[scheme] = dnsDetails{dnsName: address, hostedZoneID: ""}
+	}
+
 	return &updater{
 		r53:           r53.New(region, hostedZoneID, retries),
 		hostedZoneID:  hostedZoneID,
@@ -52,6 +58,7 @@ func New(hostedZoneID, region string, elbLabelValue string, albNames []string, r
 		albNames:      albNames,
 		elbLabelValue: elbLabelValue,
 		findELBs:      elb.FindFrontEndElbs,
+		schemeToDNS:   schemeToDNS,
 	}
 }
 
@@ -62,17 +69,19 @@ func (u *updater) String() string {
 func (u *updater) Start() error {
 	log.Info("Starting dns updater")
 
-	if u.elbLabelValue != "" && len(u.albNames) > 0 {
-		return fmt.Errorf("can't specify both elb label value (%s) and alb names (%v) - only one or the other may be"+
-			" specified", u.elbLabelValue, u.albNames)
-	}
+	if len(u.schemeToDNS) == 0 {
+		if u.elbLabelValue != "" && len(u.albNames) > 0 {
+			return fmt.Errorf("can't specify both elb label value (%s) and alb names (%v) - only one or the other may be"+
+				" specified", u.elbLabelValue, u.albNames)
+		}
 
-	if err := u.initELBs(); err != nil {
-		return err
-	}
+		if err := u.initELBs(); err != nil {
+			return err
+		}
 
-	if err := u.initALBs(); err != nil {
-		return err
+		if err := u.initALBs(); err != nil {
+			return err
+		}
 	}
 
 	domain, err := u.r53.GetHostedZoneDomain()
@@ -278,17 +287,29 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 }
 
 func newChange(action string, host string, targetElbDNSName string, targetElbHostedZoneID string) *route53.Change {
-	return &route53.Change{
-		Action: aws.String(action),
-		ResourceRecordSet: &route53.ResourceRecordSet{
-			Name: aws.String(host),
-			Type: aws.String("A"),
-			AliasTarget: &route53.AliasTarget{
-				DNSName:      aws.String(targetElbDNSName),
-				HostedZoneId: aws.String(targetElbHostedZoneID),
-				// disable this since we only point to a single load balancer
-				EvaluateTargetHealth: aws.Bool(false),
+	set := &route53.ResourceRecordSet{
+		Name: aws.String(host),
+	}
+
+	if targetElbHostedZoneID != "" {
+		set.Type = aws.String("A")
+		set.AliasTarget = &route53.AliasTarget{
+			DNSName:      aws.String(targetElbDNSName),
+			HostedZoneId: aws.String(targetElbHostedZoneID),
+			// disable this since we only point to a single load balancer
+			EvaluateTargetHealth: aws.Bool(false),
+		}
+	} else {
+		set.Type = aws.String("CNAME")
+		set.ResourceRecords = []*route53.ResourceRecord{
+			{
+				Value: aws.String(targetElbDNSName),
 			},
-		},
+		}
+	}
+
+	return &route53.Change{
+		Action:            aws.String(action),
+		ResourceRecordSet: set,
 	}
 }
