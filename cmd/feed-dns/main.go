@@ -89,8 +89,8 @@ func main() {
 
 	var dnsUpdater controller.Updater
 	if internalIngressFQDN != "" && externalIngressFQDN != "" {
-		addressesWithScheme := map[string]string {"internal": internalIngressFQDN, "internet-facing": externalIngressFQDN}
-		dnsUpdater = dns.New(r53HostedZone, elbRegion, addressesWithScheme,"", albNames, awsAPIRetries)
+		addressesWithScheme := map[string]string{"internal": internalIngressFQDN, "internet-facing": externalIngressFQDN}
+		dnsUpdater = dns.New(r53HostedZone, elbRegion, addressesWithScheme, "", albNames, awsAPIRetries)
 	} else {
 		dnsUpdater = dns.New(r53HostedZone, elbRegion, nil, elbLabelValue, albNames, awsAPIRetries)
 	}
@@ -117,7 +117,7 @@ func validateConfig() {
 		os.Exit(-1)
 	}
 
-	if ((internalIngressFQDN != "") != (externalIngressFQDN != "")) { //XOR
+	if (internalIngressFQDN != "") != (externalIngressFQDN != "") { //XOR
 		log.Error("Must supply both internal-ip and external-ip if any are to be provided.")
 		os.Exit(-1)
 	}
