@@ -37,8 +37,8 @@ const (
 	unassocALBDnsNameWithPeriod  = unassocALBDnsName + "."
 	internalScheme               = "internal"
 	externalScheme               = "external"
-	internalAddressArgument		 = "ha-ingress-internal"
-	externalAddressArgument		 = "ha-ingress-external"
+	internalAddressArgument      = "ha-ingress-internal"
+	externalAddressArgument      = "ha-ingress-external"
 )
 
 var albNames = []string{internalALBName, externalALBName}
@@ -119,7 +119,7 @@ func (m *mockR53Client) UpdateRecordSets(changes []*route53.Change) error {
 	return args.Error(0)
 }
 
-func (m *mockR53Client) GetARecords() ([]*route53.ResourceRecordSet, error) {
+func (m *mockR53Client) GetRecords() ([]*route53.ResourceRecordSet, error) {
 	args := m.Called()
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
@@ -128,8 +128,8 @@ func (m *mockR53Client) GetARecords() ([]*route53.ResourceRecordSet, error) {
 	return args.Get(0).([]*route53.ResourceRecordSet), args.Error(1)
 }
 
-func (m *mockR53Client) mockGetARecords(rs []*route53.ResourceRecordSet, err error) {
-	m.On("GetARecords").Return(rs, err)
+func (m *mockR53Client) mockGetRecords(rs []*route53.ResourceRecordSet, err error) {
+	m.On("GetRecords").Return(rs, err)
 }
 
 func (m *mockR53Client) mockGetHostedZoneDomain() {
@@ -148,7 +148,7 @@ func setupForELB() (*updater, *mockR53Client, *mockELB, *mockALB) {
 }
 
 func setupForExplicitAddresses() (*updater, *mockR53Client) {
-	addresses := map[string]string {internalScheme: internalAddressArgument, externalScheme: externalAddressArgument}
+	addresses := map[string]string{internalScheme: internalAddressArgument, externalScheme: externalAddressArgument}
 
 	dnsUpdater := New(hostedZoneID, awsRegion, addresses, "", albNames, 1).(*updater)
 	mockR53 := &mockR53Client{}
@@ -223,7 +223,7 @@ func TestUpdateRecordSetFail(t *testing.T) {
 	// given
 	dnsUpdater, mockR53, _, mockALB := setupForELB()
 	mockR53.mockGetHostedZoneDomain()
-	mockR53.mockGetARecords(nil, nil)
+	mockR53.mockGetRecords(nil, nil)
 	mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
 
 	ingressUpdate := []controller.IngressEntry{{Host: "verification.james.com", ELbScheme: internalScheme}}
@@ -511,7 +511,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		dnsUpdater, mockR53, _, mockALB := setupForELB()
 		mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
 		mockR53.mockGetHostedZoneDomain()
-		mockR53.mockGetARecords(test.records, nil)
+		mockR53.mockGetRecords(test.records, nil)
 		mockR53.On("UpdateRecordSets", test.expectedChanges).Return(nil)
 
 		assert.NoError(t, dnsUpdater.Start())
@@ -799,11 +799,11 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		fmt.Printf("=== test: %s\n", test.name)
+		fmt.Printf("=== test: TestRecordSetUpdatesWithAddressArguments: %s\n", test.name)
 
 		dnsUpdater, mockR53 := setupForExplicitAddresses()
 		mockR53.mockGetHostedZoneDomain()
-		mockR53.mockGetARecords(test.records, nil)
+		mockR53.mockGetRecords(test.records, nil)
 		mockR53.On("UpdateRecordSets", test.expectedChanges).Return(nil)
 
 		assert.NoError(t, dnsUpdater.Start())

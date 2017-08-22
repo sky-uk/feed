@@ -153,17 +153,17 @@ func (u *updater) Health() error {
 }
 
 func (u *updater) Update(entries controller.IngressEntries) error {
-	aRecords, err := u.r53.GetARecords()
+	records, err := u.r53.GetRecords()
 	if err != nil {
 		log.Warn("Unable to get A records from Route53. Not updating Route53.", err)
 		failedCount.Inc()
 		return err
 	}
 
-	aRecords = u.determineManagedRecordSets(aRecords)
-	recordsGauge.Set(float64(len(aRecords)))
+	records = u.determineManagedRecordSets(records)
+	recordsGauge.Set(float64(len(records)))
 
-	changes := u.calculateChanges(aRecords, entries)
+	changes := u.calculateChanges(records, entries)
 
 	updateCount.Add(float64(len(changes)))
 
