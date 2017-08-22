@@ -29,6 +29,8 @@ var (
 	pushgatewayIntervalSeconds int
 	pushgatewayLabels          cmd.KeyValues
 	awsAPIRetries              int
+	internalIngressFQDN        string
+	externalIngressFQDN        string
 )
 
 func init() {
@@ -67,6 +69,10 @@ func init() {
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
 	flag.IntVar(&awsAPIRetries, "aws-api-retries", defaultAwsAPIRetries,
 		"Number of times a request to the AWS API is retried.")
+	flag.StringVar(&internalIngressFQDN, "internal-ip", "",
+		"IP of the internal facing load-balancer")
+	flag.StringVar(&externalIngressFQDN, "external-ip", "",
+		"IP of the external (internet) facing load-balancer")
 }
 
 func main() {
@@ -81,7 +87,13 @@ func main() {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
 
-	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue, albNames, awsAPIRetries)
+	var dnsUpdater controller.Updater
+	if internalIngressFQDN != "" && externalIngressFQDN != "" {
+		addressesWithScheme := map[string]string {"internal": internalIngressFQDN, "internet-facing": externalIngressFQDN}
+		dnsUpdater = dns.New(r53HostedZone, elbRegion, addressesWithScheme,"", albNames, awsAPIRetries)
+	} else {
+		dnsUpdater = dns.New(r53HostedZone, elbRegion, nil, elbLabelValue, albNames, awsAPIRetries)
+	}
 
 	controller := controller.New(controller.Config{
 		KubernetesClient: client,
@@ -102,6 +114,11 @@ func main() {
 func validateConfig() {
 	if r53HostedZone == "" {
 		log.Error("Must supply r53-hosted-zone")
+		os.Exit(-1)
+	}
+
+	if ((internalIngressFQDN != "") != (externalIngressFQDN != "")) { //XOR
+		log.Error("Must supply both internal-ip and external-ip if any are to be provided.")
 		os.Exit(-1)
 	}
 }
