@@ -1,9 +1,13 @@
+# v1.1.3
+* Fix bug where no ELB updater would be created if the `elb-label-value` is provided.
+
 # v1.1.2
 
 * Fix bug where feed-ingress would wait for `elb-drain-delay` and `alb-target-group-deregistration-delay`
   even if no instances where attached.
 * Do not create ELB or ALB updater when `elb-label-value` or `alb-target-group-names`,
   respectively, are empty.
+* Note: this image is broken, it does not create an ELB updater if the `elb-label-value` is provided.
 
 # v1.1.1
 

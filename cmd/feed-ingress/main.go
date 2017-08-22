@@ -201,7 +201,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 
 	updaters := []controller.Updater{nginxUpdater}
 
-	if elbLabelValue == "" {
+	if elbLabelValue != "" {
 		elbUpdater, err := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
 		if err != nil {
 			return updaters, err
