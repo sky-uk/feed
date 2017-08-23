@@ -574,7 +574,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 				Name: aws.String("foo.james.com."),
 				ResourceRecords: []*route53.ResourceRecord{
 					{
-						Value: aws.String(externalAddressArgument),
+						Value: aws.String(internalAddressArgument),
 					},
 				},
 			}},
@@ -607,7 +607,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 					Name: aws.String("bar.com."),
 					ResourceRecords: []*route53.ResourceRecord{
 						{
-							Value: aws.String(internalAddressArgument),
+							Value: aws.String("some-ingress-we-dont-manage.james.com"),
 						},
 					},
 				},
@@ -647,7 +647,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 					Name: aws.String("baz.james.com."),
 					ResourceRecords: []*route53.ResourceRecord{
 						{
-							Value: aws.String(internalAddressArgument),
+							Value: aws.String("somerandom-ingress.s.sandbox.james.com"),
 						},
 					},
 				},
