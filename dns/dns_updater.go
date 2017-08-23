@@ -23,6 +23,12 @@ type dnsDetails struct {
 	hostedZoneID string
 }
 
+type record struct {
+	name            string
+	pointsTo        string
+	aliasHostedZone string
+}
+
 type updater struct {
 	r53           r53.Route53Client
 	hostedZoneID  string
@@ -153,12 +159,15 @@ func (u *updater) Health() error {
 }
 
 func (u *updater) Update(entries controller.IngressEntries) error {
-	records, err := u.r53.GetRecords()
+	route53Records, err := u.r53.GetRecords()
 	if err != nil {
 		log.Warn("Unable to get A records from Route53. Not updating Route53.", err)
 		failedCount.Inc()
 		return err
 	}
+
+	// Flatten Alias (A) and CNAME records into a common structure
+	var records []record = u.flattenRoute53ResourceRecordSet(route53Records)
 
 	records = u.determineManagedRecordSets(records)
 	recordsGauge.Set(float64(len(records)))
@@ -176,18 +185,39 @@ func (u *updater) Update(entries controller.IngressEntries) error {
 	return nil
 }
 
-func (u *updater) determineManagedRecordSets(rrs []*route53.ResourceRecordSet) []*route53.ResourceRecordSet {
+func (u *updater) flattenRoute53ResourceRecordSet(rrs []*route53.ResourceRecordSet) []record {
+	records := make([]record, 0)
+
+	for _, recordSet := range rrs {
+		if len(recordSet.ResourceRecords) == 1 {
+			records = append(records, record{
+				name:     *recordSet.Name,
+				pointsTo: *recordSet.ResourceRecords[0].Value,
+			})
+		} else {
+			records = append(records, record{
+				name:            *recordSet.Name,
+				pointsTo:        *recordSet.AliasTarget.DNSName,
+				aliasHostedZone: *recordSet.AliasTarget.HostedZoneId,
+			})
+		}
+	}
+
+	return records
+}
+
+func (u *updater) determineManagedRecordSets(rrs []record) []record {
 	managedLBs := make(map[string]bool)
 	for _, dns := range u.schemeToDNS {
 		managedLBs[dns.dnsName] = true
 	}
-	var managed []*route53.ResourceRecordSet
-	var nonManaged []string
+	managed := make([]record, 0)
+	nonManaged := make([]string, 0)
 	for _, rec := range rrs {
-		if rec.AliasTarget != nil && rec.AliasTarget.DNSName != nil && managedLBs[*rec.AliasTarget.DNSName] {
+		if rec.name != "" && managedLBs[rec.pointsTo] {
 			managed = append(managed, rec)
 		} else {
-			nonManaged = append(nonManaged, *rec.Name)
+			nonManaged = append(nonManaged, rec.name)
 		}
 	}
 
@@ -198,7 +228,7 @@ func (u *updater) determineManagedRecordSets(rrs []*route53.ResourceRecordSet) [
 	return managed
 }
 
-func (u *updater) calculateChanges(originalRecords []*route53.ResourceRecordSet,
+func (u *updater) calculateChanges(originalRecords []record,
 	entries controller.IngressEntries) []*route53.Change {
 
 	log.Infof("Current %s records: %v", u.domain, originalRecords)
@@ -250,14 +280,14 @@ func (u *updater) indexByHost(entries []controller.IngressEntry) (hostToIngress,
 }
 
 func (u *updater) createChanges(hostToIngress hostToIngress,
-	originalRecords []*route53.ResourceRecordSet) ([]*route53.Change, []string) {
+	originalRecords []record) ([]*route53.Change, []string) {
 
 	type recordKey struct{ host, elbDNSName string }
 	var skipped []string
 	changes := []*route53.Change{}
-	indexedRecords := make(map[recordKey]*route53.ResourceRecordSet)
-	for _, recordSet := range originalRecords {
-		indexedRecords[recordKey{*recordSet.Name, *recordSet.AliasTarget.DNSName}] = recordSet
+	indexedRecords := make(map[recordKey]record)
+	for _, rec := range originalRecords {
+		indexedRecords[recordKey{rec.name, rec.pointsTo}] = rec
 	}
 
 	for host, entry := range hostToIngress {
@@ -273,13 +303,9 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 		}
 	}
 
-	for _, recordSet := range originalRecords {
-		if _, contains := hostToIngress[*recordSet.Name]; !contains {
-			changes = append(changes, newChange(
-				"DELETE",
-				*recordSet.Name,
-				*recordSet.AliasTarget.DNSName,
-				*recordSet.AliasTarget.HostedZoneId))
+	for _, rec := range originalRecords {
+		if _, contains := hostToIngress[rec.name]; !contains {
+			changes = append(changes, newChange("DELETE", rec.name, rec.pointsTo, rec.aliasHostedZone))
 		}
 	}
 
