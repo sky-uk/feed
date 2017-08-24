@@ -146,13 +146,13 @@ func (c *controller) updateIngresses() error {
 
 				if address := serviceMap[serviceName]; address != "" {
 					entry := IngressEntry{
-						Namespace:      ingress.Namespace,
-						Name:           ingress.Name,
-						Host:           rule.Host,
-						Path:           path.Path,
-						ServiceAddress: address,
-						ServicePort:    int32(path.Backend.ServicePort.IntValue()),
-						Allow:          c.defaultAllow,
+						Namespace:               ingress.Namespace,
+						Name:                    ingress.Name,
+						Host:                    rule.Host,
+						Path:                    path.Path,
+						ServiceAddress:          address,
+						ServicePort:             int32(path.Backend.ServicePort.IntValue()),
+						Allow:                   c.defaultAllow,
 						StripPaths:              c.defaultStripPath,
 						BackendKeepAliveSeconds: c.defaultBackendTimeout,
 						CreationTimestamp:       ingress.CreationTimestamp.Time,
