@@ -156,13 +156,12 @@ func (c *controller) updateIngresses() error {
 						ServiceAddress:          address,
 						ServicePort:             int32(path.Backend.ServicePort.IntValue()),
 						Allow:                   c.defaultAllow,
-						//ELbScheme:               ingress.Annotations[frontendElbSchemeAnnotation],
 						StripPaths:              c.defaultStripPath,
 						BackendTimeoutSeconds: c.defaultBackendTimeout,
 						CreationTimestamp:       ingress.CreationTimestamp.Time,
 					}
 
-					log.Infof("ingress: %s", ingress)
+					log.Infof("Found ingress to update: %s", ingress.Name)
 
 					if elbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
 						entry.ELbScheme = elbScheme

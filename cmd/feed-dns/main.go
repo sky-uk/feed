@@ -123,7 +123,7 @@ func validateConfig() {
 	}
 
 	if (internalCNAME == "" && externalCNAME != "") || (internalCNAME != "" && externalCNAME == "") {
-		log.Error("Must supply both internal-ip and external-ip if any are to be provided.")
+		log.Error("Must supply both internal-cname and external-cname if any are to be provided.")
 		os.Exit(-1)
 	}
 }
