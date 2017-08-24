@@ -261,6 +261,12 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		entries     IngressEntries
 	}{
 		{
+			"ingress tagged with sky.uk/frontend-scheme",
+			createIngressesFromNonELBAnnotation(),
+			createDefaultServices(),
+			createLbEntriesFixture(),
+		},
+		{
 			"ingress with corresponding service",
 			createDefaultIngresses(),
 			createDefaultServices(),
@@ -293,19 +299,19 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with missing host name",
-			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout),
+			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
 			[]IngressEntry{},
 		},
 		{
 			"ingress with missing service name",
-			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow, stripPath, backendTimeout),
+			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
 			[]IngressEntry{},
 		},
 		{
 			"ingress with missing service port",
-			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow, stripPath, backendTimeout),
+			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
 			[]IngressEntry{},
 		},
@@ -317,7 +323,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING", stripPath, backendTimeout),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING", stripPath, backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:      ingressNamespace,
@@ -332,7 +338,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with empty allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", stripPath, backendTimeout),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", stripPath, backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:      ingressNamespace,
@@ -348,7 +354,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with strip paths set to true",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "true", backendTimeout),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "true", backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -365,7 +371,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with strip paths set to false",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", backendTimeout),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -382,7 +388,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with overridden backend timeout",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20, frontendElbSchemeAnnotation),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -399,7 +405,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default backend timeout",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", -1),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", -1, frontendElbSchemeAnnotation),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -478,11 +484,15 @@ const (
 )
 
 func createDefaultIngresses() []*v1beta1.Ingress {
-	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout)
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation)
+}
+
+func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendSchemeAnnotation)
 }
 
 func createIngressesFixture(host string, serviceName string, servicePort int, allow string, stripPath string,
-	backendTimeout int) []*v1beta1.Ingress {
+	backendTimeout int, schemeAnnotationKey string) []*v1beta1.Ingress {
 
 	paths := []v1beta1.HTTPIngressPath{{
 		Path: ingressPath,
@@ -495,7 +505,7 @@ func createIngressesFixture(host string, serviceName string, servicePort int, al
 	annotations := make(map[string]string)
 	if allow != "MISSING" {
 		annotations[ingressAllowAnnotation] = allow
-		annotations[frontendElbSchemeAnnotation] = elbScheme
+		annotations[schemeAnnotationKey] = elbScheme
 	}
 	if stripPath != "MISSING" {
 		annotations[stripPathAnnotation] = stripPath

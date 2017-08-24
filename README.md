@@ -50,7 +50,7 @@ Another is to place an SSL termination EC2 instance in front of the ELBs.
 
 ## feed-dns
 
-`feed-dns` manages a Route53 hosted zone, updating entries to point to the correct ELBs. It is designed to be run as a
+`feed-dns` manages a Route53 hosted zone, updating entries to point to ELBs or CNAMEs of your choosing. It is designed to be run as a
 single instance per zone in your cluster.
 
 See the command line options with:
@@ -59,17 +59,19 @@ See the command line options with:
    
 ### DNS records
 
-The feed-dns controller assumes that it can overwrite any entry in the supplied DNS zone and manages ALIAS
+The feed-dns controller assumes that it can overwrite any entry in the supplied DNS zone and manages ALIAS and CNAME
 records per ingress.
 
 On startup, all ingress entries are queried and compared to all the Record Sets in the configured hosted zone.
 
-Any ALIAS records pointing to one of the ELBs associated with this controller that do not have an ingress
-entry are deleted. For any new ingress entry, an ALIAS record is created to point to the correct ELB. Existing
+Any records pointing to one of the endpoints associated with this controller that do not have an ingress
+entry are deleted. For any new ingress entry, a record is created to point to the correct endpoint. Existing
 records which do not meet these conditions remain untouched.
 
-Each ingress must have the following tag `sky.uk/frontend-elb-scheme` set to `internal` or `internet-facing` so the A
-record can be set to the correct ELB.
+Each ingress must have the following tag `sky.uk/frontend-scheme` (`sky.uk/frontend-elb-scheme` is **deprecated**) set to `internal` or `internet-facing` so the
+record can be set to the correct endpoint.
+
+If you're using ELBs then ALIAS (A) records will be created. If you've explicitly provided CNAMEs of your load-balancers then CNAMEs will be created.
 
 ## Ingress annotations
 
