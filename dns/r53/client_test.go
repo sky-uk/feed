@@ -68,7 +68,7 @@ func TestGetHostedZoneDomainError(t *testing.T) {
 	assert.EqualError(t, err, "unable to get Hosted Zone Info: james says no")
 }
 
-func TestGetARecords(t *testing.T) {
+func TestGetRecords(t *testing.T) {
 	// given
 	client, fake53 := createClient()
 	expectedRecords := []*route53.ResourceRecordSet{
@@ -76,20 +76,24 @@ func TestGetARecords(t *testing.T) {
 			Name: aws.String("james.com"),
 			Type: aws.String("A"),
 		},
+		&route53.ResourceRecordSet{
+			Name: aws.String("james2.com"),
+			Type: aws.String("CNAME"),
+		},
 	}
 	fake53.On("ListResourceRecordSets", &route53.ListResourceRecordSetsInput{
 		HostedZoneId: aws.String(hostedZone),
 	}).Return(&route53.ListResourceRecordSetsOutput{ResourceRecordSets: expectedRecords}, nil)
 
 	// when
-	records, err := client.GetARecords()
+	records, err := client.GetRecords()
 
 	// then
 	assert.NoError(t, err)
 	assert.Equal(t, expectedRecords, records)
 }
 
-func TestGetARecordsFiltersOutNonARecords(t *testing.T) {
+func TestGetRecordsFiltersOutNonARecordsAndCNAMERecords(t *testing.T) {
 	// given
 	client, fake53 := createClient()
 	aRecord := &route53.ResourceRecordSet{
@@ -98,20 +102,24 @@ func TestGetARecordsFiltersOutNonARecords(t *testing.T) {
 	}
 	cRecord := &route53.ResourceRecordSet{
 		Name: aws.String("james2.com"),
-		Type: aws.String("C"),
+		Type: aws.String("CNAME"),
 	}
-	allRecords := []*route53.ResourceRecordSet{aRecord, cRecord}
+	txtRecord := &route53.ResourceRecordSet{
+		Name: aws.String("blah-mx"),
+		Type: aws.String("TXT"),
+	}
+	allRecords := []*route53.ResourceRecordSet{aRecord, cRecord, txtRecord}
 	fake53.On("ListResourceRecordSets", &route53.ListResourceRecordSetsInput{
 		HostedZoneId: aws.String(hostedZone),
 	}).Return(&route53.ListResourceRecordSetsOutput{ResourceRecordSets: allRecords}, nil)
 
 	// when
-	records, err := client.GetARecords()
+	records, err := client.GetRecords()
 
 	// then
-	aRecords := []*route53.ResourceRecordSet{aRecord}
+	acRecords := []*route53.ResourceRecordSet{aRecord, cRecord}
 	assert.NoError(t, err)
-	assert.Equal(t, aRecords, records)
+	assert.Equal(t, acRecords, records)
 }
 
 func TestGetARecordPages(t *testing.T) {
@@ -143,7 +151,7 @@ func TestGetARecordPages(t *testing.T) {
 	}, nil)
 
 	// when
-	records, err := client.GetARecords()
+	records, err := client.GetRecords()
 
 	// then
 	allRecords := []*route53.ResourceRecordSet{firstRecord, secondRecord}

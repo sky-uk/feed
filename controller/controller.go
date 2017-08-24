@@ -22,6 +22,7 @@ import (
 )
 
 const ingressAllowAnnotation = "sky.uk/allow"
+const frontendSchemeAnnotation = "sky.uk/frontend-scheme"
 const frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
 const stripPathAnnotation = "sky.uk/strip-path"
 const backendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
@@ -152,10 +153,17 @@ func (c *controller) updateIngresses() error {
 						ServiceAddress:          address,
 						ServicePort:             int32(path.Backend.ServicePort.IntValue()),
 						Allow:                   c.defaultAllow,
-						ELbScheme:               ingress.Annotations[frontendElbSchemeAnnotation],
 						StripPaths:              c.defaultStripPath,
 						BackendKeepAliveSeconds: c.defaultBackendTimeout,
 						CreationTimestamp:       ingress.CreationTimestamp.Time,
+					}
+
+					log.Infof("Found ingress to update: %s", ingress.Name)
+
+					if elbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
+						entry.ELbScheme = elbScheme
+					} else {
+						entry.ELbScheme = ingress.Annotations[frontendElbSchemeAnnotation]
 					}
 
 					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
