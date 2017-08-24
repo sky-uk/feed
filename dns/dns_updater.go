@@ -161,13 +161,13 @@ func (u *updater) Health() error {
 func (u *updater) Update(entries controller.IngressEntries) error {
 	route53Records, err := u.r53.GetRecords()
 	if err != nil {
-		log.Warn("Unable to get A records from Route53. Not updating Route53.", err)
+		log.Warn("Unable to get records from Route53. Not updating Route53.", err)
 		failedCount.Inc()
 		return err
 	}
 
 	// Flatten Alias (A) and CNAME records into a common structure
-	var records []record = u.flattenRoute53ResourceRecordSet(route53Records)
+	records := u.flattenRoute53ResourceRecordSet(route53Records)
 
 	records = u.determineManagedRecordSets(records)
 	recordsGauge.Set(float64(len(records)))
@@ -186,7 +186,7 @@ func (u *updater) Update(entries controller.IngressEntries) error {
 }
 
 func (u *updater) flattenRoute53ResourceRecordSet(rrs []*route53.ResourceRecordSet) []record {
-	records := make([]record, 0)
+	var records []record
 
 	for _, recordSet := range rrs {
 		if len(recordSet.ResourceRecords) == 1 {
@@ -211,8 +211,8 @@ func (u *updater) determineManagedRecordSets(rrs []record) []record {
 	for _, dns := range u.schemeToDNS {
 		managedLBs[dns.dnsName] = true
 	}
-	managed := make([]record, 0)
-	nonManaged := make([]string, 0)
+	var managed []record
+	var nonManaged []string
 	for _, rec := range rrs {
 		if rec.name != "" && managedLBs[rec.pointsTo] {
 			managed = append(managed, rec)
