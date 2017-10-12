@@ -30,7 +30,7 @@ spec:
       restartPolicy: Always
 
       containers:
-      - image: skycirrus/feed-ingress:v1.0.2
+      - image: skycirrus/feed-ingress:v1.2.0
         name: feed-ingress
 
         resources:
@@ -104,8 +104,8 @@ spec:
         # Max number of idle connections to a backend.
         - -nginx-backend-keepalive-count=1024
 
-        # Max time for a keepalive connection to a backend, should be less than backend idle timeouts.
-        - -nginx-default-backend-keepalive-seconds=5
+        # Default max time for a request to a backend. Can be overridden by an annotation on the ingress resource.
+        - -nginx-default-backend-timeout-seconds=5
 
         # Needs to be greater than 64 to support very large domain names.
         - -nginx-server-names-hash-bucket-size=128
