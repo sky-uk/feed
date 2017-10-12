@@ -14,8 +14,8 @@ metadata:
     # Strip the path from the path passed to the backend service.
     sky.uk/strip-path: "true"
 
-    # Max timeout for requests, as well as max idle timeout.
-    sky.uk/backend-keepalive-seconds: 20
+    # Max timeout for requests.
+    sky.uk/backend-timeout-seconds: 20
 spec:
   rules:
   - host: example.bskyb.com

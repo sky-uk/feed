@@ -37,7 +37,10 @@ var (
 	nginxConfig                    nginx.Conf
 	nginxLogHeaders                cmd.CommaSeparatedValues
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
+	legacyBackendKeepaliveSeconds  int
 )
+
+const unset = -1
 
 func init() {
 	const (
@@ -53,11 +56,11 @@ func init() {
 		defaultNginxWorkerConnections            = 1024
 		defaultNginxKeepAliveSeconds             = 60
 		defaultNginxBackendKeepalives            = 512
-		defaultNginxBackendKeepaliveSeconds      = 60
+		defaultNginxBackendTimeoutSeconds        = 60
 		defaultNginxBackendConnectTimeoutSeconds = 1
 		defaultNginxLogLevel                     = "warn"
-		defaultNginxServerNamesHashBucketSize    = -1
-		defaultNginxServerNamesHashMaxSize       = -1
+		defaultNginxServerNamesHashBucketSize    = unset
+		defaultNginxServerNamesHashMaxSize       = unset
 		defaultNginxProxyProtocol                = false
 		defaultNginxUpdatePeriod                 = time.Second * 30
 		defaultElbLabelValue                     = ""
@@ -106,10 +109,11 @@ func init() {
 	flag.IntVar(&nginxConfig.BackendKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
 		"Maximum number of keepalive connections per backend service. Keepalive connections count against"+
 			" nginx-worker-connections limit, and will be restricted by that global limit as well.")
-	flag.IntVar(&controllerConfig.DefaultBackendKeepAlive, "nginx-default-backend-keepalive-seconds",
-		defaultNginxBackendKeepaliveSeconds,
-		"Time to keep backend keepalive connections open. This should generally be set smaller than backend service keepalive "+
-			"times to prevent stale connections. Can be overridden per ingress with the sky.uk/backend-keepalive-seconds annotation.")
+	flag.IntVar(&legacyBackendKeepaliveSeconds, "nginx-default-backend-keepalive-seconds", unset,
+		"Deprecated. Use -nginx-default-backend-timeout-seconds instead.")
+	flag.IntVar(&controllerConfig.DefaultBackendTimeoutSeconds, "nginx-default-backend-timeout-seconds",
+		defaultNginxBackendTimeoutSeconds,
+		"Timeout for requests to backends. Can be overridden per ingress with the sky.uk/backend-timeout-seconds annotation.")
 	flag.IntVar(&nginxConfig.BackendConnectTimeoutSeconds, "nginx-backend-connect-timeout-seconds",
 		defaultNginxBackendConnectTimeoutSeconds,
 		"Connect timeout to backend services.")
@@ -176,6 +180,11 @@ func main() {
 	controllerConfig.Updaters, err = createIngressUpdaters()
 	if err != nil {
 		log.Fatal("Unable to create ingress updaters: ", err)
+	}
+
+	// If the legacy setting is set, use it instead to preserve backwards compatibility.
+	if legacyBackendKeepaliveSeconds != unset {
+		controllerConfig.DefaultBackendTimeoutSeconds = legacyBackendKeepaliveSeconds
 	}
 
 	feedController := controller.New(controllerConfig)

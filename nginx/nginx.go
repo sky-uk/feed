@@ -121,11 +121,11 @@ type upstream struct {
 }
 
 type location struct {
-	Path                    string
-	UpstreamID              string
-	Allow                   []string
-	StripPath               bool
-	BackendKeepaliveSeconds int
+	Path                  string
+	UpstreamID            string
+	Allow                 []string
+	StripPath             bool
+	BackendTimeoutSeconds int
 }
 
 func (c *Conf) nginxConfFile() string {
@@ -438,11 +438,11 @@ func createServerEntries(entries controller.IngressEntries) []*server {
 		}
 
 		location := location{
-			Path:                    createNginxPath(ingressEntry.Path),
-			UpstreamID:              upstreamID(ingressEntry),
-			Allow:                   ingressEntry.Allow,
-			StripPath:               ingressEntry.StripPaths,
-			BackendKeepaliveSeconds: ingressEntry.BackendKeepAliveSeconds,
+			Path:                  createNginxPath(ingressEntry.Path),
+			UpstreamID:            upstreamID(ingressEntry),
+			Allow:                 ingressEntry.Allow,
+			StripPath:             ingressEntry.StripPaths,
+			BackendTimeoutSeconds: ingressEntry.BackendTimeoutSeconds,
 		}
 
 		serverEntry.Names = append(serverEntry.Names, ingressEntry.NamespaceName())

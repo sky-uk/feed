@@ -24,7 +24,10 @@ import (
 const ingressAllowAnnotation = "sky.uk/allow"
 const frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
 const stripPathAnnotation = "sky.uk/strip-path"
-const backendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
+
+// Old annotation - still supported to maintain backwards compatibility.
+const legacyBackendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
+const backendTimeoutSeconds = "sky.uk/backend-timeout-seconds"
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
 type Controller interface {
@@ -52,11 +55,11 @@ type controller struct {
 
 // Config for creating a new ingress controller.
 type Config struct {
-	KubernetesClient        k8s.Client
-	Updaters                []Updater
-	DefaultAllow            string
-	DefaultStripPath        bool
-	DefaultBackendKeepAlive int
+	KubernetesClient             k8s.Client
+	Updaters                     []Updater
+	DefaultAllow                 string
+	DefaultStripPath             bool
+	DefaultBackendTimeoutSeconds int
 }
 
 // New creates an ingress controller.
@@ -66,7 +69,7 @@ func New(conf Config) Controller {
 		updaters:              conf.Updaters,
 		defaultAllow:          strings.Split(conf.DefaultAllow, ","),
 		defaultStripPath:      conf.DefaultStripPath,
-		defaultBackendTimeout: conf.DefaultBackendKeepAlive,
+		defaultBackendTimeout: conf.DefaultBackendTimeoutSeconds,
 		doneCh:                make(chan struct{}),
 	}
 }
@@ -145,17 +148,17 @@ func (c *controller) updateIngresses() error {
 
 				if address := serviceMap[serviceName]; address != "" {
 					entry := IngressEntry{
-						Namespace:               ingress.Namespace,
-						Name:                    ingress.Name,
-						Host:                    rule.Host,
-						Path:                    path.Path,
-						ServiceAddress:          address,
-						ServicePort:             int32(path.Backend.ServicePort.IntValue()),
-						Allow:                   c.defaultAllow,
-						ELbScheme:               ingress.Annotations[frontendElbSchemeAnnotation],
-						StripPaths:              c.defaultStripPath,
-						BackendKeepAliveSeconds: c.defaultBackendTimeout,
-						CreationTimestamp:       ingress.CreationTimestamp.Time,
+						Namespace:             ingress.Namespace,
+						Name:                  ingress.Name,
+						Host:                  rule.Host,
+						Path:                  path.Path,
+						ServiceAddress:        address,
+						ServicePort:           int32(path.Backend.ServicePort.IntValue()),
+						Allow:                 c.defaultAllow,
+						ELbScheme:             ingress.Annotations[frontendElbSchemeAnnotation],
+						StripPaths:            c.defaultStripPath,
+						BackendTimeoutSeconds: c.defaultBackendTimeout,
+						CreationTimestamp:     ingress.CreationTimestamp.Time,
 					}
 
 					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
@@ -176,9 +179,14 @@ func (c *controller) updateIngresses() error {
 						}
 					}
 
-					if backendKeepAlive, ok := ingress.Annotations[backendKeepAliveSeconds]; ok {
+					if backendKeepAlive, ok := ingress.Annotations[legacyBackendKeepAliveSeconds]; ok {
 						tmp, _ := strconv.Atoi(backendKeepAlive)
-						entry.BackendKeepAliveSeconds = tmp
+						entry.BackendTimeoutSeconds = tmp
+					}
+
+					if backendKeepAlive, ok := ingress.Annotations[backendTimeoutSeconds]; ok {
+						tmp, _ := strconv.Atoi(backendKeepAlive)
+						entry.BackendTimeoutSeconds = tmp
 					}
 
 					if err := entry.validate(); err == nil {
