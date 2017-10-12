@@ -172,8 +172,8 @@ func (u *updater) determineManagedRecordSets(rrs []*route53.ResourceRecordSet) [
 	for _, dns := range u.schemeToDNS {
 		managedLBs[dns.dnsName] = true
 	}
-	managed := make([]*route53.ResourceRecordSet, 0)
-	nonManaged := make([]string, 0)
+	var managed []*route53.ResourceRecordSet
+	var nonManaged []string
 	for _, rec := range rrs {
 		if rec.AliasTarget != nil && rec.AliasTarget.DNSName != nil && managedLBs[*rec.AliasTarget.DNSName] {
 			managed = append(managed, rec)

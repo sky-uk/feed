@@ -1,3 +1,9 @@
+# v1.2.0
+* Rename annotation `sky.uk/backend-keepalive-seconds` to `sky.uk/backend-timeout-seconds` to make it
+  clear that this value only affects request timeouts. The old annotation is preserved for backwards
+  compatibility.
+* Update to golang 1.9.1.
+
 # v1.1.3
 * Fix bug where no ELB updater would be created if the `elb-label-value` is provided.
 

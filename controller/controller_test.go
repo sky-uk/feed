@@ -92,10 +92,10 @@ func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 
 func newController(lb Updater, client k8s.Client) Controller {
 	return New(Config{
-		Updaters:                []Updater{lb},
-		KubernetesClient:        client,
-		DefaultAllow:            ingressDefaultAllow,
-		DefaultBackendKeepAlive: backendTimeout,
+		Updaters:                     []Updater{lb},
+		KubernetesClient:             client,
+		DefaultAllow:                 ingressDefaultAllow,
+		DefaultBackendTimeoutSeconds: backendTimeout,
 	})
 }
 
@@ -125,10 +125,10 @@ func TestControllerStartsAndStopsUpdatersInCorrectOrder(t *testing.T) {
 
 	_, client := createDefaultStubs()
 	controller := New(Config{
-		Updaters:                []Updater{updater1, updater2},
-		KubernetesClient:        client,
-		DefaultAllow:            ingressDefaultAllow,
-		DefaultBackendKeepAlive: backendTimeout,
+		Updaters:                     []Updater{updater1, updater2},
+		KubernetesClient:             client,
+		DefaultAllow:                 ingressDefaultAllow,
+		DefaultBackendTimeoutSeconds: backendTimeout,
 	})
 
 	// when
@@ -327,7 +327,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress: serviceIP,
 				ServicePort:    ingressSvcPort,
 				Allow:          strings.Split(ingressDefaultAllow, ","),
-				BackendKeepAliveSeconds: backendTimeout,
+				BackendTimeoutSeconds: backendTimeout,
 			}},
 		},
 		{
@@ -343,7 +343,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServicePort:    ingressSvcPort,
 				ELbScheme:      "internal",
 				Allow:          []string{},
-				BackendKeepAliveSeconds: backendTimeout,
+				BackendTimeoutSeconds: backendTimeout,
 			}},
 		},
 		{
@@ -351,16 +351,16 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "true", backendTimeout),
 			createDefaultServices(),
 			[]IngressEntry{{
-				Namespace:               ingressNamespace,
-				Name:                    ingressName,
-				Host:                    ingressHost,
-				Path:                    ingressPath,
-				ServiceAddress:          serviceIP,
-				ServicePort:             ingressSvcPort,
-				ELbScheme:               "internal",
-				Allow:                   []string{},
-				StripPaths:              true,
-				BackendKeepAliveSeconds: backendTimeout,
+				Namespace:             ingressNamespace,
+				Name:                  ingressName,
+				Host:                  ingressHost,
+				Path:                  ingressPath,
+				ServiceAddress:        serviceIP,
+				ServicePort:           ingressSvcPort,
+				ELbScheme:             "internal",
+				Allow:                 []string{},
+				StripPaths:            true,
+				BackendTimeoutSeconds: backendTimeout,
 			}},
 		},
 		{
@@ -368,16 +368,16 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", backendTimeout),
 			createDefaultServices(),
 			[]IngressEntry{{
-				Namespace:               ingressNamespace,
-				Name:                    ingressName,
-				Host:                    ingressHost,
-				Path:                    ingressPath,
-				ServiceAddress:          serviceIP,
-				ServicePort:             ingressSvcPort,
-				ELbScheme:               "internal",
-				Allow:                   []string{},
-				StripPaths:              false,
-				BackendKeepAliveSeconds: backendTimeout,
+				Namespace:             ingressNamespace,
+				Name:                  ingressName,
+				Host:                  ingressHost,
+				Path:                  ingressPath,
+				ServiceAddress:        serviceIP,
+				ServicePort:           ingressSvcPort,
+				ELbScheme:             "internal",
+				Allow:                 []string{},
+				StripPaths:            false,
+				BackendTimeoutSeconds: backendTimeout,
 			}},
 		},
 		{
@@ -385,16 +385,16 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20),
 			createDefaultServices(),
 			[]IngressEntry{{
-				Namespace:               ingressNamespace,
-				Name:                    ingressName,
-				Host:                    ingressHost,
-				Path:                    ingressPath,
-				ServiceAddress:          serviceIP,
-				ServicePort:             ingressSvcPort,
-				ELbScheme:               "internal",
-				Allow:                   []string{},
-				StripPaths:              false,
-				BackendKeepAliveSeconds: 20,
+				Namespace:             ingressNamespace,
+				Name:                  ingressName,
+				Host:                  ingressHost,
+				Path:                  ingressPath,
+				ServiceAddress:        serviceIP,
+				ServicePort:           ingressSvcPort,
+				ELbScheme:             "internal",
+				Allow:                 []string{},
+				StripPaths:            false,
+				BackendTimeoutSeconds: 20,
 			}},
 		},
 		{
@@ -402,16 +402,16 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", -1),
 			createDefaultServices(),
 			[]IngressEntry{{
-				Namespace:               ingressNamespace,
-				Name:                    ingressName,
-				Host:                    ingressHost,
-				Path:                    ingressPath,
-				ServiceAddress:          serviceIP,
-				ServicePort:             ingressSvcPort,
-				ELbScheme:               "internal",
-				Allow:                   []string{},
-				StripPaths:              false,
-				BackendKeepAliveSeconds: backendTimeout,
+				Namespace:             ingressNamespace,
+				Name:                  ingressName,
+				Host:                  ingressHost,
+				Path:                  ingressPath,
+				ServiceAddress:        serviceIP,
+				ServicePort:           ingressSvcPort,
+				ELbScheme:             "internal",
+				Allow:                 []string{},
+				StripPaths:            false,
+				BackendTimeoutSeconds: backendTimeout,
 			}},
 		},
 	}
@@ -450,15 +450,15 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 
 func createLbEntriesFixture() IngressEntries {
 	return []IngressEntry{{
-		Namespace:               ingressNamespace,
-		Name:                    ingressName,
-		Host:                    ingressHost,
-		Path:                    ingressPath,
-		ServiceAddress:          serviceIP,
-		ServicePort:             ingressSvcPort,
-		Allow:                   strings.Split(ingressAllow, ","),
-		ELbScheme:               elbScheme,
-		BackendKeepAliveSeconds: backendTimeout,
+		Namespace:             ingressNamespace,
+		Name:                  ingressName,
+		Host:                  ingressHost,
+		Path:                  ingressPath,
+		ServiceAddress:        serviceIP,
+		ServicePort:           ingressSvcPort,
+		Allow:                 strings.Split(ingressAllow, ","),
+		ELbScheme:             elbScheme,
+		BackendTimeoutSeconds: backendTimeout,
 	}}
 }
 
@@ -502,7 +502,7 @@ func createIngressesFixture(host string, serviceName string, servicePort int, al
 	}
 
 	if backendTimeout != -1 {
-		annotations[backendKeepAliveSeconds] = strconv.Itoa(backendTimeout)
+		annotations[backendTimeoutSeconds] = strconv.Itoa(backendTimeout)
 	}
 
 	return []*v1beta1.Ingress{

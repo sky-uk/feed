@@ -125,8 +125,8 @@ http {
             vhost_traffic_status_filter_by_set_key {{ $location.Path }}::$proxy_host $server_name;
 
             # Close proxy connections after backend keepalive time.
-            proxy_read_timeout {{ $location.BackendKeepaliveSeconds }}s;
-            proxy_send_timeout {{ $location.BackendKeepaliveSeconds }}s;
+            proxy_read_timeout {{ $location.BackendTimeoutSeconds }}s;
+            proxy_send_timeout {{ $location.BackendTimeoutSeconds }}s;
 
             # Allow localhost for debugging
             allow 127.0.0.1;
