@@ -1,3 +1,7 @@
+# v1.2.1
+* Aggressively rotate access logs to avoid excessive file cache usage. This can lead to kernel 
+  allocation failures when running feed inside a container with a memory limit.
+
 # v1.2.0
 * Rename annotation `sky.uk/backend-keepalive-seconds` to `sky.uk/backend-timeout-seconds` to make it
   clear that this value only affects request timeouts. The old annotation is preserved for backwards

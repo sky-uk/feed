@@ -1,4 +1,4 @@
-FROM phusion/baseimage:0.9.19
+FROM phusion/baseimage:0.9.22
 
 RUN apt-get update \
     && apt-get dist-upgrade -y \
@@ -33,8 +33,10 @@ RUN chmod 600 /etc/cron.d/nginx
 ADD log-dir-ownership.sh /etc/my_init.d/log-dir-ownership.sh
 
 # Let feed shutdown gracefully by giving it plenty of time to stop.
-RUN sed -i 's/KILL_PROCESS_TIMEOUT = 5/KILL_PROCESS_TIMEOUT = 300/' /sbin/my_init \
-    && grep 'KILL_PROCESS_TIMEOUT = 300' /sbin/my_init
+# Give children processes 5 minutes to timeout
+ENV KILL_PROCESS_TIMEOUT=300
+# Give all other processes (such as those which have been forked) 5 minutes to timeout
+ENV KILL_ALL_PROCESSES_TIMEOUT=300
 
 ENTRYPOINT ["/sbin/my_init", "--quiet", "--", "/sbin/setuser", "nginx", \
     "/feed-ingress", "-nginx-workdir", "/nginx"]
