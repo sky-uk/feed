@@ -11,6 +11,7 @@ import (
 	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
+	"github.com/sky-uk/feed/gorb"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
@@ -28,6 +29,7 @@ var (
 	elbLabelValue                  string
 	elbExpectedNumber              int
 	elbDrainDelay                  time.Duration
+	drainDelay                     time.Duration
 	targetGroupNames               cmd.CommaSeparatedValues
 	targetGroupDeregistrationDelay time.Duration
 	pushgatewayURL                 string
@@ -38,6 +40,13 @@ var (
 	nginxLogHeaders                cmd.CommaSeparatedValues
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
 	legacyBackendKeepaliveSeconds  int
+	registrationLoadbalancerType   string
+	serverUrl                      string
+	instanceIp                     string
+	servicesName                   string
+	servicesPort                   string
+	backendMethod                  string
+	backendWeight                  int
 )
 
 const unset = -1
@@ -65,11 +74,19 @@ func init() {
 		defaultNginxUpdatePeriod                 = time.Second * 30
 		defaultElbLabelValue                     = ""
 		defaultElbDrainDelay                     = time.Second * 60
+		defaultDrainDelay                        = time.Second * 30
 		defaultTargetGroupDeregistrationDelay    = time.Second * 300
 		defaultRegion                            = "eu-west-1"
 		defaultElbExpectedNumber                 = 0
 		defaultPushgatewayIntervalSeconds        = 60
 		defaultAccessLogDir                      = "/var/log/nginx"
+        defaultRegistrationLoadbalancerType      = "elb"
+        defaultServerUrl                         = "http://127.0.0.1:80"
+        defaultInstanceIp                        = "127.0.0.1"
+        defaultBackendMethod                     = "dr"
+        defaultBackendWeight                     = 1000
+        defaultServicesName                      = "http-proxy,https-proxy"
+        defaultServicesPort                      = "80,443"
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -132,6 +149,8 @@ func init() {
 	flag.DurationVar(&nginxConfig.UpdatePeriod, "nginx-update-period", defaultNginxUpdatePeriod,
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
+	flag.StringVar(&serverUrl, "server-url", defaultServerUrl, "Define the endpoint to talk to for registration.")
+	flag.StringVar(&instanceIp, "instance-ip", defaultInstanceIp, "Define the instance ip, the ip of the node where feed-ingress is running.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
 	flag.Var(&nginxLogHeaders, "nginx-log-headers", "Comma separated list of headers to be logged in access logs")
 	flag.Var(&nginxTrustedFrontends, "nginx-trusted-frontends",
@@ -144,12 +163,15 @@ func init() {
 
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
+    flag.StringVar(&registrationLoadbalancerType, "registration-loadbalancer-type", defaultRegistrationLoadbalancerType,
+		"Define the registration loadbalancer type")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
 	flag.DurationVar(&elbDrainDelay, "elb-drain-delay", defaultElbDrainDelay, "Delay to wait"+
 		" for feed-ingress to drain from the ELB on shutdown. Should match the ELB's drain time.")
-
+	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
+		" for feed-ingress to drain from the registration component on shutdown.")
 	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
 	flag.DurationVar(&targetGroupDeregistrationDelay, "alb-target-group-deregistration-delay",
@@ -163,6 +185,15 @@ func init() {
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
+    flag.StringVar(&servicesName, "services-name", defaultServicesName,
+		"Service Name to register to Gorb")
+    flag.StringVar(&servicesPort, "services-port", defaultServicesPort,
+		"Service Port to register to Gorb")
+    flag.StringVar(&backendMethod, "backend-method", defaultBackendMethod,
+		"Define the backend method for Gorb ")
+	flag.IntVar(&backendWeight, "backend-weight", defaultBackendWeight,
+		"Define the backend weight for Gorb")
+
 }
 
 func main() {
@@ -225,6 +256,15 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		}
 		updaters = append(updaters, albUpdater)
 	}
+
+    if registrationLoadbalancerType == "gorb" {
+		gorbUpdater, err := gorb.New(serverUrl, instanceIp, drainDelay, servicesName, servicesPort, backendWeight, backendMethod)
+		if err != nil {
+			return updaters, err
+		}
+		updaters = append(updaters, gorbUpdater)
+    }
+
 	// update nginx before attaching to front ends
 	return updaters, nil
 }
