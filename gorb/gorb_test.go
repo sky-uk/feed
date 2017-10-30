@@ -123,7 +123,6 @@ var _ = Describe("Gorb", func() {
       gorbH.responsePrimer = append(gorbH.responsePrimer, gorbResponsePrimer{statusCode: 404})
       gorbH.responsePrimer = append(gorbH.responsePrimer, gorbResponsePrimer{statusCode: 200})
       err := gorb.Update(controller.IngressEntries{})
-      fmt.Println(len(gorbH.recordedRequest))
       Expect(len(gorbH.recordedRequest)).To(Equal(2))
       Expect(gorbH.recordedRequest[1].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-%s", instanceIp)))
       Expect(err).NotTo(HaveOccurred())

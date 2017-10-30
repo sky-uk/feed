@@ -1,5 +1,5 @@
 /*
-Package gorb provide the ability to register and deregister the bachend
+Package gorb provide the ability to register and deregister the backend
 */
 package gorb
 
@@ -20,11 +20,24 @@ import (
   "github.com/hashicorp/go-multierror"
 )
 
+type ArgPulse struct {
+  method string `json:"method"`
+  path string `json:"path"`
+  expect string `json:"expect"`
+}
+
+type Pulse struct {
+  typeHealthcheck string `json:"type"`
+  args ArgPulse `json:"args"`
+  interval string `json:"interval"`
+}
+
 type BackendConf struct {
   host string `json:"host"`
   port int `json:"port"`
   method string `json:"method"`
   weight int `json:"weight"`
+  pulse Pulse `json:"pulse"`
 }
 
 type Backend struct {
@@ -54,6 +67,17 @@ func New(serverBaseUrl string, instanceIp string, drainDelay time.Duration, serv
     if err != nil {
        return nil, errors.New("Unable to convert port form string to int")
     }
+
+    args := ArgPulse{
+      method: "GET",
+      path: "/",
+      expect: "200",
+    }
+    pulse := Pulse{
+      args: args,
+      typeHealthcheck: "http",
+      interval: "1s",
+    }
     backend = Backend {
         serviceName: service,
         backendConf: BackendConf {
@@ -61,6 +85,7 @@ func New(serverBaseUrl string, instanceIp string, drainDelay time.Duration, serv
           port: port,
           method: backendMethod,
           weight: backendWeight,
+          pulse: pulse,
         },
     }
 
