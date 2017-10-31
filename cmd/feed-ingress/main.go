@@ -80,13 +80,13 @@ func init() {
 		defaultElbExpectedNumber                 = 0
 		defaultPushgatewayIntervalSeconds        = 60
 		defaultAccessLogDir                      = "/var/log/nginx"
-        defaultRegistrationLoadbalancerType      = "elb"
-        defaultServerURL                         = "http://127.0.0.1:80"
-        defaultInstanceIP                        = "127.0.0.1"
-        defaultBackendMethod                     = "dr"
-        defaultBackendWeight                     = 1000
-        defaultServicesName                      = "http-proxy,https-proxy"
-        defaultServicesPort                      = "80,443"
+		defaultRegistrationLoadbalancerType      = "elb"
+		defaultServerURL                         = "http://127.0.0.1:80"
+		defaultInstanceIP                        = "127.0.0.1"
+		defaultBackendMethod                     = "dr"
+		defaultBackendWeight                     = 1000
+		defaultServicesName                      = "http-proxy,https-proxy"
+		defaultServicesPort                      = "80,443"
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -163,7 +163,7 @@ func init() {
 
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
-    flag.StringVar(&registrationLoadbalancerType, "registration-loadbalancer-type", defaultRegistrationLoadbalancerType,
+	flag.StringVar(&registrationLoadbalancerType, "registration-loadbalancer-type", defaultRegistrationLoadbalancerType,
 		"Define the registration loadbalancer type")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
@@ -185,11 +185,11 @@ func init() {
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
-    flag.StringVar(&servicesName, "services-name", defaultServicesName,
+	flag.StringVar(&servicesName, "services-name", defaultServicesName,
 		"Service Name to register to Gorb")
-    flag.StringVar(&servicesPort, "services-port", defaultServicesPort,
+	flag.StringVar(&servicesPort, "services-port", defaultServicesPort,
 		"Service Port to register to Gorb")
-    flag.StringVar(&backendMethod, "backend-method", defaultBackendMethod,
+	flag.StringVar(&backendMethod, "backend-method", defaultBackendMethod,
 		"Define the backend method for Gorb ")
 	flag.IntVar(&backendWeight, "backend-weight", defaultBackendWeight,
 		"Define the backend weight for Gorb")
@@ -257,13 +257,13 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		updaters = append(updaters, albUpdater)
 	}
 
-    if registrationLoadbalancerType == "gorb" {
+	if registrationLoadbalancerType == "gorb" {
 		gorbUpdater, err := gorb.New(serverURL, instanceIP, drainDelay, servicesName, servicesPort, backendWeight, backendMethod)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, gorbUpdater)
-    }
+	}
 
 	// update nginx before attaching to front ends
 	return updaters, nil
