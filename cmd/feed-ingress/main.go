@@ -41,8 +41,8 @@ var (
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
 	legacyBackendKeepaliveSeconds  int
 	registrationLoadbalancerType   string
-	serverUrl                      string
-	instanceIp                     string
+	serverURL                      string
+	instanceIP                     string
 	servicesName                   string
 	servicesPort                   string
 	backendMethod                  string
@@ -81,8 +81,8 @@ func init() {
 		defaultPushgatewayIntervalSeconds        = 60
 		defaultAccessLogDir                      = "/var/log/nginx"
         defaultRegistrationLoadbalancerType      = "elb"
-        defaultServerUrl                         = "http://127.0.0.1:80"
-        defaultInstanceIp                        = "127.0.0.1"
+        defaultServerURL                         = "http://127.0.0.1:80"
+        defaultInstanceIP                        = "127.0.0.1"
         defaultBackendMethod                     = "dr"
         defaultBackendWeight                     = 1000
         defaultServicesName                      = "http-proxy,https-proxy"
@@ -149,8 +149,8 @@ func init() {
 	flag.DurationVar(&nginxConfig.UpdatePeriod, "nginx-update-period", defaultNginxUpdatePeriod,
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
-	flag.StringVar(&serverUrl, "server-url", defaultServerUrl, "Define the endpoint to talk to for registration.")
-	flag.StringVar(&instanceIp, "instance-ip", defaultInstanceIp, "Define the instance ip, the ip of the node where feed-ingress is running.")
+	flag.StringVar(&serverURL, "server-url", defaultServerURL, "Define the endpoint to talk to for registration.")
+	flag.StringVar(&instanceIP, "instance-ip", defaultInstanceIP, "Define the instance ip, the ip of the node where feed-ingress is running.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
 	flag.Var(&nginxLogHeaders, "nginx-log-headers", "Comma separated list of headers to be logged in access logs")
 	flag.Var(&nginxTrustedFrontends, "nginx-trusted-frontends",
@@ -258,7 +258,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 	}
 
     if registrationLoadbalancerType == "gorb" {
-		gorbUpdater, err := gorb.New(serverUrl, instanceIp, drainDelay, servicesName, servicesPort, backendWeight, backendMethod)
+		gorbUpdater, err := gorb.New(serverURL, instanceIP, drainDelay, servicesName, servicesPort, backendWeight, backendMethod)
 		if err != nil {
 			return updaters, err
 		}

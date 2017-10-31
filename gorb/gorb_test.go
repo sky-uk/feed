@@ -20,7 +20,7 @@ func TestE2E(t *testing.T) {
 }
 
 const (
-  instanceIp = "10.10.0.1"
+  instanceIP = "10.10.0.1"
   drainImmediately = 0
   servicesName = "http-proxy"
   servicesPort = "80"
@@ -77,7 +77,7 @@ var _ = Describe("Gorb", func() {
   var (
     gorb controller.Updater
     server *httptest.Server
-    serverUrl string
+    serverURL string
     responsePrimer []gorbResponsePrimer
     recordedRequests []gorbRecordedRequest
     gorbH *gorbHandler
@@ -89,9 +89,9 @@ var _ = Describe("Gorb", func() {
     gorbH = &gorbHandler{responsePrimer: responsePrimer, recordedRequest: recordedRequests}
     server = httptest.NewServer(gorbH)
 
-    serverUrl = server.URL
-    log.Info("url ", serverUrl)
-    gorb, _ = New(serverUrl, instanceIp, drainImmediately, servicesName, servicesPort, backendWeight, backendMethod)
+    serverURL = server.URL
+    log.Info("url ", serverURL)
+    gorb, _ = New(serverURL, instanceIP, drainImmediately, servicesName, servicesPort, backendWeight, backendMethod)
   })
 
   BeforeEach(func() {
@@ -124,7 +124,7 @@ var _ = Describe("Gorb", func() {
       gorbH.responsePrimer = append(gorbH.responsePrimer, gorbResponsePrimer{statusCode: 200})
       err := gorb.Update(controller.IngressEntries{})
       Expect(len(gorbH.recordedRequest)).To(Equal(2))
-      Expect(gorbH.recordedRequest[1].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-%s", instanceIp)))
+      Expect(gorbH.recordedRequest[1].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-%s", instanceIP)))
       Expect(err).NotTo(HaveOccurred())
     })
 

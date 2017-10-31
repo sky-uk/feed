@@ -20,37 +20,43 @@ import (
   "github.com/hashicorp/go-multierror"
 )
 
+// ArgPulse define healthcheck path
 type ArgPulse struct {
-  method string `json:"method"`
-  path string `json:"path"`
-  expect string `json:"expect"`
+  Method string `json:"method"`
+  Path string `json:"path"`
+  Expect string `json:"expect"`
 }
 
+
+// Pulse define healthcheck
 type Pulse struct {
-  typeHealthcheck string `json:"type"`
-  args ArgPulse `json:"args"`
-  interval string `json:"interval"`
+  TypeHealthcheck string `json:"type"`
+  Args ArgPulse `json:"args"`
+  Interval string `json:"interval"`
 }
 
+// BackendConf define the backend configuration
 type BackendConf struct {
-  host string `json:"host"`
-  port int `json:"port"`
-  method string `json:"method"`
-  weight int `json:"weight"`
-  pulse Pulse `json:"pulse"`
+  Host string `json:"host"`
+  Port int `json:"port"`
+  Method string `json:"method"`
+  Weight int `json:"weight"`
+  Pulse Pulse `json:"pulse"`
 }
 
+// Backend define the backend configuration + service name
 type Backend struct {
-  serviceName string
-  backendConf BackendConf
+  ServiceName string
+  BackendConf BackendConf
 }
 
-func New(serverBaseUrl string, instanceIp string, drainDelay time.Duration, servicesName string, servicesPort string, backendWeight int, backendMethod string) (controller.Updater, error) {
-  if serverBaseUrl == "" {
+// New creates a gorb handler
+func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, servicesName string, servicesPort string, backendWeight int, backendMethod string) (controller.Updater, error) {
+  if serverBaseURL == "" {
     return nil, errors.New("unable to create Gorb updater: missing server ip address")
   }
   //initMetrics()
-  log.Infof("Gorb server url: %s, drainDelay: %d, instance ip adddress: %s ", serverBaseUrl, drainDelay, instanceIp)
+  log.Infof("Gorb server url: %s, drainDelay: %d, instance ip adddress: %s ", serverBaseURL, drainDelay, instanceIP)
 
   backendDefinition := []Backend {}
   servicesNameArr := strings.Split(servicesName, ",")
@@ -69,23 +75,23 @@ func New(serverBaseUrl string, instanceIp string, drainDelay time.Duration, serv
     }
 
     args := ArgPulse{
-      method: "GET",
-      path: "/",
-      expect: "200",
+      Method: "GET",
+      Path: "/",
+      Expect: "200",
     }
     pulse := Pulse{
-      args: args,
-      typeHealthcheck: "http",
-      interval: "1s",
+      Args: args,
+      TypeHealthcheck: "http",
+      Interval: "1s",
     }
     backend = Backend {
-        serviceName: service,
-        backendConf: BackendConf {
-          host: instanceIp,
-          port: port,
-          method: backendMethod,
-          weight: backendWeight,
-          pulse: pulse,
+        ServiceName: service,
+        BackendConf: BackendConf {
+          Host: instanceIP,
+          Port: port,
+          Method: backendMethod,
+          Weight: backendWeight,
+          Pulse: pulse,
         },
     }
 
@@ -93,17 +99,17 @@ func New(serverBaseUrl string, instanceIp string, drainDelay time.Duration, serv
   }
 
   return &gorb{
-    serverBaseUrl:     serverBaseUrl,
+    serverBaseURL:     serverBaseURL,
     drainDelay:        drainDelay,
-    instanceIp:        instanceIp,
+    instanceIP:        instanceIP,
     backend:           backendDefinition,
   }, nil
 }
 
 type gorb struct {
-  serverBaseUrl string
+  serverBaseURL string
   drainDelay    time.Duration
-  instanceIp    string
+  instanceIP    string
   backend       []Backend
 }
 
@@ -116,13 +122,13 @@ func (g *gorb) Stop() error {
 
   var errorArr error
   for _, backend := range g.backend {
-    backend.backendConf.weight = 0
+    backend.BackendConf.Weight = 0
     err := g.modifyBackend(&backend)
     if err != nil {
       log.Error("Unable to set the backend weight to 0", err)
       errorArr = multierror.Append(errorArr, err)
     } else {
-      log.Infof("Set backend weight to 0", g.instanceIp)
+      log.Infof("Set backend weight to 0", g.instanceIP)
     }
   }
 
@@ -135,20 +141,20 @@ func (g *gorb) Stop() error {
       log.Error("Unable to remove Backend ", err)
       errorArr = multierror.Append(errorArr, err)
     } else {
-    log.Infof("Backend succesfully removed", g.instanceIp)
+    log.Infof("Backend succesfully removed", g.instanceIP)
     }
   }
 
   if errorArr != nil {
     return errorArr
-  } else {
-    return nil
   }
+
+  return nil
 
 }
 
 func (g *gorb) Health() error {
-  resp, err := http.Get(fmt.Sprintf("%s/service", g.serverBaseUrl))
+  resp, err := http.Get(fmt.Sprintf("%s/service", g.serverBaseURL))
   if err != nil {
     return fmt.Errorf("Unable to check service details: %v", err)
   }
@@ -187,28 +193,28 @@ func (g *gorb) Update(controller.IngressEntries) error {
         errorArr = multierror.Append(errorArr, err)
       }
     }
-    log.Info("Backend Succesfully added: ", g.instanceIp)
+    log.Info("Backend Succesfully added: ", g.instanceIP)
   }
 
   if errorArr != nil {
     return errorArr
-  } else {
-    return nil
   }
+
+  return nil
 }
 
 func (g *gorb) backendExists() (int, error) {
-  resp, err := http.Get(fmt.Sprintf("%s/service/node-%s", g.serverBaseUrl, g.instanceIp))
+  resp, err := http.Get(fmt.Sprintf("%s/service/node-%s", g.serverBaseURL, g.instanceIP))
   if err != nil {
-    return 0, fmt.Errorf("Unable to retrieve backend details for instance ip: %s error :%v", g.instanceIp, err)
+    return 0, fmt.Errorf("Unable to retrieve backend details for instance ip: %s error :%v", g.instanceIP, err)
   }
   return resp.StatusCode, nil
 }
 
 func (g *gorb) addBackend(backend *Backend) error {
-  payload, err := json.Marshal(backend.backendConf)
+  payload, err := json.Marshal(backend.BackendConf)
 
-  req, err := http.NewRequest("PUT", fmt.Sprintf("%s/service/%s/node-%s", g.serverBaseUrl, backend.serviceName, g.instanceIp), bytes.NewBuffer(payload))
+  req, err := http.NewRequest("PUT", fmt.Sprintf("%s/service/%s/node-%s", g.serverBaseURL, backend.ServiceName, g.instanceIP), bytes.NewBuffer(payload))
   if err != nil {
     return fmt.Errorf("Error while creating add backend request: %v", err)
   }
@@ -227,9 +233,9 @@ func (g *gorb) addBackend(backend *Backend) error {
 }
 
 func (g *gorb) modifyBackend(backend *Backend) error {
-  payload, err := json.Marshal(backend.backendConf)
+  payload, err := json.Marshal(backend.BackendConf)
 
-  req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/service/%s/node-%s", g.serverBaseUrl, backend.serviceName, g.instanceIp), bytes.NewBuffer(payload))
+  req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/service/%s/node-%s", g.serverBaseURL, backend.ServiceName, g.instanceIP), bytes.NewBuffer(payload))
 
   client := &http.Client{}
   resp, err := client.Do(req)
@@ -246,7 +252,7 @@ func (g *gorb) modifyBackend(backend *Backend) error {
 
 func (g *gorb) removeBackend(backend *Backend) error {
 
-  req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/service/%s/node-%s", g.serverBaseUrl, backend.serviceName, g.instanceIp), nil)
+  req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/service/%s/node-%s", g.serverBaseURL, backend.ServiceName, g.instanceIP), nil)
   if err != nil {
     return fmt.Errorf("Error while creating add backend request: %v", err)
   }
@@ -254,12 +260,12 @@ func (g *gorb) removeBackend(backend *Backend) error {
   client := &http.Client{}
   resp, err := client.Do(req)
   if err != nil {
-    return fmt.Errorf("Error while removing backend: %v, error: %v", err)
+    return fmt.Errorf("Error while removing backend, error: %v", err)
   }
   log.Infof("Error removing backend", resp.StatusCode)
   if resp.StatusCode != 200 {
     body, _ := ioutil.ReadAll(resp.Body)
-    return fmt.Errorf("Failed to remove backend: %v, status code: %d, response: %v", resp.StatusCode, body)
+    return fmt.Errorf("Failed to remove backend, status code: %d, response: %v", resp.StatusCode, body)
   }
   return nil
 }
