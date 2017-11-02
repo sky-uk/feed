@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -77,7 +78,7 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, serv
 		args := ArgPulse{
 			Method: "GET",
 			Path:   "/",
-			Expect: "200",
+			Expect: "404",
 		}
 		pulse := Pulse{
 			Args:            args,
@@ -135,6 +136,13 @@ func (g *gorb) Stop() error {
 	log.Infof("Waiting %v to finish gorb draining", g.drainDelay)
 	time.Sleep(g.drainDelay)
 
+	go func() {
+		cmd := `while [[ $(curl -s -o /dev/null -w %{http_code} http://localhost:80) != '000' ]] ; do  sleep 0.25; echo 'Waiting ingress stopped '; done; ip addr del 10.154.0.10/32 dev lo label lo:0 ; echo 'VIP loopback deleted '; echo 0 > /host-ipv4-proc/arp_ignore; echo 0 > /host-ipv4-proc/arp_announce`
+		outCmd, errCmd := exec.Command("nohup", "bash", "-c", cmd).Output()
+		log.Infof("output deletion VIP: ", outCmd)
+		log.Infof("err deletion VIP: ", errCmd)
+	}()
+
 	for _, backend := range g.backend {
 		err := g.removeBackend(&backend)
 		if err != nil {
@@ -168,10 +176,15 @@ func (g *gorb) Health() error {
 
 func (g *gorb) Update(controller.IngressEntries) error {
 
+	cmd := `while [[ $(curl -s -o /dev/null -w %{http_code} http://localhost:80) != '404' ]] ; do  sleep 0.25; echo 'Waiting ingres started ' ; done; echo 1 > /host-ipv4-proc/arp_ignore; echo 2 > /host-ipv4-proc/arp_announce; ip addr add 10.154.0.10/32 dev lo label lo:0; echo 'VIP loopback created'`
+	outCmd, errCmd := exec.Command("nohup", "bash", "-c", cmd).Output()
+	log.Infof("output creation VIP: ", outCmd)
+	log.Infof("err creation VIP: ", errCmd)
+
 	var errorArr error
 	for _, backend := range g.backend {
 
-		backendExists, err := g.backendExists()
+		backendExists, err := g.backendExists(&backend)
 		if err != nil {
 			log.Error("Unable to check if backend already exists", err)
 		} else {
@@ -193,7 +206,6 @@ func (g *gorb) Update(controller.IngressEntries) error {
 				errorArr = multierror.Append(errorArr, err)
 			}
 		}
-		log.Info("Backend Succesfully added: ", g.instanceIP)
 	}
 
 	if errorArr != nil {
@@ -203,8 +215,8 @@ func (g *gorb) Update(controller.IngressEntries) error {
 	return nil
 }
 
-func (g *gorb) backendExists() (int, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/service/node-%s", g.serverBaseURL, g.instanceIP))
+func (g *gorb) backendExists(backend *Backend) (int, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/service/%s/node-%s-%s", g.serverBaseURL, backend.ServiceName, backend.ServiceName, g.instanceIP))
 	if err != nil {
 		return 0, fmt.Errorf("Unable to retrieve backend details for instance ip: %s error :%v", g.instanceIP, err)
 	}
@@ -214,7 +226,7 @@ func (g *gorb) backendExists() (int, error) {
 func (g *gorb) addBackend(backend *Backend) error {
 	payload, err := json.Marshal(backend.BackendConf)
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/service/%s/node-%s", g.serverBaseURL, backend.ServiceName, g.instanceIP), bytes.NewBuffer(payload))
+	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/service/%s/node-%s-%s", g.serverBaseURL, backend.ServiceName, backend.ServiceName, g.instanceIP), bytes.NewBuffer(payload))
 	if err != nil {
 		return fmt.Errorf("Error while creating add backend request: %v", err)
 	}
@@ -235,7 +247,7 @@ func (g *gorb) addBackend(backend *Backend) error {
 func (g *gorb) modifyBackend(backend *Backend) error {
 	payload, err := json.Marshal(backend.BackendConf)
 
-	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/service/%s/node-%s", g.serverBaseURL, backend.ServiceName, g.instanceIP), bytes.NewBuffer(payload))
+	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/service/%s/node-%s-%s", g.serverBaseURL, backend.ServiceName, backend.ServiceName, g.instanceIP), bytes.NewBuffer(payload))
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -252,7 +264,7 @@ func (g *gorb) modifyBackend(backend *Backend) error {
 
 func (g *gorb) removeBackend(backend *Backend) error {
 
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/service/%s/node-%s", g.serverBaseURL, backend.ServiceName, g.instanceIP), nil)
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/service/%s/node-%s-%s", g.serverBaseURL, backend.ServiceName, backend.ServiceName, g.instanceIP), nil)
 	if err != nil {
 		return fmt.Errorf("Error while creating add backend request: %v", err)
 	}

@@ -7,6 +7,7 @@ RUN apt-get update \
         dnsutils \
         vim-tiny \
         lsof \
+        iproute2 \
     && apt-get clean -y \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* /tmp/*
@@ -38,5 +39,5 @@ ENV KILL_PROCESS_TIMEOUT=300
 # Give all other processes (such as those which have been forked) 5 minutes to timeout
 ENV KILL_ALL_PROCESSES_TIMEOUT=300
 
-ENTRYPOINT ["/sbin/my_init", "--quiet", "--", "/sbin/setuser", "nginx", \
+ENTRYPOINT ["/sbin/my_init", "--quiet", "--", \
     "/feed-ingress", "-nginx-workdir", "/nginx"]
