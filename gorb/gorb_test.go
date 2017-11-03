@@ -27,6 +27,7 @@ const (
 	servicesPort     = "80"
 	backendWeight    = 1000
 	backendMethod    = "dr"
+	vipLoadbalancer  = "127.0.0.1"
 )
 
 type gorbResponsePrimer struct {
@@ -92,7 +93,7 @@ var _ = Describe("Gorb", func() {
 
 		serverURL = server.URL
 		log.Info("url ", serverURL)
-		gorb, _ = New(serverURL, instanceIP, drainImmediately, servicesName, servicesPort, backendWeight, backendMethod)
+		gorb, _ = New(serverURL, instanceIP, drainImmediately, servicesName, servicesPort, backendWeight, backendMethod, vipLoadbalancer)
 	})
 
 	BeforeEach(func() {

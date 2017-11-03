@@ -47,6 +47,7 @@ var (
 	servicesPort                   string
 	backendMethod                  string
 	backendWeight                  int
+	vipLoadbalancer                string
 )
 
 const unset = -1
@@ -87,6 +88,7 @@ func init() {
 		defaultBackendWeight                     = 1000
 		defaultServicesName                      = "http-proxy,https-proxy"
 		defaultServicesPort                      = "80,443"
+		defaultVipLoadbalancer                   = "127.0.0.1"
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -193,6 +195,8 @@ func init() {
 		"Define the backend method for Gorb ")
 	flag.IntVar(&backendWeight, "backend-weight", defaultBackendWeight,
 		"Define the backend weight for Gorb")
+	flag.StringVar(&vipLoadbalancer, "vip-loadbalancer", defaultVipLoadbalancer,
+		"Define the vip loadbalancer to set the loopback")
 
 }
 
@@ -258,7 +262,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 	}
 
 	if registrationLoadbalancerType == "gorb" {
-		gorbUpdater, err := gorb.New(serverURL, instanceIP, drainDelay, servicesName, servicesPort, backendWeight, backendMethod)
+		gorbUpdater, err := gorb.New(serverURL, instanceIP, drainDelay, servicesName, servicesPort, backendWeight, backendMethod, vipLoadbalancer)
 		if err != nil {
 			return updaters, err
 		}
