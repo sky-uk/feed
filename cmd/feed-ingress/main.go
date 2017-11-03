@@ -48,6 +48,7 @@ var (
 	backendMethod                  string
 	backendWeight                  int
 	vipLoadbalancer                string
+	manageLoopback                 bool
 )
 
 const unset = -1
@@ -89,6 +90,7 @@ func init() {
 		defaultServicesName                      = "http-proxy,https-proxy"
 		defaultServicesPort                      = "80,443"
 		defaultVipLoadbalancer                   = "127.0.0.1"
+		defaultManageLoopback                    = true
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -197,6 +199,7 @@ func init() {
 		"Define the backend weight for Gorb")
 	flag.StringVar(&vipLoadbalancer, "vip-loadbalancer", defaultVipLoadbalancer,
 		"Define the vip loadbalancer to set the loopback")
+	flag.BoolVar(&manageLoopback, "management-loopback", defaultManageLoopback, "Enable loopback creation")
 
 }
 
@@ -262,7 +265,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 	}
 
 	if registrationLoadbalancerType == "gorb" {
-		gorbUpdater, err := gorb.New(serverURL, instanceIP, drainDelay, servicesName, servicesPort, backendWeight, backendMethod, vipLoadbalancer)
+		gorbUpdater, err := gorb.New(serverURL, instanceIP, drainDelay, servicesName, servicesPort, backendWeight, backendMethod, vipLoadbalancer, manageLoopback)
 		if err != nil {
 			return updaters, err
 		}

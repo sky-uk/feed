@@ -12,7 +12,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
+	"github.com/sky-uk/feed/util/metrics"
 )
 
 func TestE2E(t *testing.T) {
@@ -28,6 +30,7 @@ const (
 	backendWeight    = 1000
 	backendMethod    = "dr"
 	vipLoadbalancer  = "127.0.0.1"
+	manageLoopback   = false
 )
 
 type gorbResponsePrimer struct {
@@ -86,6 +89,7 @@ var _ = Describe("Gorb", func() {
 	)
 
 	BeforeSuite(func() {
+		metrics.SetConstLabels(make(prometheus.Labels))
 		responsePrimer = []gorbResponsePrimer{}
 		recordedRequests = []gorbRecordedRequest{}
 		gorbH = &gorbHandler{responsePrimer: responsePrimer, recordedRequest: recordedRequests}
@@ -93,7 +97,8 @@ var _ = Describe("Gorb", func() {
 
 		serverURL = server.URL
 		log.Info("url ", serverURL)
-		gorb, _ = New(serverURL, instanceIP, drainImmediately, servicesName, servicesPort, backendWeight, backendMethod, vipLoadbalancer)
+
+		gorb, _ = New(serverURL, instanceIP, drainImmediately, servicesName, servicesPort, backendWeight, backendMethod, vipLoadbalancer, manageLoopback)
 	})
 
 	BeforeEach(func() {
@@ -125,15 +130,7 @@ var _ = Describe("Gorb", func() {
 			gorbH.responsePrimer = append(gorbH.responsePrimer, gorbResponsePrimer{statusCode: 200})
 			err := gorb.Update(controller.IngressEntries{})
 			Expect(len(gorbH.recordedRequest)).To(Equal(2))
-			Expect(gorbH.recordedRequest[1].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-%s", instanceIP)))
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should modify when already exist", func() {
-			gorbH.responsePrimer = append(gorbH.responsePrimer, gorbResponsePrimer{statusCode: 200})
-			gorbH.responsePrimer = append(gorbH.responsePrimer, gorbResponsePrimer{statusCode: 200})
-			err := gorb.Update(controller.IngressEntries{})
-			Expect(len(gorbH.recordedRequest)).To(Equal(2))
+			Expect(gorbH.recordedRequest[1].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-http-proxy-%s", instanceIP)))
 			Expect(err).NotTo(HaveOccurred())
 		})
 

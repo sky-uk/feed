@@ -52,7 +52,7 @@ type Backend struct {
 }
 
 // New creates a gorb handler
-func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, servicesName string, servicesPort string, backendWeight int, backendMethod string, vipLoadbalancer string) (controller.Updater, error) {
+func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, servicesName string, servicesPort string, backendWeight int, backendMethod string, vipLoadbalancer string, manageLoopback bool) (controller.Updater, error) {
 	if serverBaseURL == "" {
 		return nil, errors.New("unable to create Gorb updater: missing server ip address")
 	}
@@ -115,6 +115,7 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, serv
 		vipLoadbalancer: vipLoadbalancer,
 		backend:         backendDefinition,
 		httpClient:      httpClient,
+		manageLoopback:  manageLoopback,
 	}, nil
 }
 
@@ -125,6 +126,7 @@ type gorb struct {
 	vipLoadbalancer string
 	httpClient      *http.Client
 	backend         []Backend
+	manageLoopback  bool
 }
 
 func (g *gorb) Start() error {
@@ -173,8 +175,10 @@ func (g *gorb) Stop() error {
 	log.Infof("Waiting %v to finish gorb draining", g.drainDelay)
 	time.Sleep(g.drainDelay)
 
-	err := g.ManageLoopBack("del", 0, 0)
-	errorArr = multierror.Append(errorArr, err)
+	if g.manageLoopback {
+		err := g.ManageLoopBack("del", 0, 0)
+		errorArr = multierror.Append(errorArr, err)
+	}
 
 	for _, backend := range g.backend {
 		err := g.removeBackend(&backend)
@@ -205,8 +209,11 @@ func (g *gorb) Health() error {
 func (g *gorb) Update(controller.IngressEntries) error {
 
 	var errorArr *multierror.Error
-	err := g.ManageLoopBack("add", 1, 2)
-	errorArr = multierror.Append(errorArr, err)
+
+	if g.manageLoopback {
+		err := g.ManageLoopBack("add", 1, 2)
+		errorArr = multierror.Append(errorArr, err)
+	}
 
 	for _, backend := range g.backend {
 
