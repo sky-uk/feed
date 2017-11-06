@@ -29,8 +29,8 @@ var (
 	pushgatewayIntervalSeconds int
 	pushgatewayLabels          cmd.KeyValues
 	awsAPIRetries              int
-	internalCNAME              string
-	externalCNAME              string
+	internalHostname           string
+	externalHostname           string
 )
 
 func init() {
@@ -69,10 +69,10 @@ func init() {
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
 	flag.IntVar(&awsAPIRetries, "aws-api-retries", defaultAwsAPIRetries,
 		"Number of times a request to the AWS API is retried.")
-	flag.StringVar(&internalCNAME, "internal-cname", "",
-		"the CNAME of the internal facing load-balancer. If specified, external-cname must also be given.")
-	flag.StringVar(&externalCNAME, "external-cname", "",
-		"the CNAME of the internet facing load-balancer. If specified, internal-cname must also be given.")
+	flag.StringVar(&internalHostname, "internal-hostname", "",
+		"hostname of the internal facing load-balancer. If specified, external-hostname must also be given.")
+	flag.StringVar(&externalHostname, "external-cname", "",
+		"hostname of the internet facing load-balancer. If specified, internal-hostname must also be given.")
 }
 
 func main() {
@@ -88,8 +88,8 @@ func main() {
 	}
 
 	var dnsUpdater controller.Updater
-	if internalCNAME != "" && externalCNAME != "" {
-		addressesWithScheme := map[string]string{"internal": internalCNAME, "internet-facing": externalCNAME}
+	if internalHostname != "" && externalHostname != "" {
+		addressesWithScheme := map[string]string{"internal": internalHostname, "internet-facing": externalHostname}
 		dnsUpdater = dns.New(r53HostedZone, elbRegion, addressesWithScheme, "", albNames, awsAPIRetries)
 	} else {
 		dnsUpdater = dns.New(r53HostedZone, elbRegion, nil, elbLabelValue, albNames, awsAPIRetries)
@@ -117,12 +117,12 @@ func validateConfig() {
 		os.Exit(-1)
 	}
 
-	if (internalCNAME != "" || externalCNAME != "") && elbLabelValue != "" {
+	if (internalHostname != "" || externalHostname != "") && elbLabelValue != "" {
 		log.Error("Can't supply both ELB label and non-ELB CNAME. Choose one or the other.")
 		os.Exit(-1)
 	}
 
-	if (internalCNAME == "" && externalCNAME != "") || (internalCNAME != "" && externalCNAME == "") {
+	if (internalHostname == "" && externalHostname != "") || (internalHostname != "" && externalHostname == "") {
 		log.Error("Must supply both internal-cname and external-cname if any are to be provided.")
 		os.Exit(-1)
 	}

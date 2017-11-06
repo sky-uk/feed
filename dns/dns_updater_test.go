@@ -526,6 +526,7 @@ func TestRecordSetUpdates(t *testing.T) {
 }
 
 func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
+	ttl := int64(300)
 	var tests = []struct {
 		name            string
 		update          controller.IngressEntries
@@ -558,6 +559,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
+					TTL: &ttl,
 				},
 			}},
 		},
@@ -588,6 +590,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(externalAddressArgument),
 						},
 					},
+					TTL: &ttl,
 				},
 			}},
 		},
@@ -622,6 +625,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
+					TTL: &ttl,
 				},
 			}},
 		},
@@ -662,6 +666,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
+					TTL: &ttl,
 				}},
 				{
 					Action: aws.String("DELETE"),
@@ -673,6 +678,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 								Value: aws.String(internalAddressArgument),
 							},
 						},
+						TTL: &ttl,
 					},
 				},
 			},
@@ -736,6 +742,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
+					TTL: &ttl,
 					//Type: aws.String("A"),
 					//AliasTarget: &route53.AliasTarget{
 					//	DNSName:              aws.String(internalALBDnsNameWithPeriod),
@@ -774,6 +781,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(externalAddressArgument),
 						},
 					},
+					TTL: &ttl,
 				},
 			}},
 		},

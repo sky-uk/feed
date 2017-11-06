@@ -50,8 +50,8 @@ Another is to place an SSL termination EC2 instance in front of the ELBs.
 
 ## feed-dns
 
-`feed-dns` manages a Route53 hosted zone, updating entries to point to ELBs or CNAMEs of your choosing. It is designed to be run as a
-single instance per zone in your cluster.
+`feed-dns` manages a Route53 hosted zone, updating entries to point to ELBs or arbitrary hostnames. It is designed to
+be run as a single instance per zone in your cluster.
 
 See the command line options with:
 

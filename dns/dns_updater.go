@@ -326,7 +326,9 @@ func newChange(action string, host string, targetElbDNSName string, targetElbHos
 			EvaluateTargetHealth: aws.Bool(false),
 		}
 	} else {
+		ttl := int64(300)
 		set.Type = aws.String("CNAME")
+		set.TTL = &ttl
 		set.ResourceRecords = []*route53.ResourceRecord{
 			{
 				Value: aws.String(targetElbDNSName),
