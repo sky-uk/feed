@@ -23,6 +23,7 @@ RUN /bin/bash /tmp/build-nginx.sh
 COPY feed-ingress /
 COPY nginx.tmpl /nginx/
 RUN chown nginx:nginx /nginx/nginx.tmpl
+RUN setcap "cap_net_bind_service=+ep" /usr/sbin/nginx
 
 ADD logrotate.config /etc/logrotate.d/nginx
 RUN chmod 600 /etc/logrotate.d/nginx
@@ -39,5 +40,5 @@ ENV KILL_PROCESS_TIMEOUT=300
 # Give all other processes (such as those which have been forked) 5 minutes to timeout
 ENV KILL_ALL_PROCESSES_TIMEOUT=300
 
-ENTRYPOINT ["/sbin/my_init", "--quiet", "--", \
+ENTRYPOINT ["/sbin/my_init", "--quiet", "--", "/sbin/setuser", "nginx", \
     "/feed-ingress", "-nginx-workdir", "/nginx"]
