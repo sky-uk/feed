@@ -22,8 +22,8 @@ import (
 	"github.com/sky-uk/feed/controller"
 )
 
-// ArgPulse define healthcheck path
-type ArgPulse struct {
+// HealthcheckArgs define healthcheck path
+type HealthcheckArgs struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
 	Expect string `json:"expect"`
@@ -32,7 +32,7 @@ type ArgPulse struct {
 // Pulse define healthcheck
 type Pulse struct {
 	TypeHealthcheck string   `json:"type"`
-	Args            ArgPulse `json:"args"`
+	Args            HealthcheckArgs `json:"args"`
 	Interval        string   `json:"interval"`
 }
 
@@ -52,30 +52,26 @@ type Backend struct {
 }
 
 // New creates a gorb handler
-func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, servicesName string, servicesPort string, backendWeight int, backendMethod string, vipLoadbalancer string, manageLoopback bool) (controller.Updater, error) {
+func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, gorbServicesDefinition string, backendWeight int, backendMethod string, vipLoadbalancer string, manageLoopback bool, gorbIntervalHealthcheck string) (controller.Updater, error) {
 	if serverBaseURL == "" {
 		return nil, errors.New("unable to create Gorb updater: missing server ip address")
 	}
 	initMetrics()
 	log.Infof("Gorb server url: %s, drainDelay: %v, instance ip adddress: %s, vipLoadbalancer: %s ", serverBaseURL, drainDelay, instanceIP, vipLoadbalancer)
 
-	backendDefinition := []Backend{}
-	servicesNameArr := strings.Split(servicesName, ",")
-	servicesPortArr := strings.Split(servicesPort, ",")
-
-	if len(servicesNameArr) != len(servicesPortArr) {
-		return nil, errors.New("Unable to create Gorb updater: the number of serviceName and port are not the same")
-	}
+	backendDefinitions := []Backend{}
+	gorbServicesDefinitionArr := strings.Split(gorbServicesDefinition, ",")
 
 	var backend Backend
-	for index, service := range servicesNameArr {
+	for _, service := range gorbServicesDefinitionArr {
 
-		port, err := strconv.Atoi(servicesPortArr[index])
+        servicesArr := strings.Split(service, ":")
+		port, err := strconv.Atoi(servicesArr[1])
 		if err != nil {
 			return nil, errors.New("Unable to convert port form string to int")
 		}
 
-		args := ArgPulse{
+		args := HealthcheckArgs{
 			Method: "GET",
 			Path:   "/",
 			Expect: "404",
@@ -83,10 +79,10 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, serv
 		pulse := Pulse{
 			Args:            args,
 			TypeHealthcheck: "http",
-			Interval:        "1s",
+			Interval:        gorbIntervalHealthcheck,
 		}
 		backend = Backend{
-			ServiceName: service,
+			ServiceName: servicesArr[0],
 			BackendConf: BackendConf{
 				Host:   instanceIP,
 				Port:   port,
@@ -96,7 +92,7 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, serv
 			},
 		}
 
-		backendDefinition = append(backendDefinition, backend)
+		backendDefinitions = append(backendDefinitions, backend)
 	}
 
 	tr := &http.Transport{
@@ -113,7 +109,7 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, serv
 		drainDelay:      drainDelay,
 		instanceIP:      instanceIP,
 		vipLoadbalancer: vipLoadbalancer,
-		backend:         backendDefinition,
+		backend:         backendDefinitions,
 		httpClient:      httpClient,
 		manageLoopback:  manageLoopback,
 	}, nil
@@ -133,7 +129,7 @@ func (g *gorb) Start() error {
 	return nil
 }
 
-func (g *gorb) ManageLoopBack(action string, arpIgnore int, arpAnnounce int) error {
+func (g *gorb) manageLoopBack(action string, arpIgnore int, arpAnnounce int) error {
 
 	var errorArr *multierror.Error
 	vipLoadbalancerArr := strings.Split(g.vipLoadbalancer, ",")
@@ -143,12 +139,12 @@ func (g *gorb) ManageLoopBack(action string, arpIgnore int, arpAnnounce int) err
 		_, errCmd := exec.Command("bash", "-c", cmd).Output()
 		errorArr = multierror.Append(errorArr, errCmd)
 
-		log.WithFields(log.Fields{"arp_ignore": arpIgnore}).Info("Set back arp_ignore")
+        log.WithFields(log.Fields{"arp_ignore": arpIgnore}).Info("Set arp_ignore to: ")
 		cmd = fmt.Sprintf("echo %d > /host-ipv4-proc/arp_ignore", arpIgnore)
 		_, errCmd = exec.Command("bash", "-c", cmd).Output()
 		errorArr = multierror.Append(errorArr, errCmd)
 
-		log.WithFields(log.Fields{"arp_announce": arpAnnounce}).Info("Set back arp_announce")
+        log.WithFields(log.Fields{"arp_announce": arpAnnounce}).Info("Set arp_announce to: ")
 		cmd = fmt.Sprintf("echo %d > /host-ipv4-proc/arp_announce", arpAnnounce)
 		_, errCmd = exec.Command("bash", "-c", cmd).Output()
 		errorArr = multierror.Append(errorArr, errCmd)
@@ -176,7 +172,7 @@ func (g *gorb) Stop() error {
 	time.Sleep(g.drainDelay)
 
 	if g.manageLoopback {
-		err := g.ManageLoopBack("del", 0, 0)
+		err := g.manageLoopBack("del", 0, 0)
 		errorArr = multierror.Append(errorArr, err)
 	}
 
@@ -200,7 +196,7 @@ func (g *gorb) Health() error {
 	}
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Gorb server is not healthy. Status code: %d", resp.StatusCode)
+		return fmt.Errorf("Gorb server is not healthy. Status code: %d, Response Body %s", resp.StatusCode, resp.Body)
 	}
 
 	return nil
@@ -211,7 +207,7 @@ func (g *gorb) Update(controller.IngressEntries) error {
 	var errorArr *multierror.Error
 
 	if g.manageLoopback {
-		err := g.ManageLoopBack("add", 1, 2)
+		err := g.manageLoopBack("add", 1, 2)
 		errorArr = multierror.Append(errorArr, err)
 	}
 
@@ -219,13 +215,13 @@ func (g *gorb) Update(controller.IngressEntries) error {
 
 		backendExists, err := g.backendExists(&backend)
 		if err != nil {
-			log.WithFields(log.Fields{"err": err}).Error("Unable to check if backend already exists")
+          log.WithFields(log.Fields{"err": err, "backend": backend }).Error("Unable to check if backend already exists")
 		}
 
 		if backendExists == 404 {
 			err := g.addBackend(&backend)
 			if err != nil {
-				log.WithFields(log.Fields{"err": err}).Error("Error add Backend ")
+				log.WithFields(log.Fields{"err": err, "backend": backend }).Error("Error add Backend ")
 				errorArr = multierror.Append(errorArr, err)
 			} else {
 				log.WithFields(log.Fields{"backend": backend}).Infof("Backend added successfully")

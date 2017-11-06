@@ -28,7 +28,6 @@ var (
 	region                         string
 	elbLabelValue                  string
 	elbExpectedNumber              int
-	elbDrainDelay                  time.Duration
 	drainDelay                     time.Duration
 	targetGroupNames               cmd.CommaSeparatedValues
 	targetGroupDeregistrationDelay time.Duration
@@ -41,14 +40,14 @@ var (
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
 	legacyBackendKeepaliveSeconds  int
 	registrationLoadbalancerType   string
-	serverURL                      string
+	gorbEndpoint                   string
 	instanceIP                     string
-	servicesName                   string
-	servicesPort                   string
+	gorbServicesDefinition         string
 	backendMethod                  string
 	backendWeight                  int
 	vipLoadbalancer                string
 	manageLoopback                 bool
+    gorbIntervalHealthcheck        string
 )
 
 const unset = -1
@@ -75,7 +74,6 @@ func init() {
 		defaultNginxProxyProtocol                = false
 		defaultNginxUpdatePeriod                 = time.Second * 30
 		defaultElbLabelValue                     = ""
-		defaultElbDrainDelay                     = time.Second * 60
 		defaultDrainDelay                        = time.Second * 30
 		defaultTargetGroupDeregistrationDelay    = time.Second * 300
 		defaultRegion                            = "eu-west-1"
@@ -83,14 +81,14 @@ func init() {
 		defaultPushgatewayIntervalSeconds        = 60
 		defaultAccessLogDir                      = "/var/log/nginx"
 		defaultRegistrationLoadbalancerType      = "elb"
-		defaultServerURL                         = "http://127.0.0.1:80"
+		defaultGorbEndpoint                      = "http://127.0.0.1:80"
 		defaultInstanceIP                        = "127.0.0.1"
 		defaultBackendMethod                     = "dr"
 		defaultBackendWeight                     = 1000
-		defaultServicesName                      = "http-proxy,https-proxy"
-		defaultServicesPort                      = "80,443"
+        defaultGorbServicesDefinition            = "http-proxy:80,https-proxy:443"
 		defaultVipLoadbalancer                   = "127.0.0.1"
 		defaultManageLoopback                    = true
+        defaultGorbIntervalHealthcheck           = "1s"
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -153,7 +151,7 @@ func init() {
 	flag.DurationVar(&nginxConfig.UpdatePeriod, "nginx-update-period", defaultNginxUpdatePeriod,
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
-	flag.StringVar(&serverURL, "server-url", defaultServerURL, "Define the endpoint to talk to for registration.")
+	flag.StringVar(&gorbEndpoint, "gorb-endpoint", defaultGorbEndpoint, "Define the endpoint to talk to gorb for registration.")
 	flag.StringVar(&instanceIP, "instance-ip", defaultInstanceIP, "Define the instance ip, the ip of the node where feed-ingress is running.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
 	flag.Var(&nginxLogHeaders, "nginx-log-headers", "Comma separated list of headers to be logged in access logs")
@@ -172,10 +170,8 @@ func init() {
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
-	flag.DurationVar(&elbDrainDelay, "elb-drain-delay", defaultElbDrainDelay, "Delay to wait"+
-		" for feed-ingress to drain from the ELB on shutdown. Should match the ELB's drain time.")
 	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
-		" for feed-ingress to drain from the registration component on shutdown.")
+		" for feed-ingress to drain from the registration component on shutdown. Should match the ELB's drain time.")
 	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
 	flag.DurationVar(&targetGroupDeregistrationDelay, "alb-target-group-deregistration-delay",
@@ -189,17 +185,17 @@ func init() {
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
-	flag.StringVar(&servicesName, "services-name", defaultServicesName,
+	flag.StringVar(&gorbServicesDefinition, "services-name", defaultGorbServicesDefinition,
 		"Service Name to register to Gorb")
-	flag.StringVar(&servicesPort, "services-port", defaultServicesPort,
-		"Service Port to register to Gorb")
 	flag.StringVar(&backendMethod, "backend-method", defaultBackendMethod,
 		"Define the backend method for Gorb ")
 	flag.IntVar(&backendWeight, "backend-weight", defaultBackendWeight,
 		"Define the backend weight for Gorb")
 	flag.StringVar(&vipLoadbalancer, "vip-loadbalancer", defaultVipLoadbalancer,
-		"Define the vip loadbalancer to set the loopback")
+		"Define the vip loadbalancer to set the loopback, only necessary when Direct Return is enabled ")
 	flag.BoolVar(&manageLoopback, "management-loopback", defaultManageLoopback, "Enable loopback creation")
+	flag.StringVar(&gorbIntervalHealthcheck, "gorb-interval-healthcheck", defaultGorbIntervalHealthcheck,
+		"Define the gorb interval http healthcheck")
 
 }
 
@@ -248,24 +244,20 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 
 	updaters := []controller.Updater{nginxUpdater}
 
-	if elbLabelValue != "" {
-		elbUpdater, err := elb.New(region, elbLabelValue, elbExpectedNumber, elbDrainDelay)
+	if registrationLoadbalancerType == "elb" {
+		elbUpdater, err := elb.New(region, elbLabelValue, elbExpectedNumber, drainDelay)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, elbUpdater)
-	}
-
-	if len(targetGroupNames) != 0 {
+	} else if registrationLoadbalancerType == "alb" {
 		albUpdater, err := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, albUpdater)
-	}
-
-	if registrationLoadbalancerType == "gorb" {
-		gorbUpdater, err := gorb.New(serverURL, instanceIP, drainDelay, servicesName, servicesPort, backendWeight, backendMethod, vipLoadbalancer, manageLoopback)
+	} else if registrationLoadbalancerType == "gorb" {
+		gorbUpdater, err := gorb.New(gorbEndpoint, instanceIP, drainDelay, gorbServicesDefinition, backendWeight, backendMethod, vipLoadbalancer, manageLoopback, gorbIntervalHealthcheck)
 		if err != nil {
 			return updaters, err
 		}
