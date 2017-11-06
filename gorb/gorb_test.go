@@ -19,7 +19,7 @@ import (
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "E2E Suite")
+	RunSpecs(t, "Gorb E2E Suite")
 }
 
 const (
@@ -161,12 +161,31 @@ var _ = Describe("Gorb", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should return an error when failing to add a backend", func() {
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
+			err := gorb.Update(controller.IngressEntries{})
+			Expect(len(gorbH.recordedRequests)).To(Equal(2))
+			Expect(err).To(HaveOccurred())
+		})
+
 	})
 
-	//Describe("Multiple backends", func() {
-	//It("should parse backend", func() {
-	//servicesDefinition = "http-proxy:80,https-proxy:443"
-	//})
+	Describe("Multiple services", func() {
+		It("should all have their backends", func() {
+			gorb, _ = New(serverURL, instanceIP, drainImmediately, "http-proxy:80,https-proxy:443", backendWeight, backendMethod, vipLoadbalancer, manageLoopback, intervalHealthcheck)
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
+			err := gorb.Update(controller.IngressEntries{})
+			Expect(len(gorbH.recordedRequests)).To(Equal(4))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(gorbH.recordedRequests[1].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-http-proxy-%s", instanceIP)))
+			Expect(gorbH.recordedRequests[1].body.Port).To(Equal(80))
 
-	//})
+			Expect(gorbH.recordedRequests[3].url.RequestURI()).To(Equal(fmt.Sprintf("/service/https-proxy/node-https-proxy-%s", instanceIP)))
+			Expect(gorbH.recordedRequests[3].body.Port).To(Equal(443))
+		})
+	})
 })
