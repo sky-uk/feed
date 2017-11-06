@@ -16,8 +16,8 @@ func initMetrics() {
 			prometheus.GaugeOpts{
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusIngressSubsystem,
-				Name:        "frontends_attached",
-				Help:        "The total number of frontends attached",
+				Name:        "gorb_frontennds_attached",
+				Help:        "The total number of frontends attached to Gorb",
 				ConstLabels: metrics.ConstLabels(),
 			})).(prometheus.Gauge)
 	})

@@ -47,7 +47,7 @@ var (
 	backendWeight                  int
 	vipLoadbalancer                string
 	manageLoopback                 bool
-    gorbIntervalHealthcheck        string
+	gorbIntervalHealthcheck        string
 )
 
 const unset = -1
@@ -85,10 +85,10 @@ func init() {
 		defaultInstanceIP                        = "127.0.0.1"
 		defaultBackendMethod                     = "dr"
 		defaultBackendWeight                     = 1000
-        defaultGorbServicesDefinition            = "http-proxy:80,https-proxy:443"
+		defaultGorbServicesDefinition            = "http-proxy:80,https-proxy:443"
 		defaultVipLoadbalancer                   = "127.0.0.1"
 		defaultManageLoopback                    = true
-        defaultGorbIntervalHealthcheck           = "1s"
+		defaultGorbIntervalHealthcheck           = "1s"
 	)
 
 	flag.BoolVar(&debug, "debug", false,

@@ -23,14 +23,14 @@ func TestE2E(t *testing.T) {
 }
 
 const (
-	instanceIP       = "10.10.0.1"
-	drainImmediately = 0
-    servicesDefinition = "http-proxy:80"
-    intervalHealthcheck = "1s"
-	backendWeight    = 1000
-	backendMethod    = "dr"
-	vipLoadbalancer  = "127.0.0.1"
-	manageLoopback   = false
+	instanceIP          = "10.10.0.1"
+	drainImmediately    = 0
+	servicesDefinition  = "http-proxy:80"
+	intervalHealthcheck = "1s"
+	backendWeight       = 1000
+	backendMethod       = "dr"
+	vipLoadbalancer     = "127.0.0.1"
+	manageLoopback      = false
 )
 
 type gorbResponsePrimer struct {
@@ -39,20 +39,19 @@ type gorbResponsePrimer struct {
 }
 
 type gorbRecordedRequest struct {
-	url  *url.URL
-	body *BackendConf
+	url    *url.URL
+	body   *BackendConfig
 	method string
 }
 
 type gorbHandler struct {
 	responsePrimers  []gorbResponsePrimer
 	recordedRequests []gorbRecordedRequest
-	requestCounter  int
+	requestCounter   int
 }
 
 func (h *gorbHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer func() { h.requestCounter++ }()
-    recordedRequest := gorbRecordedRequest{url: r.URL, body: &BackendConf{}, method: r.Method}
+	recordedRequest := gorbRecordedRequest{url: r.URL, body: &BackendConfig{}, method: r.Method}
 	h.recordedRequests = append(h.recordedRequests, recordedRequest)
 
 	log.Info("Recorded requests: ", len(h.recordedRequests))
@@ -68,7 +67,6 @@ func (h *gorbHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			panic(err.Error())
 		}
 	}
-    fmt.Println("debug server ", recordedRequest.body)
 
 	if h.responsePrimers[h.requestCounter].statusCode != 0 {
 		w.WriteHeader(h.responsePrimers[h.requestCounter].statusCode)
@@ -77,7 +75,7 @@ func (h *gorbHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data, _ := json.Marshal(h.responsePrimers[h.requestCounter].response)
 		w.Write(data)
 	}
-
+	h.requestCounter++
 }
 
 var _ = Describe("Gorb", func() {
@@ -85,7 +83,7 @@ var _ = Describe("Gorb", func() {
 		gorb             controller.Updater
 		server           *httptest.Server
 		serverURL        string
-		responsePrimers   []gorbResponsePrimer
+		responsePrimers  []gorbResponsePrimer
 		recordedRequests []gorbRecordedRequest
 		gorbH            *gorbHandler
 	)
@@ -165,10 +163,10 @@ var _ = Describe("Gorb", func() {
 
 	})
 
-    //Describe("Multiple backends", func() {
-      //It("should parse backend", func() {
-        //servicesDefinition = "http-proxy:80,https-proxy:443"
-      //})
+	//Describe("Multiple backends", func() {
+	//It("should parse backend", func() {
+	//servicesDefinition = "http-proxy:80,https-proxy:443"
+	//})
 
-    //})
+	//})
 })

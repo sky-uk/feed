@@ -17,27 +17,29 @@ import (
 	"strconv"
 	"strings"
 
+	"io"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/hashicorp/go-multierror"
 	"github.com/sky-uk/feed/controller"
 )
 
-// HealthcheckArgs define healthcheck path
+// HealthcheckArgs defines health check URI
 type HealthcheckArgs struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
 	Expect string `json:"expect"`
 }
 
-// Pulse define healthcheck
+// Pulse defines backend health check
 type Pulse struct {
-	TypeHealthcheck string   `json:"type"`
+	TypeHealthcheck string          `json:"type"`
 	Args            HealthcheckArgs `json:"args"`
-	Interval        string   `json:"interval"`
+	Interval        string          `json:"interval"`
 }
 
-// BackendConf define the backend configuration
-type BackendConf struct {
+// BackendConfig defines the backend configuration
+type BackendConfig struct {
 	Host   string `json:"host"`
 	Port   int    `json:"port"`
 	Method string `json:"method"`
@@ -45,10 +47,10 @@ type BackendConf struct {
 	Pulse  Pulse  `json:"pulse"`
 }
 
-// Backend define the backend configuration + service name
-type Backend struct {
-	ServiceName string
-	BackendConf BackendConf
+// Backend defines the backend configuration + service name
+type backend struct {
+	ServiceName   string
+	BackendConfig BackendConfig
 }
 
 // New creates a gorb handler
@@ -59,13 +61,13 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, gorb
 	initMetrics()
 	log.Infof("Gorb server url: %s, drainDelay: %v, instance ip adddress: %s, vipLoadbalancer: %s ", serverBaseURL, drainDelay, instanceIP, vipLoadbalancer)
 
-	backendDefinitions := []Backend{}
+	backendDefinitions := []backend{}
 	gorbServicesDefinitionArr := strings.Split(gorbServicesDefinition, ",")
 
-	var backend Backend
+	var backendDefinition backend
 	for _, service := range gorbServicesDefinitionArr {
 
-        servicesArr := strings.Split(service, ":")
+		servicesArr := strings.Split(service, ":")
 		port, err := strconv.Atoi(servicesArr[1])
 		if err != nil {
 			return nil, errors.New("Unable to convert port form string to int")
@@ -81,9 +83,9 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, gorb
 			TypeHealthcheck: "http",
 			Interval:        gorbIntervalHealthcheck,
 		}
-		backend = Backend{
+		backendDefinition = backend{
 			ServiceName: servicesArr[0],
-			BackendConf: BackendConf{
+			BackendConfig: BackendConfig{
 				Host:   instanceIP,
 				Port:   port,
 				Method: backendMethod,
@@ -92,16 +94,11 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, gorb
 			},
 		}
 
-		backendDefinitions = append(backendDefinitions, backend)
+		backendDefinitions = append(backendDefinitions, backendDefinition)
 	}
 
-	tr := &http.Transport{
-		MaxIdleConns:    10,
-		IdleConnTimeout: 30 * time.Second,
-	}
 	var httpClient = &http.Client{
-		Transport: tr,
-		Timeout:   time.Second * 5,
+		Timeout: time.Second * 5,
 	}
 
 	return &gorb{
@@ -121,7 +118,7 @@ type gorb struct {
 	instanceIP      string
 	vipLoadbalancer string
 	httpClient      *http.Client
-	backend         []Backend
+	backend         []backend
 	manageLoopback  bool
 }
 
@@ -139,12 +136,12 @@ func (g *gorb) manageLoopBack(action string, arpIgnore int, arpAnnounce int) err
 		_, errCmd := exec.Command("bash", "-c", cmd).Output()
 		errorArr = multierror.Append(errorArr, errCmd)
 
-        log.WithFields(log.Fields{"arp_ignore": arpIgnore}).Info("Set arp_ignore to: ")
+		log.WithFields(log.Fields{"arp_ignore": arpIgnore}).Info("Set arp_ignore to: ")
 		cmd = fmt.Sprintf("echo %d > /host-ipv4-proc/arp_ignore", arpIgnore)
 		_, errCmd = exec.Command("bash", "-c", cmd).Output()
 		errorArr = multierror.Append(errorArr, errCmd)
 
-        log.WithFields(log.Fields{"arp_announce": arpAnnounce}).Info("Set arp_announce to: ")
+		log.WithFields(log.Fields{"arp_announce": arpAnnounce}).Info("Set arp_announce to: ")
 		cmd = fmt.Sprintf("echo %d > /host-ipv4-proc/arp_announce", arpAnnounce)
 		_, errCmd = exec.Command("bash", "-c", cmd).Output()
 		errorArr = multierror.Append(errorArr, errCmd)
@@ -155,10 +152,9 @@ func (g *gorb) manageLoopBack(action string, arpIgnore int, arpAnnounce int) err
 
 // Stop removes this instance from Gorb
 func (g *gorb) Stop() error {
-
 	var errorArr *multierror.Error
 	for _, backend := range g.backend {
-		backend.BackendConf.Weight = 0
+		backend.BackendConfig.Weight = 0
 		err := g.modifyBackend(&backend)
 		if err != nil {
 			log.WithFields(log.Fields{"err": err}).Error("Unable to set the backend weight to 0")
@@ -192,20 +188,18 @@ func (g *gorb) Stop() error {
 func (g *gorb) Health() error {
 	resp, err := g.httpClient.Get(fmt.Sprintf("%s/service", g.serverBaseURL))
 	if err != nil {
-		return fmt.Errorf("Unable to check service details: %v", err)
+		return fmt.Errorf("unable to check service details: %v", err)
 	}
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Gorb server is not healthy. Status code: %d, Response Body %s", resp.StatusCode, resp.Body)
+		return fmt.Errorf("gorb server is not healthy. Status code: %d, Response Body %s", resp.StatusCode, resp.Body)
 	}
 
 	return nil
 }
 
 func (g *gorb) Update(controller.IngressEntries) error {
-
 	var errorArr *multierror.Error
-
 	if g.manageLoopback {
 		err := g.manageLoopBack("add", 1, 2)
 		errorArr = multierror.Append(errorArr, err)
@@ -215,13 +209,13 @@ func (g *gorb) Update(controller.IngressEntries) error {
 
 		backendExists, err := g.backendExists(&backend)
 		if err != nil {
-          log.WithFields(log.Fields{"err": err, "backend": backend }).Error("Unable to check if backend already exists")
+			log.WithFields(log.Fields{"err": err, "backend": backend}).Error("Unable to check if backend already exists")
 		}
 
 		if backendExists == 404 {
 			err := g.addBackend(&backend)
 			if err != nil {
-				log.WithFields(log.Fields{"err": err, "backend": backend }).Error("Error add Backend ")
+				log.WithFields(log.Fields{"err": err, "backend": backend}).Error("Error add Backend ")
 				errorArr = multierror.Append(errorArr, err)
 			} else {
 				log.WithFields(log.Fields{"backend": backend}).Infof("Backend added successfully")
@@ -232,69 +226,70 @@ func (g *gorb) Update(controller.IngressEntries) error {
 	return errorArr.ErrorOrNil()
 }
 
-func (g *gorb) backendExists(backend *Backend) (int, error) {
-	resp, err := g.httpClient.Get(fmt.Sprintf("%s/service/%s/node-%s-%s", g.serverBaseURL, backend.ServiceName, backend.ServiceName, g.instanceIP))
+func (g *gorb) backendExists(backend *backend) (int, error) {
+	resp, err := g.httpClient.Get(g.serviceRequest(backend))
 	if err != nil {
-		return 0, fmt.Errorf("Unable to retrieve backend details for instance ip: %s error :%v", g.instanceIP, err)
+		return 0, fmt.Errorf("unable to retrieve backend details for instance ip: %s error :%v", g.instanceIP, err)
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode, nil
 }
 
-func (g *gorb) addBackend(backend *Backend) error {
-	payload, err := json.Marshal(backend.BackendConf)
-
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/service/%s/node-%s-%s", g.serverBaseURL, backend.ServiceName, backend.ServiceName, g.instanceIP), bytes.NewBuffer(payload))
+func (g *gorb) addBackend(backend *backend) error {
+	payload, err := json.Marshal(backend.BackendConfig)
 	if err != nil {
-		return fmt.Errorf("Error while creating add backend request: %v", err)
+		return fmt.Errorf("error while marshalling backend: %v, error: %v", backend, err)
 	}
 
-	resp, err := g.httpClient.Do(req)
+	err = g.executeRequest("PUT", backend, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("Error while adding backend: %v, error: %v", backend, err)
-	}
-	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		log.WithFields(log.Fields{"StatusCode": resp.StatusCode}).Infof("Error PUT add backend")
-		return fmt.Errorf("Failed to add backend: %v, status code: %d, response: %v", backend, resp.StatusCode, body)
+		return fmt.Errorf("error while adding backend: %v, error: %v", backend, err)
 	}
 	return nil
 }
 
-func (g *gorb) modifyBackend(backend *Backend) error {
-	payload, err := json.Marshal(backend.BackendConf)
-
-	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/service/%s/node-%s-%s", g.serverBaseURL, backend.ServiceName, backend.ServiceName, g.instanceIP), bytes.NewBuffer(payload))
-
-	resp, err := g.httpClient.Do(req)
+func (g *gorb) modifyBackend(backend *backend) error {
+	payload, err := json.Marshal(backend.BackendConfig)
 	if err != nil {
-		return fmt.Errorf("Error while modifying backend: %v, error: %v", backend, err)
+		return fmt.Errorf("error while marshalling backend: %v, error: %v", backend, err)
 	}
-	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		log.WithFields(log.Fields{"StatusCode": resp.StatusCode}).Infof("Error PATCH modification backend")
-		return fmt.Errorf("Failed to modify backend: %v, status code: %d, response: %v", backend, resp.StatusCode, body)
+
+	err = g.executeRequest("PATCH", backend, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("error while modifying backend: %v, error: %v", backend, err)
 	}
 	return nil
 }
 
-func (g *gorb) removeBackend(backend *Backend) error {
-
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/service/%s/node-%s-%s", g.serverBaseURL, backend.ServiceName, backend.ServiceName, g.instanceIP), nil)
+func (g *gorb) removeBackend(backend *backend) error {
+	err := g.executeRequest("DELETE", backend, nil)
 	if err != nil {
-		return fmt.Errorf("Error while creating add backend request: %v", err)
+		return fmt.Errorf("error while removing backend: %v, error: %v", backend, err)
+	}
+	return nil
+}
+
+func (g *gorb) executeRequest(method string, backend *backend, payload io.Reader) error {
+	req, err := http.NewRequest(method, g.serviceRequest(backend), payload)
+	if err != nil {
+		return fmt.Errorf("error while creating %s request: %v", method, err)
 	}
 
 	resp, err := g.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("Error while removing backend, error: %v", err)
+		return fmt.Errorf("error while sending %s backend request, error: %v", method, err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		body, _ := ioutil.ReadAll(resp.Body)
-		log.WithFields(log.Fields{"StatusCode": resp.StatusCode}).Infof("Error removing backend")
-		return fmt.Errorf("Failed to remove backend, status code: %d, response: %v", resp.StatusCode, body)
+		log.WithFields(log.Fields{"StatusCode": resp.StatusCode}).Infof("Error while sending %s backend request", method)
+		return fmt.Errorf("failed to send %s backend request, status code: %d, response: %v", method, resp.StatusCode, body)
 	}
 	return nil
+}
+
+func (g *gorb) serviceRequest(backend *backend) string {
+	return fmt.Sprintf("%s/service/%s/node-%s-%s", g.serverBaseURL, backend.ServiceName, backend.ServiceName, g.instanceIP)
 }
 
 func (g *gorb) String() string {
