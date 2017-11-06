@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
@@ -136,28 +138,32 @@ func (m *mockR53Client) mockGetHostedZoneDomain() {
 	m.On("GetHostedZoneDomain").Return(domain, nil)
 }
 
-func setupForELB() (*updater, *mockR53Client, *mockELB, *mockALB) {
-	dnsUpdater := New(hostedZoneID, awsRegion, nil, "", albNames, 1).(*updater)
+func setupForELB() (*updater, *mockR53Client, *mockELB, *mockALB, *awsAdapter) {
+	lbAdapter, _ := NewAWSAdapter(awsRegion, hostedZoneID, "", albNames)
+	awsAdapter := lbAdapter.(*awsAdapter)
+	dnsUpdater := New(hostedZoneID, lbAdapter, awsRegion, 1).(*updater)
+
 	mockR53 := &mockR53Client{}
 	dnsUpdater.r53 = mockR53
 	mockELB := &mockELB{}
 	mockALB := &mockALB{}
-	dnsUpdater.findELBs = mockELB.FindFrontEndElbs
-	dnsUpdater.alb = mockALB
-	return dnsUpdater, mockR53, mockELB, mockALB
+	awsAdapter.findFrontEndElbs = mockELB.FindFrontEndElbs
+	awsAdapter.alb = mockALB
+	return dnsUpdater, mockR53, mockELB, mockALB, awsAdapter
 }
 
 func setupForExplicitAddresses() (*updater, *mockR53Client) {
 	addresses := map[string]string{internalScheme: internalAddressArgument, externalScheme: externalAddressArgument}
+	lbAdapter := NewStaticHostnameAdapter(addresses, 5*time.Minute)
 
-	dnsUpdater := New(hostedZoneID, awsRegion, addresses, "", albNames, 1).(*updater)
+	dnsUpdater := New(hostedZoneID, lbAdapter, awsRegion, 1).(*updater)
 	mockR53 := &mockR53Client{}
 	dnsUpdater.r53 = mockR53
 	return dnsUpdater, mockR53
 }
 
 func TestFailsToQueryFrontends(t *testing.T) {
-	dnsUpdater, mockR53, _, mockALB := setupForELB()
+	dnsUpdater, mockR53, _, mockALB, _ := setupForELB()
 	mockALB.mockDescribeLoadBalancers(albNames, nil, errors.New("doh"))
 	mockR53.mockGetHostedZoneDomain()
 
@@ -167,25 +173,25 @@ func TestFailsToQueryFrontends(t *testing.T) {
 }
 
 func TestQueryFrontendElbsFails(t *testing.T) {
-	dnsUpdater, mockR53, mockELB, _ := setupForELB()
-	dnsUpdater.albNames = nil
-	dnsUpdater.elbLabelValue = elbLabelValue
-	mockELB.mockFindFrontEndElbs(elbLabelValue, nil, errors.New("Nope"))
+	dnsUpdater, mockR53, mockELB, _, awsAdapter := setupForELB()
+	awsAdapter.albNames = nil
+	awsAdapter.elbLabelValue = elbLabelValue
+	mockELB.mockFindFrontEndElbs(elbLabelValue, nil, errors.New("nope"))
 	mockR53.mockGetHostedZoneDomain()
 
 	err := dnsUpdater.Start()
 
-	assert.EqualError(t, err, "unable to find front end load balancers: Nope")
+	assert.EqualError(t, err, "unable to find front end load balancers: nope")
 }
 
 func TestQueryFrontendElbsTrailingDotOnDomain(t *testing.T) {
-	dnsUpdater, mockR53, mockELB, _ := setupForELB()
+	dnsUpdater, mockR53, mockELB, _, awsAdapter := setupForELB()
 	lbDetWithDot := []lbDetail{
 		{scheme: internalScheme, dnsName: internalALBDnsName},
 		{scheme: externalScheme, dnsName: externalALBDnsNameWithPeriod},
 	}
-	dnsUpdater.albNames = nil
-	dnsUpdater.elbLabelValue = elbLabelValue
+	awsAdapter.albNames = nil
+	awsAdapter.elbLabelValue = elbLabelValue
 	mockELB.mockFindFrontEndElbs(elbLabelValue, lbDetWithDot, nil)
 	mockR53.mockGetHostedZoneDomain()
 
@@ -195,24 +201,24 @@ func TestQueryFrontendElbsTrailingDotOnDomain(t *testing.T) {
 }
 
 func TestQueryFrontedElbs(t *testing.T) {
-	dnsUpdater, mockR53, mockELB, _ := setupForELB()
-	dnsUpdater.albNames = nil
-	dnsUpdater.elbLabelValue = elbLabelValue
+	dnsUpdater, mockR53, mockELB, _, awsAdapter := setupForELB()
+	awsAdapter.albNames = nil
+	awsAdapter.elbLabelValue = elbLabelValue
 	mockELB.mockFindFrontEndElbs(elbLabelValue, lbDetails, nil)
 	mockR53.mockGetHostedZoneDomain()
 
 	assert.NoError(t, dnsUpdater.Start())
 	assert.Equal(t, map[string]dnsDetails{
-		internalScheme: dnsDetails{dnsName: internalALBDnsNameWithPeriod, hostedZoneID: lbHostedZoneID},
-		externalScheme: dnsDetails{dnsName: externalALBDnsNameWithPeriod, hostedZoneID: lbHostedZoneID},
+		internalScheme: {dnsName: internalALBDnsNameWithPeriod, hostedZoneID: lbHostedZoneID},
+		externalScheme: {dnsName: externalALBDnsNameWithPeriod, hostedZoneID: lbHostedZoneID},
 	}, dnsUpdater.schemeToDNS)
 	mockR53.AssertExpectations(t)
 }
 
 func TestGetsDomainNameFails(t *testing.T) {
-	dnsUpdater, mockR53, _, mockALB := setupForELB()
+	dnsUpdater, mockR53, _, mockALB, _ := setupForELB()
 	mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
-	mockR53.On("GetHostedZoneDomain").Return("", errors.New("No domain for you"))
+	mockR53.On("GetHostedZoneDomain").Return("", errors.New("no domain for you"))
 
 	err := dnsUpdater.Start()
 
@@ -221,7 +227,7 @@ func TestGetsDomainNameFails(t *testing.T) {
 
 func TestUpdateRecordSetFail(t *testing.T) {
 	// given
-	dnsUpdater, mockR53, _, mockALB := setupForELB()
+	dnsUpdater, mockR53, _, mockALB, _ := setupForELB()
 	mockR53.mockGetHostedZoneDomain()
 	mockR53.mockGetRecords(nil, nil)
 	mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
@@ -265,7 +271,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				Action: aws.String("UPSERT"),
 				ResourceRecordSet: &route53.ResourceRecordSet{
 					Name: aws.String("cats.james.com."),
-					Type: aws.String("A"),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -285,6 +291,7 @@ func TestRecordSetUpdates(t *testing.T) {
 			}},
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("foo.james.com."),
+				Type: aws.String(route53.RRTypeA),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String(internalALBDnsNameWithPeriod),
 					HostedZoneId:         aws.String(lbHostedZoneID),
@@ -295,7 +302,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				Action: aws.String("UPSERT"),
 				ResourceRecordSet: &route53.ResourceRecordSet{
 					Name: aws.String("foo.james.com."),
-					Type: aws.String("A"),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(externalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -310,6 +317,7 @@ func TestRecordSetUpdates(t *testing.T) {
 			[]*route53.ResourceRecordSet{
 				{
 					Name: aws.String("foo.com."),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -318,6 +326,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				},
 				{
 					Name: aws.String("bar.com."),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(unassocALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -329,7 +338,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				Action: aws.String("DELETE"),
 				ResourceRecordSet: &route53.ResourceRecordSet{
 					Name: aws.String("foo.com."),
-					Type: aws.String("A"),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -350,6 +359,7 @@ func TestRecordSetUpdates(t *testing.T) {
 			[]*route53.ResourceRecordSet{
 				{
 					Name: aws.String("bar.james.com."),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -358,6 +368,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				},
 				{
 					Name: aws.String("baz.james.com."),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(unassocALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -369,7 +380,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				Action: aws.String("UPSERT"),
 				ResourceRecordSet: &route53.ResourceRecordSet{
 					Name: aws.String("foo.james.com."),
-					Type: aws.String("A"),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -380,7 +391,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					Action: aws.String("DELETE"),
 					ResourceRecordSet: &route53.ResourceRecordSet{
 						Name: aws.String("bar.james.com."),
-						Type: aws.String("A"),
+						Type: aws.String(route53.RRTypeA),
 						AliasTarget: &route53.AliasTarget{
 							DNSName:              aws.String(internalALBDnsNameWithPeriod),
 							HostedZoneId:         aws.String(lbHostedZoneID),
@@ -443,7 +454,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				Action: aws.String("UPSERT"),
 				ResourceRecordSet: &route53.ResourceRecordSet{
 					Name: aws.String("foo.james.com."),
-					Type: aws.String("A"),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(internalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -475,7 +486,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				Action: aws.String("UPSERT"),
 				ResourceRecordSet: &route53.ResourceRecordSet{
 					Name: aws.String("bar.james.com."),
-					Type: aws.String("A"),
+					Type: aws.String(route53.RRTypeA),
 					AliasTarget: &route53.AliasTarget{
 						DNSName:              aws.String(externalALBDnsNameWithPeriod),
 						HostedZoneId:         aws.String(lbHostedZoneID),
@@ -495,6 +506,7 @@ func TestRecordSetUpdates(t *testing.T) {
 			}},
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("foo.james.com."),
+				Type: aws.String(route53.RRTypeA),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:              aws.String(externalALBDnsNameWithPeriod),
 					HostedZoneId:         aws.String(lbHostedZoneID),
@@ -508,7 +520,7 @@ func TestRecordSetUpdates(t *testing.T) {
 	for _, test := range tests {
 		fmt.Printf("=== test: %s\n", test.name)
 
-		dnsUpdater, mockR53, _, mockALB := setupForELB()
+		dnsUpdater, mockR53, _, mockALB, _ := setupForELB()
 		mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
 		mockR53.mockGetHostedZoneDomain()
 		mockR53.mockGetRecords(test.records, nil)
@@ -526,7 +538,7 @@ func TestRecordSetUpdates(t *testing.T) {
 }
 
 func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
-	ttl := int64(300)
+	ttl := aws.Int64(300)
 	var tests = []struct {
 		name            string
 		update          controller.IngressEntries
@@ -559,12 +571,12 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
-					TTL: &ttl,
+					TTL: ttl,
 				},
 			}},
 		},
 		{
-			"Updating existing record to a new elb schema",
+			"Updating existing record to a new scheme",
 			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -574,6 +586,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 			}},
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("foo.james.com."),
+				Type: aws.String(route53.RRTypeCname),
 				ResourceRecords: []*route53.ResourceRecord{
 					{
 						Value: aws.String(internalAddressArgument),
@@ -590,7 +603,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(externalAddressArgument),
 						},
 					},
-					TTL: &ttl,
+					TTL: ttl,
 				},
 			}},
 		},
@@ -600,6 +613,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 			[]*route53.ResourceRecordSet{
 				{
 					Name: aws.String("foo.com."),
+					Type: aws.String(route53.RRTypeCname),
 					ResourceRecords: []*route53.ResourceRecord{
 						{
 							Value: aws.String(internalAddressArgument),
@@ -608,6 +622,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 				},
 				{
 					Name: aws.String("bar.com."),
+					Type: aws.String(route53.RRTypeCname),
 					ResourceRecords: []*route53.ResourceRecord{
 						{
 							Value: aws.String("some-ingress-we-dont-manage.james.com"),
@@ -625,7 +640,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
-					TTL: &ttl,
+					TTL: ttl,
 				},
 			}},
 		},
@@ -641,6 +656,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 			[]*route53.ResourceRecordSet{
 				{
 					Name: aws.String("bar.james.com."),
+					Type: aws.String(route53.RRTypeCname),
 					ResourceRecords: []*route53.ResourceRecord{
 						{
 							Value: aws.String(internalAddressArgument),
@@ -649,6 +665,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 				},
 				{
 					Name: aws.String("baz.james.com."),
+					Type: aws.String(route53.RRTypeCname),
 					ResourceRecords: []*route53.ResourceRecord{
 						{
 							Value: aws.String("somerandom-ingress.s.sandbox.james.com"),
@@ -666,7 +683,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
-					TTL: &ttl,
+					TTL: ttl,
 				}},
 				{
 					Action: aws.String("DELETE"),
@@ -678,7 +695,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 								Value: aws.String(internalAddressArgument),
 							},
 						},
-						TTL: &ttl,
+						TTL: ttl,
 					},
 				},
 			},
@@ -742,13 +759,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
-					TTL: &ttl,
-					//Type: aws.String("A"),
-					//AliasTarget: &route53.AliasTarget{
-					//	DNSName:              aws.String(internalALBDnsNameWithPeriod),
-					//	HostedZoneId:         aws.String(lbHostedZoneID),
-					//	EvaluateTargetHealth: aws.Bool(false),
-					//},
+					TTL: ttl,
 				},
 			}},
 		},
@@ -781,7 +792,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(externalAddressArgument),
 						},
 					},
-					TTL: &ttl,
+					TTL: ttl,
 				},
 			}},
 		},
@@ -796,6 +807,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 			}},
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("foo.james.com."),
+				Type: aws.String(route53.RRTypeCname),
 				ResourceRecords: []*route53.ResourceRecord{
 					{
 						Value: aws.String(externalAddressArgument),

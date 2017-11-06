@@ -31,10 +31,15 @@ func New(region string, labelValue string, expectedNumber int, drainDelay time.D
 	}
 	initMetrics()
 	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, labelValue, expectedNumber)
-	metadata := ec2metadata.New(session.New())
+
+	session, err := session.NewSession(&aws.Config{Region: &region})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create ELB updater: %v", err)
+	}
+
 	return &elb{
-		metadata:       metadata,
-		awsElb:         aws_elb.New(session.New(&aws.Config{Region: &region})),
+		metadata:       ec2metadata.New(session),
+		awsElb:         aws_elb.New(session),
 		labelValue:     labelValue,
 		region:         region,
 		expectedNumber: expectedNumber,

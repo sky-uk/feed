@@ -6,65 +6,44 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	aws_elb "github.com/aws/aws-sdk-go/service/elb"
-	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/dns/r53"
-	"github.com/sky-uk/feed/elb"
 )
 
 type hostToIngress map[string]controller.IngressEntry
-type findELBsFunc func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error)
 type dnsDetails struct {
 	dnsName      string
 	hostedZoneID string
 }
 
-type record struct {
+type consolidatedRecord struct {
 	name            string
 	pointsTo        string
 	aliasHostedZone string
 }
 
 type updater struct {
-	r53           r53.Route53Client
-	hostedZoneID  string
-	elb           elb.ELB
-	alb           ALB
-	schemeToDNS   map[string]dnsDetails
-	albNames      []string
-	elbLabelValue string
-	domain        string
-	findELBs      findELBsFunc
+	r53         r53.Route53Client
+	schemeToDNS map[string]dnsDetails
+	domain      string
+	lbAdapter   LoadBalancerAdapter
 }
 
-// ALB represents the subset of AWS operations needed for dns_updater.go
-type ALB interface {
-	DescribeLoadBalancers(input *aws_alb.DescribeLoadBalancersInput) (*aws_alb.DescribeLoadBalancersOutput, error)
+// LoadBalancerAdapter defines operations which vary based on the type of load balancer being used for ingress.
+type LoadBalancerAdapter interface {
+	newChange(action string, host string, details dnsDetails) *route53.Change
+	initialise(schemeToDNS map[string]dnsDetails) error
 }
 
 // New creates an updater for dns
-func New(hostedZoneID, region string, addressesWithScheme map[string]string, elbLabelValue string, albNames []string, retries int) controller.Updater {
+func New(hostedZoneID string, lbAdapter LoadBalancerAdapter, region string, retries int) controller.Updater {
 	initMetrics()
-	session := session.New(&aws.Config{Region: &region})
-
-	schemeToDNS := make(map[string]dnsDetails)
-	for scheme, address := range addressesWithScheme {
-		schemeToDNS[scheme] = dnsDetails{dnsName: address, hostedZoneID: ""}
-	}
 
 	return &updater{
-		r53:           r53.New(region, hostedZoneID, retries),
-		hostedZoneID:  hostedZoneID,
-		elb:           aws_elb.New(session),
-		alb:           aws_alb.New(session),
-		albNames:      albNames,
-		elbLabelValue: elbLabelValue,
-		findELBs:      elb.FindFrontEndElbs,
-		schemeToDNS:   schemeToDNS,
+		r53:         r53.New(region, hostedZoneID, retries),
+		lbAdapter:   lbAdapter,
+		schemeToDNS: make(map[string]dnsDetails),
 	}
 }
 
@@ -75,19 +54,8 @@ func (u *updater) String() string {
 func (u *updater) Start() error {
 	log.Info("Starting dns updater")
 
-	if len(u.schemeToDNS) == 0 {
-		if u.elbLabelValue != "" && len(u.albNames) > 0 {
-			return fmt.Errorf("can't specify both elb label value (%s) and alb names (%v) - only one or the other may be"+
-				" specified", u.elbLabelValue, u.albNames)
-		}
-
-		if err := u.initELBs(); err != nil {
-			return err
-		}
-
-		if err := u.initALBs(); err != nil {
-			return err
-		}
+	if err := u.lbAdapter.initialise(u.schemeToDNS); err != nil {
+		return err
 	}
 
 	domain, err := u.r53.GetHostedZoneDomain()
@@ -97,56 +65,6 @@ func (u *updater) Start() error {
 	u.domain = domain
 
 	log.Info("Dns updater started")
-	return nil
-}
-
-func (u *updater) initELBs() error {
-	if u.elbLabelValue == "" {
-		return nil
-	}
-
-	elbs, err := u.findELBs(u.elb, u.elbLabelValue)
-	if err != nil {
-		return fmt.Errorf("unable to find front end load balancers: %v", err)
-	}
-
-	u.schemeToDNS = make(map[string]dnsDetails)
-	for scheme, lbDetails := range elbs {
-		if strings.HasSuffix(lbDetails.DNSName, ".") {
-			return fmt.Errorf("unexpected trailing dot on load balancer DNS name: %s", lbDetails.DNSName)
-		}
-
-		u.schemeToDNS[scheme] = dnsDetails{dnsName: lbDetails.DNSName + ".", hostedZoneID: lbDetails.HostedZoneID}
-	}
-
-	return nil
-}
-
-func (u *updater) initALBs() error {
-	if len(u.albNames) == 0 {
-		return nil
-	}
-
-	u.schemeToDNS = make(map[string]dnsDetails)
-	req := &aws_alb.DescribeLoadBalancersInput{Names: aws.StringSlice(u.albNames)}
-
-	for {
-		resp, err := u.alb.DescribeLoadBalancers(req)
-		if err != nil {
-			return err
-		}
-
-		for _, lb := range resp.LoadBalancers {
-			u.schemeToDNS[*lb.Scheme] = dnsDetails{dnsName: *lb.DNSName + ".", hostedZoneID: *lb.CanonicalHostedZoneId}
-		}
-
-		if resp.NextMarker == nil {
-			break
-		}
-
-		req.Marker = resp.NextMarker
-	}
-
 	return nil
 }
 
@@ -167,7 +85,7 @@ func (u *updater) Update(entries controller.IngressEntries) error {
 	}
 
 	// Flatten Alias (A) and CNAME records into a common structure
-	records := u.flattenRoute53ResourceRecordSet(route53Records)
+	records := u.consolidateRecordsFromRoute53(route53Records)
 
 	records = u.determineManagedRecordSets(records)
 	recordsGauge.Set(float64(len(records)))
@@ -185,20 +103,20 @@ func (u *updater) Update(entries controller.IngressEntries) error {
 	return nil
 }
 
-func (u *updater) flattenRoute53ResourceRecordSet(rrs []*route53.ResourceRecordSet) []record {
-	var records []record
+func (u *updater) consolidateRecordsFromRoute53(rrs []*route53.ResourceRecordSet) []consolidatedRecord {
+	var records []consolidatedRecord
 
 	for _, recordSet := range rrs {
-		if len(recordSet.ResourceRecords) == 1 {
-			records = append(records, record{
-				name:     *recordSet.Name,
-				pointsTo: *recordSet.ResourceRecords[0].Value,
-			})
-		} else {
-			records = append(records, record{
+		if *recordSet.Type == route53.RRTypeA && recordSet.AliasTarget != nil {
+			records = append(records, consolidatedRecord{
 				name:            *recordSet.Name,
 				pointsTo:        *recordSet.AliasTarget.DNSName,
 				aliasHostedZone: *recordSet.AliasTarget.HostedZoneId,
+			})
+		} else if *recordSet.Type == route53.RRTypeCname {
+			records = append(records, consolidatedRecord{
+				name:     *recordSet.Name,
+				pointsTo: *recordSet.ResourceRecords[0].Value,
 			})
 		}
 	}
@@ -206,12 +124,12 @@ func (u *updater) flattenRoute53ResourceRecordSet(rrs []*route53.ResourceRecordS
 	return records
 }
 
-func (u *updater) determineManagedRecordSets(rrs []record) []record {
+func (u *updater) determineManagedRecordSets(rrs []consolidatedRecord) []consolidatedRecord {
 	managedLBs := make(map[string]bool)
 	for _, dns := range u.schemeToDNS {
 		managedLBs[dns.dnsName] = true
 	}
-	var managed []record
+	var managed []consolidatedRecord
 	var nonManaged []string
 	for _, rec := range rrs {
 		if rec.name != "" && managedLBs[rec.pointsTo] {
@@ -228,7 +146,7 @@ func (u *updater) determineManagedRecordSets(rrs []record) []record {
 	return managed
 }
 
-func (u *updater) calculateChanges(originalRecords []record,
+func (u *updater) calculateChanges(originalRecords []consolidatedRecord,
 	entries controller.IngressEntries) []*route53.Change {
 
 	log.Infof("Current %s records: %v", u.domain, originalRecords)
@@ -280,12 +198,12 @@ func (u *updater) indexByHost(entries []controller.IngressEntry) (hostToIngress,
 }
 
 func (u *updater) createChanges(hostToIngress hostToIngress,
-	originalRecords []record) ([]*route53.Change, []string) {
+	originalRecords []consolidatedRecord) ([]*route53.Change, []string) {
 
 	type recordKey struct{ host, elbDNSName string }
 	var skipped []string
 	changes := []*route53.Change{}
-	indexedRecords := make(map[recordKey]record)
+	indexedRecords := make(map[recordKey]consolidatedRecord)
 	for _, rec := range originalRecords {
 		indexedRecords[recordKey{rec.name, rec.pointsTo}] = rec
 	}
@@ -299,45 +217,15 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 		}
 
 		if _, recordExists := indexedRecords[recordKey{host, dnsDetails.dnsName}]; !recordExists {
-			changes = append(changes, newChange("UPSERT", host, dnsDetails.dnsName, dnsDetails.hostedZoneID))
+			changes = append(changes, u.lbAdapter.newChange("UPSERT", host, dnsDetails))
 		}
 	}
 
 	for _, rec := range originalRecords {
 		if _, contains := hostToIngress[rec.name]; !contains {
-			changes = append(changes, newChange("DELETE", rec.name, rec.pointsTo, rec.aliasHostedZone))
+			changes = append(changes, u.lbAdapter.newChange("DELETE", rec.name, dnsDetails{rec.pointsTo, rec.aliasHostedZone}))
 		}
 	}
 
 	return changes, skipped
-}
-
-func newChange(action string, host string, targetElbDNSName string, targetElbHostedZoneID string) *route53.Change {
-	set := &route53.ResourceRecordSet{
-		Name: aws.String(host),
-	}
-
-	if targetElbHostedZoneID != "" {
-		set.Type = aws.String("A")
-		set.AliasTarget = &route53.AliasTarget{
-			DNSName:      aws.String(targetElbDNSName),
-			HostedZoneId: aws.String(targetElbHostedZoneID),
-			// disable this since we only point to a single load balancer
-			EvaluateTargetHealth: aws.Bool(false),
-		}
-	} else {
-		ttl := int64(300)
-		set.Type = aws.String("CNAME")
-		set.TTL = &ttl
-		set.ResourceRecords = []*route53.ResourceRecord{
-			{
-				Value: aws.String(targetElbDNSName),
-			},
-		}
-	}
-
-	return &route53.Change{
-		Action:            aws.String(action),
-		ResourceRecordSet: set,
-	}
 }
