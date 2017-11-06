@@ -7,6 +7,8 @@ import (
 
 	"time"
 
+	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
@@ -39,14 +41,14 @@ var (
 	nginxLogHeaders                cmd.CommaSeparatedValues
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
 	legacyBackendKeepaliveSeconds  int
-	registrationLoadbalancerType   string
+	registrationFrontendType       string
+	ingressInstanceIP              string
 	gorbEndpoint                   string
-	instanceIP                     string
 	gorbServicesDefinition         string
-	backendMethod                  string
-	backendWeight                  int
-	vipLoadbalancer                string
-	manageLoopback                 bool
+	gorbBackendMethod              string
+	gorbBackendWeight              int
+	gorbVipLoadbalancer            string
+	gorbManageLoopback             bool
 	gorbIntervalHealthcheck        string
 )
 
@@ -80,14 +82,14 @@ func init() {
 		defaultElbExpectedNumber                 = 0
 		defaultPushgatewayIntervalSeconds        = 60
 		defaultAccessLogDir                      = "/var/log/nginx"
-		defaultRegistrationLoadbalancerType      = "elb"
+		defaultRegistrationFrontendType          = "elb"
+		defaultIngressInstanceIP                 = "127.0.0.1"
 		defaultGorbEndpoint                      = "http://127.0.0.1:80"
-		defaultInstanceIP                        = "127.0.0.1"
-		defaultBackendMethod                     = "dr"
-		defaultBackendWeight                     = 1000
+		defaultGorbBackendMethod                 = "dr"
+		defaultGorbBackendWeight                 = 1000
 		defaultGorbServicesDefinition            = "http-proxy:80,https-proxy:443"
-		defaultVipLoadbalancer                   = "127.0.0.1"
-		defaultManageLoopback                    = true
+		defaultGorbVipLoadbalancer               = "127.0.0.1"
+		defaultGorbManageLoopback                = true
 		defaultGorbIntervalHealthcheck           = "1s"
 	)
 
@@ -152,7 +154,8 @@ func init() {
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
 	flag.StringVar(&gorbEndpoint, "gorb-endpoint", defaultGorbEndpoint, "Define the endpoint to talk to gorb for registration.")
-	flag.StringVar(&instanceIP, "instance-ip", defaultInstanceIP, "Define the instance ip, the ip of the node where feed-ingress is running.")
+	flag.StringVar(&ingressInstanceIP, "ingress-instance-ip", defaultIngressInstanceIP,
+		"Define the ingress instance ip, the ip of the node where feed-ingress is running.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
 	flag.Var(&nginxLogHeaders, "nginx-log-headers", "Comma separated list of headers to be logged in access logs")
 	flag.Var(&nginxTrustedFrontends, "nginx-trusted-frontends",
@@ -165,8 +168,8 @@ func init() {
 
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
-	flag.StringVar(&registrationLoadbalancerType, "registration-loadbalancer-type", defaultRegistrationLoadbalancerType,
-		"Define the registration loadbalancer type")
+	flag.StringVar(&registrationFrontendType, "registration-frontend-type", defaultRegistrationFrontendType,
+		"Define the registration frontend type. Must be gorb, elb or alb.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
@@ -185,15 +188,16 @@ func init() {
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
-	flag.StringVar(&gorbServicesDefinition, "services-name", defaultGorbServicesDefinition,
-		"Service Name to register to Gorb")
-	flag.StringVar(&backendMethod, "backend-method", defaultBackendMethod,
-		"Define the backend method for Gorb ")
-	flag.IntVar(&backendWeight, "backend-weight", defaultBackendWeight,
-		"Define the backend weight for Gorb")
-	flag.StringVar(&vipLoadbalancer, "vip-loadbalancer", defaultVipLoadbalancer,
-		"Define the vip loadbalancer to set the loopback, only necessary when Direct Return is enabled ")
-	flag.BoolVar(&manageLoopback, "management-loopback", defaultManageLoopback, "Enable loopback creation")
+	flag.StringVar(&gorbServicesDefinition, "gorb-services-definition", defaultGorbServicesDefinition,
+		"Comma separated list of Service Definition (e.g. 'http-proxy:80,https-proxy:443') to register via Gorb")
+	flag.StringVar(&gorbBackendMethod, "gorb-backend-method", defaultGorbBackendMethod,
+		"Define the backend method (e.g. nat, dr, tunnel) to register via Gorb ")
+	flag.IntVar(&gorbBackendWeight, "gorb-backend-weight", defaultGorbBackendWeight,
+		"Define the backend weight to register via Gorb")
+	flag.StringVar(&gorbVipLoadbalancer, "gorb-vip-loadbalancer", defaultGorbVipLoadbalancer,
+		"Define the vip loadbalancer to set the loopback. Only necessary when Direct Return is enabled.")
+	flag.BoolVar(&gorbManageLoopback, "gorb-management-loopback", defaultGorbManageLoopback,
+		"Enable loopback creation, necessary for Direct Return")
 	flag.StringVar(&gorbIntervalHealthcheck, "gorb-interval-healthcheck", defaultGorbIntervalHealthcheck,
 		"Define the gorb interval http healthcheck")
 
@@ -244,24 +248,26 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 
 	updaters := []controller.Updater{nginxUpdater}
 
-	if registrationLoadbalancerType == "elb" {
+	if registrationFrontendType == "elb" {
 		elbUpdater, err := elb.New(region, elbLabelValue, elbExpectedNumber, drainDelay)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, elbUpdater)
-	} else if registrationLoadbalancerType == "alb" {
+	} else if registrationFrontendType == "alb" {
 		albUpdater, err := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, albUpdater)
-	} else if registrationLoadbalancerType == "gorb" {
-		gorbUpdater, err := gorb.New(gorbEndpoint, instanceIP, drainDelay, gorbServicesDefinition, backendWeight, backendMethod, vipLoadbalancer, manageLoopback, gorbIntervalHealthcheck)
+	} else if registrationFrontendType == "gorb" {
+		gorbUpdater, err := gorb.New(gorbEndpoint, ingressInstanceIP, drainDelay, gorbServicesDefinition, gorbBackendWeight, gorbBackendMethod, gorbVipLoadbalancer, gorbManageLoopback, gorbIntervalHealthcheck)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, gorbUpdater)
+	} else {
+		return nil, fmt.Errorf("invalid Registration Frontend Type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
 	}
 
 	// update nginx before attaching to front ends
