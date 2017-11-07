@@ -19,6 +19,8 @@ import (
 
 	"io"
 
+	"path"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/hashicorp/go-multierror"
 	"github.com/sky-uk/feed/controller"
@@ -61,7 +63,7 @@ const (
 )
 
 // New creates a gorb handler
-func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, gorbServicesDefinition string, backendWeight int, backendMethod string, vipLoadbalancer string, manageLoopback bool, gorbIntervalHealthcheck string) (controller.Updater, error) {
+func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, servicesDefinition string, backendWeight int, backendMethod string, vipLoadbalancer string, manageLoopback bool, backendHealthcheckInterval string, interfaceProcFsPath string) (controller.Updater, error) {
 	if serverBaseURL == "" {
 		return nil, errors.New("unable to create Gorb updater: missing server ip address")
 	}
@@ -69,10 +71,10 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, gorb
 	log.Infof("Gorb server url: %s, drainDelay: %v, instance ip adddress: %s, vipLoadbalancer: %s ", serverBaseURL, drainDelay, instanceIP, vipLoadbalancer)
 
 	backendDefinitions := []backend{}
-	gorbServicesDefinitionArr := strings.Split(gorbServicesDefinition, ",")
+	servicesDefinitionArr := strings.Split(servicesDefinition, ",")
 
 	var backendDefinition backend
-	for _, service := range gorbServicesDefinitionArr {
+	for _, service := range servicesDefinitionArr {
 
 		servicesArr := strings.Split(service, ":")
 		port, err := strconv.Atoi(servicesArr[1])
@@ -88,7 +90,7 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, gorb
 		pulse := Pulse{
 			Args:            args,
 			TypeHealthcheck: "http",
-			Interval:        gorbIntervalHealthcheck,
+			Interval:        backendHealthcheckInterval,
 		}
 		backendDefinition = backend{
 			ServiceName: servicesArr[0],
@@ -109,24 +111,26 @@ func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, gorb
 	}
 
 	return &gorb{
-		serverBaseURL:   serverBaseURL,
-		drainDelay:      drainDelay,
-		instanceIP:      instanceIP,
-		vipLoadbalancer: vipLoadbalancer,
-		backend:         backendDefinitions,
-		httpClient:      httpClient,
-		manageLoopback:  manageLoopback,
+		serverBaseURL:       serverBaseURL,
+		drainDelay:          drainDelay,
+		instanceIP:          instanceIP,
+		vipLoadbalancer:     vipLoadbalancer,
+		backend:             backendDefinitions,
+		httpClient:          httpClient,
+		manageLoopback:      manageLoopback,
+		interfaceProcFsPath: interfaceProcFsPath,
 	}, nil
 }
 
 type gorb struct {
-	serverBaseURL   string
-	drainDelay      time.Duration
-	instanceIP      string
-	vipLoadbalancer string
-	httpClient      *http.Client
-	backend         []backend
-	manageLoopback  bool
+	serverBaseURL       string
+	drainDelay          time.Duration
+	instanceIP          string
+	vipLoadbalancer     string
+	httpClient          *http.Client
+	backend             []backend
+	manageLoopback      bool
+	interfaceProcFsPath string
 }
 
 func (g *gorb) Start() error {
@@ -159,12 +163,12 @@ func (g *gorb) manageLoopBack(action loopbackAction) error {
 		errorArr = multierror.Append(errorArr, errCmd)
 
 		log.WithFields(log.Fields{"arp_ignore": arpIgnore}).Info("Set arp_ignore to: ")
-		cmd = fmt.Sprintf("echo %d > /host-ipv4-proc/arp_ignore", arpIgnore)
+		cmd = fmt.Sprintf("echo %d > %s", arpIgnore, path.Join(g.interfaceProcFsPath, "arp_ignore"))
 		_, errCmd = exec.Command("bash", "-c", cmd).Output()
 		errorArr = multierror.Append(errorArr, errCmd)
 
 		log.WithFields(log.Fields{"arp_announce": arpAnnounce}).Info("Set arp_announce to: ")
-		cmd = fmt.Sprintf("echo %d > /host-ipv4-proc/arp_announce", arpAnnounce)
+		cmd = fmt.Sprintf("echo %d > %s", arpAnnounce, path.Join(g.interfaceProcFsPath, "arp_announce"))
 		_, errCmd = exec.Command("bash", "-c", cmd).Output()
 		errorArr = multierror.Append(errorArr, errCmd)
 	}

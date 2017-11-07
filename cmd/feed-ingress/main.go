@@ -21,15 +21,17 @@ import (
 )
 
 var (
-	debug                          bool
-	kubeconfig                     string
-	resyncPeriod                   time.Duration
-	ingressPort                    int
-	ingressHealthPort              int
-	healthPort                     int
-	region                         string
-	elbLabelValue                  string
-	elbExpectedNumber              int
+	debug             bool
+	kubeconfig        string
+	resyncPeriod      time.Duration
+	ingressPort       int
+	ingressHealthPort int
+	healthPort        int
+	region            string
+	elbLabelValue     string
+	elbExpectedNumber int
+	// Deprecated: retained to maintain backwards compatibility. Use drainDelay instead
+	legacyDrainDelay               time.Duration
 	drainDelay                     time.Duration
 	targetGroupNames               cmd.CommaSeparatedValues
 	targetGroupDeregistrationDelay time.Duration
@@ -49,50 +51,51 @@ var (
 	gorbBackendWeight              int
 	gorbVipLoadbalancer            string
 	gorbManageLoopback             bool
-	gorbIntervalHealthcheck        string
+	gorbBackendHealthcheckInterval string
+	gorbInterfaceProcFsPath        string
 )
 
-const unset = -1
+const (
+	unset                                    = -1
+	defaultResyncPeriod                      = time.Minute * 15
+	defaultIngressPort                       = 8080
+	defaultIngressAllow                      = "0.0.0.0/0"
+	defaultIngressHealthPort                 = 8081
+	defaultIngressStripPath                  = true
+	defaultHealthPort                        = 12082
+	defaultNginxBinary                       = "/usr/sbin/nginx"
+	defaultNginxWorkingDir                   = "/nginx"
+	defaultNginxWorkers                      = 1
+	defaultNginxWorkerConnections            = 1024
+	defaultNginxKeepAliveSeconds             = 60
+	defaultNginxBackendKeepalives            = 512
+	defaultNginxBackendTimeoutSeconds        = 60
+	defaultNginxBackendConnectTimeoutSeconds = 1
+	defaultNginxLogLevel                     = "warn"
+	defaultNginxServerNamesHashBucketSize    = unset
+	defaultNginxServerNamesHashMaxSize       = unset
+	defaultNginxProxyProtocol                = false
+	defaultNginxUpdatePeriod                 = time.Second * 30
+	defaultElbLabelValue                     = ""
+	defaultDrainDelay                        = time.Second * 30
+	defaultTargetGroupDeregistrationDelay    = time.Second * 300
+	defaultRegion                            = "eu-west-1"
+	defaultElbExpectedNumber                 = 0
+	defaultPushgatewayIntervalSeconds        = 60
+	defaultAccessLogDir                      = "/var/log/nginx"
+	defaultRegistrationFrontendType          = "elb"
+	defaultIngressInstanceIP                 = "127.0.0.1"
+	defaultGorbEndpoint                      = "http://127.0.0.1:80"
+	defaultGorbBackendMethod                 = "dr"
+	defaultGorbBackendWeight                 = 1000
+	defaultGorbServicesDefinition            = "http-proxy:80,https-proxy:443"
+	defaultGorbVipLoadbalancer               = "127.0.0.1"
+	defaultGorbManageLoopback                = true
+	defaultGorbInterfaceProcFsPath           = "/host-ipv4-proc/"
+	defaultGorbBackendHealthcheckInterval    = "1s"
+)
 
 func init() {
-	const (
-		defaultResyncPeriod                      = time.Minute * 15
-		defaultIngressPort                       = 8080
-		defaultIngressAllow                      = "0.0.0.0/0"
-		defaultIngressHealthPort                 = 8081
-		defaultIngressStripPath                  = true
-		defaultHealthPort                        = 12082
-		defaultNginxBinary                       = "/usr/sbin/nginx"
-		defaultNginxWorkingDir                   = "/nginx"
-		defaultNginxWorkers                      = 1
-		defaultNginxWorkerConnections            = 1024
-		defaultNginxKeepAliveSeconds             = 60
-		defaultNginxBackendKeepalives            = 512
-		defaultNginxBackendTimeoutSeconds        = 60
-		defaultNginxBackendConnectTimeoutSeconds = 1
-		defaultNginxLogLevel                     = "warn"
-		defaultNginxServerNamesHashBucketSize    = unset
-		defaultNginxServerNamesHashMaxSize       = unset
-		defaultNginxProxyProtocol                = false
-		defaultNginxUpdatePeriod                 = time.Second * 30
-		defaultElbLabelValue                     = ""
-		defaultDrainDelay                        = time.Second * 30
-		defaultTargetGroupDeregistrationDelay    = time.Second * 300
-		defaultRegion                            = "eu-west-1"
-		defaultElbExpectedNumber                 = 0
-		defaultPushgatewayIntervalSeconds        = 60
-		defaultAccessLogDir                      = "/var/log/nginx"
-		defaultRegistrationFrontendType          = "elb"
-		defaultIngressInstanceIP                 = "127.0.0.1"
-		defaultGorbEndpoint                      = "http://127.0.0.1:80"
-		defaultGorbBackendMethod                 = "dr"
-		defaultGorbBackendWeight                 = 1000
-		defaultGorbServicesDefinition            = "http-proxy:80,https-proxy:443"
-		defaultGorbVipLoadbalancer               = "127.0.0.1"
-		defaultGorbManageLoopback                = true
-		defaultGorbIntervalHealthcheck           = "1s"
-	)
-
 	flag.BoolVar(&debug, "debug", false,
 		"Enable debug logging.")
 	flag.StringVar(&kubeconfig, "kubeconfig", "",
@@ -173,7 +176,8 @@ func init() {
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
-	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
+	flag.DurationVar(&legacyDrainDelay, "elb-drain-delay", unset, "Deprecated. Used drain-delay instead.")
+	flag.DurationVar(&drainDelay, "drain-delay", unset, "Delay to wait"+
 		" for feed-ingress to drain from the registration component on shutdown. Should match the ELB's drain time.")
 	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
@@ -197,9 +201,11 @@ func init() {
 	flag.StringVar(&gorbVipLoadbalancer, "gorb-vip-loadbalancer", defaultGorbVipLoadbalancer,
 		"Define the vip loadbalancer to set the loopback. Only necessary when Direct Return is enabled.")
 	flag.BoolVar(&gorbManageLoopback, "gorb-management-loopback", defaultGorbManageLoopback,
-		"Enable loopback creation, necessary for Direct Return")
-	flag.StringVar(&gorbIntervalHealthcheck, "gorb-interval-healthcheck", defaultGorbIntervalHealthcheck,
-		"Define the gorb interval http healthcheck")
+		"Enable loopback creation. Only necessary when Direct Return is enabled")
+	flag.StringVar(&gorbInterfaceProcFsPath, "gorb-interface-proc-fs-path", defaultGorbInterfaceProcFsPath,
+		"Path to the interface proc file system. Only necessary when Direct Return is enabled")
+	flag.StringVar(&gorbBackendHealthcheckInterval, "gorb-backend-healthcheck-interval", defaultGorbBackendHealthcheckInterval,
+		"Define the gorb interval http healthcheck for the backend")
 
 }
 
@@ -246,6 +252,12 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 	nginxConfig.LogHeaders = nginxLogHeaders
 	nginxUpdater := nginx.New(nginxConfig)
 
+	if legacyDrainDelay != unset && drainDelay == unset {
+		drainDelay = legacyDrainDelay
+	} else if drainDelay == unset {
+		drainDelay = defaultDrainDelay
+	}
+
 	updaters := []controller.Updater{nginxUpdater}
 
 	if registrationFrontendType == "elb" {
@@ -261,7 +273,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		}
 		updaters = append(updaters, albUpdater)
 	} else if registrationFrontendType == "gorb" {
-		gorbUpdater, err := gorb.New(gorbEndpoint, ingressInstanceIP, drainDelay, gorbServicesDefinition, gorbBackendWeight, gorbBackendMethod, gorbVipLoadbalancer, gorbManageLoopback, gorbIntervalHealthcheck)
+		gorbUpdater, err := gorb.New(gorbEndpoint, ingressInstanceIP, drainDelay, gorbServicesDefinition, gorbBackendWeight, gorbBackendMethod, gorbVipLoadbalancer, gorbManageLoopback, gorbBackendHealthcheckInterval, gorbInterfaceProcFsPath)
 		if err != nil {
 			return updaters, err
 		}

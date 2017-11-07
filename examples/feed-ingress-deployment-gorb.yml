@@ -30,8 +30,13 @@ spec:
       restartPolicy: Always
 
       containers:
-      - image: skycirrus/feed-ingress:v1.3.0
+      - image: skycirrus/feed-ingress:v1.2.0
         name: feed-ingress
+        env:
+        - name: INSTANCEIP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
 
         resources:
           requests:
@@ -81,11 +86,37 @@ spec:
         - -pushgateway-label=environment=dev
         - -pushgateway-label=version=v1.0.2
 
-        # Attach to the ELBs with label sky.uk/KubernetesClusterFrontend set to this value.
-        - -elb-expected-number=2
-        - -elb-label-value=dev
+        # Specify gorb as the registration component
+        - -registration-frontend-type=gorb
 
-        # ELB drain time - time to wait while ELB drains requests from feed when stopping. Should be
+        # VIP of the IPVS managed via gor
+        - -gorb-vip-loadbalancer=10.10.0.10
+
+        # Define gorb base url
+        - -gorb-endpoint=http://10.154.0.11:4672
+
+        # Comma separated list of virtual service definition to create via gorb
+        - -gorb-services-definition=http-proxy:80,https-proxy:443
+
+        # Enable loopback management to make Direct Return effective
+        - -gorb-management-loopback=true
+
+        # Path to the proc file system containing the main interface definition
+        - -gorb-interface-proc-fs-path=/host-ipv4-proc/
+
+        # packet-forwarding method to set via gorb
+        - -gorb-backend-method=dr
+
+        # gorb backend weight
+        - -gorb-backend-weight=1000
+
+        # gorb backend healthcheck interval
+        - -gorb-backend-healthcheck-interval=1s
+
+        # nginx host ip address to use when the ingress is not in AWS
+        - -ingress-instance-ip=$(INSTANCEIP)
+
+        # LB drain time - time to wait while the load balancer drains requests from feed when stopping. Should be
         # at least as long as the ELBs drain timeout.
         - -drain-delay=30s
 
@@ -139,11 +170,17 @@ spec:
           periodSeconds: 10
           failureThreshold: 3
 
-        # Access logs volume.
         volumeMounts:
+        # Access logs volume.
         - name: nginx-log
           mountPath: /var/log/nginx
+        # Used for loopback address management
+        - name: ipv4-proc
+          mountPath: /host-ipv4-proc/
 
       volumes:
       - name: nginx-log
         emptyDir: {}
+      - name: ipv4-proc
+        hostPath:
+          path: /proc/sys/net/ipv4/conf/ens160/

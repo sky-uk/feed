@@ -30,6 +30,7 @@ const (
 	backendWeight       = 1000
 	backendMethod       = "dr"
 	vipLoadbalancer     = "127.0.0.1"
+	interfaceProcFsPath = "/host_ipv4_proc/"
 	manageLoopback      = false
 )
 
@@ -98,7 +99,7 @@ var _ = Describe("Gorb", func() {
 		serverURL = server.URL
 		log.Info("url ", serverURL)
 
-		gorb, _ = New(serverURL, instanceIP, drainImmediately, servicesDefinition, backendWeight, backendMethod, vipLoadbalancer, manageLoopback, intervalHealthcheck)
+		gorb, _ = New(serverURL, instanceIP, drainImmediately, servicesDefinition, backendWeight, backendMethod, vipLoadbalancer, manageLoopback, intervalHealthcheck, interfaceProcFsPath)
 	})
 
 	BeforeEach(func() {
@@ -173,7 +174,7 @@ var _ = Describe("Gorb", func() {
 
 	Describe("Multiple services", func() {
 		It("should all have their backends", func() {
-			gorb, _ = New(serverURL, instanceIP, drainImmediately, "http-proxy:80,https-proxy:443", backendWeight, backendMethod, vipLoadbalancer, manageLoopback, intervalHealthcheck)
+			gorb, _ = New(serverURL, instanceIP, drainImmediately, "http-proxy:80,https-proxy:443", backendWeight, backendMethod, vipLoadbalancer, manageLoopback, intervalHealthcheck, interfaceProcFsPath)
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
