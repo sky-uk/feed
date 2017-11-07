@@ -91,18 +91,11 @@ func main() {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
 
-	var dnsUpdater controller.Updater
-	if internalHostname != "" && externalHostname != "" {
-		addressesWithScheme := map[string]string{"internal": internalHostname, "internet-facing": externalHostname}
-		lbAdapter := dns.NewStaticHostnameAdapter(addressesWithScheme, cnameTimeToLive)
-		dnsUpdater = dns.New(r53HostedZone, lbAdapter, elbRegion, awsAPIRetries)
-	} else {
-		lbAdapter, err := dns.NewAWSAdapter(elbRegion, r53HostedZone, elbLabelValue, albNames)
-		if err != nil {
-			log.Fatal("Error during initialisation: ", err)
-		}
-		dnsUpdater = dns.New(r53HostedZone, lbAdapter, elbRegion, awsAPIRetries)
+	var lbAdapter, lbErr = createLoadBalancerAdapter()
+	if lbErr != nil {
+		log.Fatal("Error during initialisation: ", lbErr)
 	}
+	dnsUpdater := dns.New(r53HostedZone, lbAdapter, elbRegion, awsAPIRetries)
 
 	controller := controller.New(controller.Config{
 		KubernetesClient: client,
@@ -118,6 +111,15 @@ func main() {
 	}
 
 	select {}
+}
+
+func createLoadBalancerAdapter() (dns.LoadBalancerAdapter, error) {
+	if internalHostname != "" && externalHostname != "" {
+		addressesWithScheme := map[string]string{"internal": internalHostname, "internet-facing": externalHostname}
+		return dns.NewStaticHostnameAdapter(addressesWithScheme, cnameTimeToLive), nil
+	}
+
+	return dns.NewAWSAdapter(elbRegion, r53HostedZone, elbLabelValue, albNames)
 }
 
 func validateConfig() {

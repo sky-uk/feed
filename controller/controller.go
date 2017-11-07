@@ -23,6 +23,8 @@ import (
 
 const ingressAllowAnnotation = "sky.uk/allow"
 const frontendSchemeAnnotation = "sky.uk/frontend-scheme"
+
+// Deprecated: retained to maintain backwards compatibility.
 const frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
 const stripPathAnnotation = "sky.uk/strip-path"
 
