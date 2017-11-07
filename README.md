@@ -2,7 +2,7 @@
 
 # Feed
 
-This project contains Kubernetes controllers for managing external ingress with AWS. There are two controllers provided,
+This project contains Kubernetes controllers for managing external ingress with AWS or [IPVS/gorb](https://github.com/sky-uk/gorb). There are two controllers provided,
 `feed-ingress` which runs an nginx instance, and `feed-dns` which manages route53 entries. They can be run independently
 as needed, or together to provide a full ingress solution.
 
