@@ -42,3 +42,11 @@ func (s staticHostnameAdapter) newChange(action string, host string, details dns
 		ResourceRecordSet: set,
 	}
 }
+
+func (s staticHostnameAdapter) changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change {
+	if record.ttl != *s.ttl {
+		return s.newChange("UPSERT", host, details)
+	}
+
+	return nil
+}

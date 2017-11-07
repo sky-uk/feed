@@ -47,25 +47,6 @@ func NewAWSAdapter(region string, hostedZoneID string, elbLabelValue string, alb
 	}, nil
 }
 
-func (a awsAdapter) newChange(action string, host string, details dnsDetails) *route53.Change {
-	set := &route53.ResourceRecordSet{
-		Name: aws.String(host),
-	}
-
-	set.Type = aws.String("A")
-	set.AliasTarget = &route53.AliasTarget{
-		DNSName:      aws.String(details.dnsName),
-		HostedZoneId: aws.String(details.hostedZoneID),
-		// disable this since we only point to a single load balancer
-		EvaluateTargetHealth: aws.Bool(false),
-	}
-
-	return &route53.Change{
-		Action:            aws.String(action),
-		ResourceRecordSet: set,
-	}
-}
-
 func (a awsAdapter) initialise(schemeToDNS map[string]dnsDetails) error {
 	if a.elbLabelValue != "" && len(a.albNames) > 0 {
 		return fmt.Errorf("can't specify both elb label value (%s) and alb names (%v) - only one or the other may be"+
@@ -124,5 +105,28 @@ func (a awsAdapter) initALBs(schemeToDNS map[string]dnsDetails) error {
 		req.Marker = resp.NextMarker
 	}
 
+	return nil
+}
+
+func (a awsAdapter) newChange(action string, host string, details dnsDetails) *route53.Change {
+	set := &route53.ResourceRecordSet{
+		Name: aws.String(host),
+	}
+
+	set.Type = aws.String("A")
+	set.AliasTarget = &route53.AliasTarget{
+		DNSName:      aws.String(details.dnsName),
+		HostedZoneId: aws.String(details.hostedZoneID),
+		// disable this since we only point to a single load balancer
+		EvaluateTargetHealth: aws.Bool(false),
+	}
+
+	return &route53.Change{
+		Action:            aws.String(action),
+		ResourceRecordSet: set,
+	}
+}
+
+func (a awsAdapter) changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change {
 	return nil
 }

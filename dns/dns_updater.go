@@ -21,6 +21,7 @@ type consolidatedRecord struct {
 	name            string
 	pointsTo        string
 	aliasHostedZone string
+	ttl 			int64
 }
 
 type updater struct {
@@ -32,8 +33,9 @@ type updater struct {
 
 // LoadBalancerAdapter defines operations which vary based on the type of load balancer being used for ingress.
 type LoadBalancerAdapter interface {
-	newChange(action string, host string, details dnsDetails) *route53.Change
 	initialise(schemeToDNS map[string]dnsDetails) error
+	newChange(action string, host string, details dnsDetails) *route53.Change
+	changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change
 }
 
 // New creates an updater for dns
@@ -114,10 +116,14 @@ func (u *updater) consolidateRecordsFromRoute53(rrs []*route53.ResourceRecordSet
 				aliasHostedZone: *recordSet.AliasTarget.HostedZoneId,
 			})
 		} else if *recordSet.Type == route53.RRTypeCname {
-			records = append(records, consolidatedRecord{
+			record := consolidatedRecord{
 				name:     *recordSet.Name,
 				pointsTo: *recordSet.ResourceRecords[0].Value,
-			})
+			}
+			if recordSet.TTL != nil {
+				record.ttl = *recordSet.TTL
+			}
+			records = append(records, record)
 		}
 	}
 
@@ -216,8 +222,10 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 			continue
 		}
 
-		if _, recordExists := indexedRecords[recordKey{host, dnsDetails.dnsName}]; !recordExists {
+		if existingRecord, recordExists := indexedRecords[recordKey{host, dnsDetails.dnsName}]; !recordExists {
 			changes = append(changes, u.lbAdapter.newChange("UPSERT", host, dnsDetails))
+		} else if changedRecord := u.lbAdapter.changeExistingIfRequired(existingRecord, host, dnsDetails); changedRecord != nil {
+			changes = append(changes, changedRecord)
 		}
 	}
 

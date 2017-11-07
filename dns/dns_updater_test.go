@@ -592,6 +592,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 						Value: aws.String(internalAddressArgument),
 					},
 				},
+				TTL: ttl,
 			}},
 			[]*route53.Change{{
 				Action: aws.String("UPSERT"),
@@ -619,6 +620,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
+					TTL: ttl,
 				},
 				{
 					Name: aws.String("bar.com."),
@@ -628,6 +630,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String("some-ingress-we-dont-manage.james.com"),
 						},
 					},
+					TTL: ttl,
 				},
 			},
 			[]*route53.Change{{
@@ -662,6 +665,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String(internalAddressArgument),
 						},
 					},
+					TTL: ttl,
 				},
 				{
 					Name: aws.String("baz.james.com."),
@@ -671,6 +675,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 							Value: aws.String("somerandom-ingress.s.sandbox.james.com"),
 						},
 					},
+					TTL: ttl,
 				},
 			},
 			[]*route53.Change{{
@@ -808,6 +813,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 			[]*route53.ResourceRecordSet{{
 				Name: aws.String("foo.james.com."),
 				Type: aws.String(route53.RRTypeCname),
+				TTL:  ttl,
 				ResourceRecords: []*route53.ResourceRecord{
 					{
 						Value: aws.String(externalAddressArgument),
@@ -815,6 +821,71 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 				},
 			}},
 			[]*route53.Change{},
+		},
+		{
+			"Updates TTL on a CNAME record when it has changed",
+			[]controller.IngressEntry{{
+				Name:        "test-entry",
+				Host:        "foo.james.com",
+				Path:        "/",
+				ELbScheme:   externalScheme,
+				ServicePort: 80,
+			}},
+			[]*route53.ResourceRecordSet{{
+				Name: aws.String("foo.james.com."),
+				Type: aws.String(route53.RRTypeCname),
+				TTL:  aws.Int64(999),
+				ResourceRecords: []*route53.ResourceRecord{
+					{
+						Value: aws.String(externalAddressArgument),
+					},
+				},
+			}},
+			[]*route53.Change{{
+				Action: aws.String("UPSERT"),
+				ResourceRecordSet: &route53.ResourceRecordSet{
+					Name: aws.String("foo.james.com."),
+					Type: aws.String("CNAME"),
+					ResourceRecords: []*route53.ResourceRecord{
+						{
+							Value: aws.String(externalAddressArgument),
+						},
+					},
+					TTL: ttl,
+				},
+			}},
+		},
+		{
+			"Handles existing records which have no TTL",
+			[]controller.IngressEntry{{
+				Name:        "test-entry",
+				Host:        "foo.james.com",
+				Path:        "/",
+				ELbScheme:   externalScheme,
+				ServicePort: 80,
+			}},
+			[]*route53.ResourceRecordSet{{
+				Name: aws.String("foo.james.com."),
+				Type: aws.String(route53.RRTypeCname),
+				ResourceRecords: []*route53.ResourceRecord{
+					{
+						Value: aws.String(externalAddressArgument),
+					},
+				},
+			}},
+			[]*route53.Change{{
+				Action: aws.String("UPSERT"),
+				ResourceRecordSet: &route53.ResourceRecordSet{
+					Name: aws.String("foo.james.com."),
+					Type: aws.String("CNAME"),
+					ResourceRecords: []*route53.ResourceRecord{
+						{
+							Value: aws.String(externalAddressArgument),
+						},
+					},
+					TTL: ttl,
+				},
+			}},
 		},
 	}
 
