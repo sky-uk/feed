@@ -54,8 +54,9 @@ type backend struct {
 }
 
 type loopbackAction string
+
 const (
-	addLoopback loopbackAction = "add"
+	addLoopback    loopbackAction = "add"
 	deleteLoopback loopbackAction = "del"
 )
 
