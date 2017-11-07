@@ -53,6 +53,12 @@ type backend struct {
 	BackendConfig BackendConfig
 }
 
+type loopbackAction string
+const (
+	addLoopback loopbackAction = "add"
+	deleteLoopback loopbackAction = "del"
+)
+
 // New creates a gorb handler
 func New(serverBaseURL string, instanceIP string, drainDelay time.Duration, gorbServicesDefinition string, backendWeight int, backendMethod string, vipLoadbalancer string, manageLoopback bool, gorbIntervalHealthcheck string) (controller.Updater, error) {
 	if serverBaseURL == "" {
@@ -126,7 +132,22 @@ func (g *gorb) Start() error {
 	return nil
 }
 
-func (g *gorb) manageLoopBack(action string, arpIgnore int, arpAnnounce int) error {
+func (g *gorb) manageLoopBack(action loopbackAction) error {
+
+	var arpIgnore int
+	var arpAnnounce int
+
+	switch action {
+	// disable ARP for the loopback interface - see http://kb.linuxvirtualserver.org/wiki/Using_arp_announce/arp_ignore_to_disable_ARP
+	case addLoopback:
+		arpIgnore = 1
+		arpAnnounce = 2
+	case deleteLoopback:
+		arpIgnore = 0
+		arpAnnounce = 0
+	default:
+		return fmt.Errorf("unsupported loopback action %s", action)
+	}
 
 	var errorArr *multierror.Error
 	vipLoadbalancerArr := strings.Split(g.vipLoadbalancer, ",")
@@ -168,7 +189,7 @@ func (g *gorb) Stop() error {
 	time.Sleep(g.drainDelay)
 
 	if g.manageLoopback {
-		err := g.manageLoopBack("del", 0, 0)
+		err := g.manageLoopBack(deleteLoopback)
 		errorArr = multierror.Append(errorArr, err)
 	}
 
@@ -201,7 +222,7 @@ func (g *gorb) Health() error {
 func (g *gorb) Update(controller.IngressEntries) error {
 	var errorArr *multierror.Error
 	if g.manageLoopback {
-		err := g.manageLoopBack("add", 1, 2)
+		err := g.manageLoopBack(addLoopback)
 		errorArr = multierror.Append(errorArr, err)
 	}
 
