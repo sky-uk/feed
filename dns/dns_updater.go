@@ -21,7 +21,7 @@ type consolidatedRecord struct {
 	name            string
 	pointsTo        string
 	aliasHostedZone string
-	ttl 			int64
+	ttl             int64
 }
 
 type updater struct {
