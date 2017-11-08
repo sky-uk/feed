@@ -211,7 +211,7 @@ func TestQueryFrontedElbs(t *testing.T) {
 	assert.Equal(t, map[string]dnsDetails{
 		internalScheme: {dnsName: internalALBDnsNameWithPeriod, hostedZoneID: lbHostedZoneID},
 		externalScheme: {dnsName: externalALBDnsNameWithPeriod, hostedZoneID: lbHostedZoneID},
-	}, dnsUpdater.schemeToDNS)
+	}, dnsUpdater.schemeToFrontendMap)
 	mockR53.AssertExpectations(t)
 }
 

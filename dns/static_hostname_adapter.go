@@ -12,21 +12,22 @@ type staticHostnameAdapter struct {
 	ttl                 *int64
 }
 
-// NewStaticHostnameAdapter creates a LoadBalancerAdapter which interacts with load balancers accessed by static hostnames.
-func NewStaticHostnameAdapter(addressesWithScheme map[string]string, ttl time.Duration) LoadBalancerAdapter {
+// NewStaticHostnameAdapter creates a FrontendAdapter which interacts with load balancers accessed by static hostnames.
+func NewStaticHostnameAdapter(addressesWithScheme map[string]string, ttl time.Duration) FrontendAdapter {
 	return &staticHostnameAdapter{addressesWithScheme, aws.Int64(int64(ttl.Seconds()))}
 }
 
-func (s staticHostnameAdapter) initialise(schemeToDNS map[string]dnsDetails) error {
+func (s *staticHostnameAdapter) initialise() (map[string]dnsDetails, error) {
+	schemeToFrontendMap := make(map[string]dnsDetails)
 	for scheme, address := range s.addressesWithScheme {
-		schemeToDNS[scheme] = dnsDetails{dnsName: address, hostedZoneID: ""}
+		schemeToFrontendMap[scheme] = dnsDetails{dnsName: address, hostedZoneID: ""}
 	}
 
-	return nil
+	return schemeToFrontendMap, nil
 }
 
-func (s staticHostnameAdapter) newChange(action string, host string, details dnsDetails) *route53.Change {
-	set := &route53.ResourceRecordSet{
+func (s *staticHostnameAdapter) newChange(action string, host string, details dnsDetails) *route53.Change {
+	rrs := &route53.ResourceRecordSet{
 		Name: aws.String(host),
 		Type: aws.String("CNAME"),
 		TTL:  s.ttl,
@@ -39,11 +40,11 @@ func (s staticHostnameAdapter) newChange(action string, host string, details dns
 
 	return &route53.Change{
 		Action:            aws.String(action),
-		ResourceRecordSet: set,
+		ResourceRecordSet: rrs,
 	}
 }
 
-func (s staticHostnameAdapter) changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change {
+func (s *staticHostnameAdapter) changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change {
 	if record.ttl != *s.ttl {
 		return s.newChange("UPSERT", host, details)
 	}

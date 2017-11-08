@@ -72,11 +72,11 @@ func init() {
 	flag.IntVar(&awsAPIRetries, "aws-api-retries", defaultAwsAPIRetries,
 		"Number of times a request to the AWS API is retried.")
 	flag.StringVar(&internalHostname, "internal-hostname", "",
-		"hostname of the internal facing load-balancer. If specified, external-hostname must also be given.")
+		"Hostname of the internal facing load-balancer. If specified, external-hostname must also be given.")
 	flag.StringVar(&externalHostname, "external-hostname", "",
-		"hostname of the internet facing load-balancer. If specified, internal-hostname must also be given.")
+		"Hostname of the internet facing load-balancer. If specified, internal-hostname must also be given.")
 	flag.DurationVar(&cnameTimeToLive, "cname-ttl", defaultCnameTTL,
-		"time-to-live of CNAME records")
+		"Time-to-live of CNAME records")
 }
 
 func main() {
@@ -91,7 +91,7 @@ func main() {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
 
-	var lbAdapter, lbErr = createLoadBalancerAdapter()
+	var lbAdapter, lbErr = createFrontendAdapter()
 	if lbErr != nil {
 		log.Fatal("Error during initialisation: ", lbErr)
 	}
@@ -113,7 +113,7 @@ func main() {
 	select {}
 }
 
-func createLoadBalancerAdapter() (dns.LoadBalancerAdapter, error) {
+func createFrontendAdapter() (dns.FrontendAdapter, error) {
 	if internalHostname != "" && externalHostname != "" {
 		addressesWithScheme := map[string]string{"internal": internalHostname, "internet-facing": externalHostname}
 		return dns.NewStaticHostnameAdapter(addressesWithScheme, cnameTimeToLive), nil

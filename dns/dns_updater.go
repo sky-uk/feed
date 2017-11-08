@@ -25,27 +25,27 @@ type consolidatedRecord struct {
 }
 
 type updater struct {
-	r53         r53.Route53Client
-	schemeToDNS map[string]dnsDetails
-	domain      string
-	lbAdapter   LoadBalancerAdapter
+	r53                 r53.Route53Client
+	schemeToFrontendMap map[string]dnsDetails
+	domain              string
+	lbAdapter           FrontendAdapter
 }
 
-// LoadBalancerAdapter defines operations which vary based on the type of load balancer being used for ingress.
-type LoadBalancerAdapter interface {
-	initialise(schemeToDNS map[string]dnsDetails) error
+// FrontendAdapter defines operations which vary based on the type of load balancer being used for ingress.
+type FrontendAdapter interface {
+	initialise() (map[string]dnsDetails, error)
 	newChange(action string, host string, details dnsDetails) *route53.Change
 	changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change
 }
 
 // New creates an updater for dns
-func New(hostedZoneID string, lbAdapter LoadBalancerAdapter, retries int) controller.Updater {
+func New(hostedZoneID string, lbAdapter FrontendAdapter, retries int) controller.Updater {
 	initMetrics()
 
 	return &updater{
-		r53:         r53.New(hostedZoneID, retries),
-		lbAdapter:   lbAdapter,
-		schemeToDNS: make(map[string]dnsDetails),
+		r53:                 r53.New(hostedZoneID, retries),
+		lbAdapter:           lbAdapter,
+		schemeToFrontendMap: make(map[string]dnsDetails),
 	}
 }
 
@@ -56,9 +56,11 @@ func (u *updater) String() string {
 func (u *updater) Start() error {
 	log.Info("Starting dns updater")
 
-	if err := u.lbAdapter.initialise(u.schemeToDNS); err != nil {
+	schemeToFrontendMap, err := u.lbAdapter.initialise()
+	if err != nil {
 		return err
 	}
+	u.schemeToFrontendMap = schemeToFrontendMap
 
 	domain, err := u.r53.GetHostedZoneDomain()
 	if err != nil {
@@ -132,7 +134,7 @@ func (u *updater) consolidateRecordsFromRoute53(rrs []*route53.ResourceRecordSet
 
 func (u *updater) determineManagedRecordSets(rrs []consolidatedRecord) []consolidatedRecord {
 	managedLBs := make(map[string]bool)
-	for _, dns := range u.schemeToDNS {
+	for _, dns := range u.schemeToFrontendMap {
 		managedLBs[dns.dnsName] = true
 	}
 	var managed []consolidatedRecord
@@ -207,15 +209,15 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 	originalRecords []consolidatedRecord) ([]*route53.Change, []string) {
 
 	type recordKey struct{ host, elbDNSName string }
-	var skipped []string
 	changes := []*route53.Change{}
 	indexedRecords := make(map[recordKey]consolidatedRecord)
 	for _, rec := range originalRecords {
 		indexedRecords[recordKey{rec.name, rec.pointsTo}] = rec
 	}
 
+	var skipped []string
 	for host, entry := range hostToIngress {
-		dnsDetails, exists := u.schemeToDNS[entry.ELbScheme]
+		dnsDetails, exists := u.schemeToFrontendMap[entry.ELbScheme]
 		if !exists {
 			skipped = append(skipped, entry.NamespaceName()+":scheme:"+entry.ELbScheme)
 			skippedCount.Inc()

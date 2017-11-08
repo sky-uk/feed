@@ -30,8 +30,8 @@ type ALB interface {
 	DescribeLoadBalancers(input *aws_alb.DescribeLoadBalancersInput) (*aws_alb.DescribeLoadBalancersOutput, error)
 }
 
-// NewAWSAdapter a LoadBalancerAdapter which interacts with AWS ELBs or ALBs.
-func NewAWSAdapter(region string, hostedZoneID string, elbLabelValue string, albNames []string) (LoadBalancerAdapter, error) {
+// NewAWSAdapter a FrontendAdapter which interacts with AWS ELBs or ALBs.
+func NewAWSAdapter(region string, hostedZoneID string, elbLabelValue string, albNames []string) (FrontendAdapter, error) {
 	session, err := session.NewSession(&aws.Config{Region: &region})
 	if err != nil {
 		return nil, fmt.Errorf("unable to open AWS session: %v", err)
@@ -47,20 +47,25 @@ func NewAWSAdapter(region string, hostedZoneID string, elbLabelValue string, alb
 	}, nil
 }
 
-func (a awsAdapter) initialise(schemeToDNS map[string]dnsDetails) error {
+func (a *awsAdapter) initialise() (map[string]dnsDetails, error) {
 	if a.elbLabelValue != "" && len(a.albNames) > 0 {
-		return fmt.Errorf("can't specify both elb label value (%s) and alb names (%v) - only one or the other may be"+
+		return nil, fmt.Errorf("can't specify both elb label value (%s) and alb names (%v) - only one or the other may be"+
 			" specified", a.elbLabelValue, a.albNames)
 	}
 
-	if err := a.initELBs(schemeToDNS); err != nil {
-		return err
+	schemeToFrontendMap := make(map[string]dnsDetails)
+	if err := a.initELBs(schemeToFrontendMap); err != nil {
+		return nil, err
 	}
 
-	return a.initALBs(schemeToDNS)
+	if err := a.initALBs(schemeToFrontendMap); err != nil {
+		return nil, err
+	}
+
+	return schemeToFrontendMap, nil
 }
 
-func (a awsAdapter) initELBs(schemeToDNS map[string]dnsDetails) error {
+func (a *awsAdapter) initELBs(schemeToFrontendMap map[string]dnsDetails) error {
 	if a.elbLabelValue == "" {
 		return nil
 	}
@@ -75,13 +80,13 @@ func (a awsAdapter) initELBs(schemeToDNS map[string]dnsDetails) error {
 			return fmt.Errorf("unexpected trailing dot on load balancer DNS name: %s", lbDetails.DNSName)
 		}
 
-		schemeToDNS[scheme] = dnsDetails{dnsName: lbDetails.DNSName + ".", hostedZoneID: lbDetails.HostedZoneID}
+		schemeToFrontendMap[scheme] = dnsDetails{dnsName: lbDetails.DNSName + ".", hostedZoneID: lbDetails.HostedZoneID}
 	}
 
 	return nil
 }
 
-func (a awsAdapter) initALBs(schemeToDNS map[string]dnsDetails) error {
+func (a *awsAdapter) initALBs(schemeToFrontendMap map[string]dnsDetails) error {
 	if len(a.albNames) == 0 {
 		return nil
 	}
@@ -95,7 +100,7 @@ func (a awsAdapter) initALBs(schemeToDNS map[string]dnsDetails) error {
 		}
 
 		for _, lb := range resp.LoadBalancers {
-			schemeToDNS[*lb.Scheme] = dnsDetails{dnsName: *lb.DNSName + ".", hostedZoneID: *lb.CanonicalHostedZoneId}
+			schemeToFrontendMap[*lb.Scheme] = dnsDetails{dnsName: *lb.DNSName + ".", hostedZoneID: *lb.CanonicalHostedZoneId}
 		}
 
 		if resp.NextMarker == nil {
@@ -108,7 +113,7 @@ func (a awsAdapter) initALBs(schemeToDNS map[string]dnsDetails) error {
 	return nil
 }
 
-func (a awsAdapter) newChange(action string, host string, details dnsDetails) *route53.Change {
+func (a *awsAdapter) newChange(action string, host string, details dnsDetails) *route53.Change {
 	set := &route53.ResourceRecordSet{
 		Name: aws.String(host),
 	}
@@ -127,6 +132,6 @@ func (a awsAdapter) newChange(action string, host string, details dnsDetails) *r
 	}
 }
 
-func (a awsAdapter) changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change {
+func (a *awsAdapter) changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change {
 	return nil
 }
