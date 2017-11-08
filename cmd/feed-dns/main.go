@@ -128,8 +128,8 @@ func validateConfig() {
 		os.Exit(-1)
 	}
 
-	if (internalHostname != "" || externalHostname != "") && elbLabelValue != "" {
-		log.Error("Can't supply both ELB label and non-ELB hostname. Choose one or the other.")
+	if (internalHostname != "" || externalHostname != "") && (elbLabelValue != "" || len(albNames) > 0)  {
+		log.Error("Can't supply both ELB/ALB and non-ALB/ELB hostname. Choose one or the other.")
 		os.Exit(-1)
 	}
 
