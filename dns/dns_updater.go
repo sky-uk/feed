@@ -34,8 +34,7 @@ type updater struct {
 // FrontendAdapter defines operations which vary based on the type of load balancer being used for ingress.
 type FrontendAdapter interface {
 	initialise() (map[string]dnsDetails, error)
-	newChange(action string, host string, details dnsDetails) *route53.Change
-	changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change
+	createChange(action string, host string, details dnsDetails, recordExists bool, existingRecord *consolidatedRecord) *route53.Change
 }
 
 // New creates an updater for dns
@@ -224,16 +223,22 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 			continue
 		}
 
-		if existingRecord, recordExists := indexedRecords[recordKey{host, dnsDetails.dnsName}]; !recordExists {
-			changes = append(changes, u.lbAdapter.newChange("UPSERT", host, dnsDetails))
-		} else if changedRecord := u.lbAdapter.changeExistingIfRequired(existingRecord, host, dnsDetails); changedRecord != nil {
-			changes = append(changes, changedRecord)
+		existingRecord, recordExists := indexedRecords[recordKey{host, dnsDetails.dnsName}]
+		change := u.lbAdapter.createChange("UPSERT", host, dnsDetails, recordExists, &existingRecord)
+		if change != nil {
+			changes = append(changes, change)
 		}
+
+		//if existingRecord, recordExists := indexedRecords[recordKey{host, dnsDetails.dnsName}]; !recordExists {
+		//	changes = append(changes, u.lbAdapter.newChange("UPSERT", host, dnsDetails))
+		//} else if changedRecord := u.lbAdapter.changeExistingIfRequired(existingRecord, host, dnsDetails); changedRecord != nil {
+		//	changes = append(changes, changedRecord)
+		//}
 	}
 
 	for _, rec := range originalRecords {
 		if _, contains := hostToIngress[rec.name]; !contains {
-			changes = append(changes, u.lbAdapter.newChange("DELETE", rec.name, dnsDetails{rec.pointsTo, rec.aliasHostedZone}))
+			changes = append(changes, u.lbAdapter.createChange("DELETE", rec.name, dnsDetails{rec.pointsTo, rec.aliasHostedZone}, false, nil))
 		}
 	}
 

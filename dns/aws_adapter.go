@@ -113,25 +113,25 @@ func (a *awsAdapter) initALBs(schemeToFrontendMap map[string]dnsDetails) error {
 	return nil
 }
 
-func (a *awsAdapter) newChange(action string, host string, details dnsDetails) *route53.Change {
-	set := &route53.ResourceRecordSet{
-		Name: aws.String(host),
+func (a *awsAdapter) createChange(action string, host string, details dnsDetails, recordExists bool, existingRecord *consolidatedRecord) *route53.Change {
+	if !recordExists {
+		set := &route53.ResourceRecordSet{
+			Name: aws.String(host),
+		}
+
+		set.Type = aws.String("A")
+		set.AliasTarget = &route53.AliasTarget{
+			DNSName:      aws.String(details.dnsName),
+			HostedZoneId: aws.String(details.hostedZoneID),
+			// disable this since we only point to a single load balancer
+			EvaluateTargetHealth: aws.Bool(false),
+		}
+
+		return &route53.Change{
+			Action:            aws.String(action),
+			ResourceRecordSet: set,
+		}
 	}
 
-	set.Type = aws.String("A")
-	set.AliasTarget = &route53.AliasTarget{
-		DNSName:      aws.String(details.dnsName),
-		HostedZoneId: aws.String(details.hostedZoneID),
-		// disable this since we only point to a single load balancer
-		EvaluateTargetHealth: aws.Bool(false),
-	}
-
-	return &route53.Change{
-		Action:            aws.String(action),
-		ResourceRecordSet: set,
-	}
-}
-
-func (a *awsAdapter) changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change {
 	return nil
 }

@@ -26,27 +26,25 @@ func (s *staticHostnameAdapter) initialise() (map[string]dnsDetails, error) {
 	return schemeToFrontendMap, nil
 }
 
-func (s *staticHostnameAdapter) newChange(action string, host string, details dnsDetails) *route53.Change {
-	rrs := &route53.ResourceRecordSet{
-		Name: aws.String(host),
-		Type: aws.String("CNAME"),
-		TTL:  s.ttl,
-		ResourceRecords: []*route53.ResourceRecord{
-			{
-				Value: aws.String(details.dnsName),
+func (s *staticHostnameAdapter) createChange(action string, host string, details dnsDetails,
+	recordExists bool, existingRecord *consolidatedRecord) *route53.Change {
+
+	if recordExists && existingRecord.ttl != *s.ttl || !recordExists || action == "DELETE" {
+		rrs := &route53.ResourceRecordSet{
+			Name: aws.String(host),
+			Type: aws.String("CNAME"),
+			TTL:  s.ttl,
+			ResourceRecords: []*route53.ResourceRecord{
+				{
+					Value: aws.String(details.dnsName),
+				},
 			},
-		},
-	}
+		}
 
-	return &route53.Change{
-		Action:            aws.String(action),
-		ResourceRecordSet: rrs,
-	}
-}
-
-func (s *staticHostnameAdapter) changeExistingIfRequired(record consolidatedRecord, host string, details dnsDetails) *route53.Change {
-	if record.ttl != *s.ttl {
-		return s.newChange("UPSERT", host, details)
+		return &route53.Change{
+			Action:            aws.String(action),
+			ResourceRecordSet: rrs,
+		}
 	}
 
 	return nil
