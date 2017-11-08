@@ -119,7 +119,7 @@ spec:
         - -gorb-backend-healthcheck-interval=1s
 
         # nginx host ip address to use when the ingress is not in AWS
-        - -ingress-instance-ip=$(INSTANCEIP)
+        - -gorb-ingress-instance-ip=$(INSTANCEIP)
 
         # LB drain time - time to wait while the load balancer drains requests from feed when stopping. Should be
         # at least as long as the ELBs drain timeout.

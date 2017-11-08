@@ -47,7 +47,7 @@ var (
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
 	legacyBackendKeepaliveSeconds  int
 	registrationFrontendType       string
-	ingressInstanceIP              string
+	gorbIngressInstanceIP string
 	gorbEndpoint                   string
 	gorbServicesDefinition         string
 	gorbBackendMethod              string
@@ -87,7 +87,7 @@ const (
 	defaultPushgatewayIntervalSeconds        = 60
 	defaultAccessLogDir                      = "/var/log/nginx"
 	defaultRegistrationFrontendType          = "elb"
-	defaultIngressInstanceIP                 = "127.0.0.1"
+	defaultGorbIngressInstanceIP = "127.0.0.1"
 	defaultGorbEndpoint                      = "http://127.0.0.1:80"
 	defaultGorbBackendMethod                 = "dr"
 	defaultGorbBackendWeight                 = 1000
@@ -160,7 +160,7 @@ func init() {
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
 	flag.StringVar(&gorbEndpoint, "gorb-endpoint", defaultGorbEndpoint, "Define the endpoint to talk to gorb for registration.")
-	flag.StringVar(&ingressInstanceIP, "ingress-instance-ip", defaultIngressInstanceIP,
+	flag.StringVar(&gorbIngressInstanceIP, "gorb-ingress-instance-ip", defaultGorbIngressInstanceIP,
 		"Define the ingress instance ip, the ip of the node where feed-ingress is running.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
 	flag.Var(&nginxLogHeaders, "nginx-log-headers", "Comma separated list of headers to be logged in access logs")
@@ -283,7 +283,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 
 		config := gorb.Config{
 			ServerBaseURL:              gorbEndpoint,
-			InstanceIP:                 ingressInstanceIP,
+			InstanceIP:                 gorbIngressInstanceIP,
 			DrainDelay:                 drainDelay,
 			ServicesDefinition:         virtualServices,
 			BackendMethod:              gorbBackendMethod,
