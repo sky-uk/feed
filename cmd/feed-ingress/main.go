@@ -9,6 +9,9 @@ import (
 
 	"fmt"
 
+	"strconv"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
@@ -273,15 +276,49 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		}
 		updaters = append(updaters, albUpdater)
 	} else if registrationFrontendType == "gorb" {
-		gorbUpdater, err := gorb.New(gorbEndpoint, ingressInstanceIP, drainDelay, gorbServicesDefinition, gorbBackendWeight, gorbBackendMethod, gorbVipLoadbalancer, gorbManageLoopback, gorbBackendHealthcheckInterval, gorbInterfaceProcFsPath)
+		virtualServices, err := toVirtualServices(gorbServicesDefinition)
+		if err != nil {
+			return nil, fmt.Errorf("invalid gorb services definition. Must be a comma separated list - e.g. 'http-proxy:80,https-proxy:443', but was %s", gorbServicesDefinition)
+		}
+
+		config := gorb.Config{
+			ServerBaseURL:              gorbEndpoint,
+			InstanceIP:                 ingressInstanceIP,
+			DrainDelay:                 drainDelay,
+			ServicesDefinition:         virtualServices,
+			BackendMethod:              gorbBackendMethod,
+			BackendWeight:              gorbBackendWeight,
+			VipLoadbalancer:            gorbVipLoadbalancer,
+			ManageLoopback:             gorbManageLoopback,
+			BackendHealthcheckInterval: gorbBackendHealthcheckInterval,
+			InterfaceProcFsPath:        gorbBackendHealthcheckInterval,
+		}
+		gorbUpdater, err := gorb.New(&config)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, gorbUpdater)
 	} else {
-		return nil, fmt.Errorf("invalid Registration Frontend Type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
+		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
 	}
 
 	// update nginx before attaching to front ends
 	return updaters, nil
+}
+
+func toVirtualServices(servicesCsv string) ([]gorb.VirtualService, error) {
+	virtualServices := make([]gorb.VirtualService, 0)
+	servicesDefinitionArr := strings.Split(servicesCsv, ",")
+	for _, service := range servicesDefinitionArr {
+		servicesArr := strings.Split(service, ":")
+		if len(servicesArr) != 2 {
+			return nil, fmt.Errorf("unable to convert %s to servicename:port combination", servicesArr)
+		}
+		port, err := strconv.Atoi(servicesArr[1])
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert port %s to int", servicesArr[1])
+		}
+		virtualServices = append(virtualServices, gorb.VirtualService{Name: servicesArr[0], Port: port})
+	}
+	return virtualServices, nil
 }

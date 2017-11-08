@@ -23,15 +23,14 @@ func TestE2E(t *testing.T) {
 }
 
 const (
-	instanceIP          = "10.10.0.1"
-	drainImmediately    = 0
-	servicesDefinition  = "http-proxy:80"
-	intervalHealthcheck = "1s"
-	backendWeight       = 1000
-	backendMethod       = "dr"
-	vipLoadbalancer     = "127.0.0.1"
-	interfaceProcFsPath = "/host_ipv4_proc/"
-	manageLoopback      = false
+	instanceIP                 = "10.10.0.1"
+	drainImmediately           = 0
+	backendHealthcheckInterval = "1s"
+	backendWeight              = 1000
+	backendMethod              = "dr"
+	vipLoadbalancer            = "127.0.0.1"
+	interfaceProcFsPath        = "/host_ipv4_proc/"
+	manageLoopback             = false
 )
 
 type gorbResponsePrimer struct {
@@ -98,8 +97,19 @@ var _ = Describe("Gorb", func() {
 
 		serverURL = server.URL
 		log.Info("url ", serverURL)
-
-		gorb, _ = New(serverURL, instanceIP, drainImmediately, servicesDefinition, backendWeight, backendMethod, vipLoadbalancer, manageLoopback, intervalHealthcheck, interfaceProcFsPath)
+		config := &Config{
+			ServerBaseURL:              serverURL,
+			InstanceIP:                 instanceIP,
+			DrainDelay:                 drainImmediately,
+			ServicesDefinition:         []VirtualService{{Name: "http-proxy", Port: 80}},
+			BackendMethod:              backendMethod,
+			BackendWeight:              backendWeight,
+			VipLoadbalancer:            vipLoadbalancer,
+			ManageLoopback:             manageLoopback,
+			BackendHealthcheckInterval: backendHealthcheckInterval,
+			InterfaceProcFsPath:        interfaceProcFsPath,
+		}
+		gorb, _ = New(config)
 	})
 
 	BeforeEach(func() {
@@ -174,7 +184,19 @@ var _ = Describe("Gorb", func() {
 
 	Describe("Multiple services", func() {
 		It("should all have their backends", func() {
-			gorb, _ = New(serverURL, instanceIP, drainImmediately, "http-proxy:80,https-proxy:443", backendWeight, backendMethod, vipLoadbalancer, manageLoopback, intervalHealthcheck, interfaceProcFsPath)
+			config := &Config{
+				ServerBaseURL:              serverURL,
+				InstanceIP:                 instanceIP,
+				DrainDelay:                 drainImmediately,
+				ServicesDefinition:         []VirtualService{{Name: "http-proxy", Port: 80}, {Name: "https-proxy", Port: 443}},
+				BackendMethod:              backendMethod,
+				BackendWeight:              backendWeight,
+				VipLoadbalancer:            vipLoadbalancer,
+				ManageLoopback:             manageLoopback,
+				BackendHealthcheckInterval: backendHealthcheckInterval,
+				InterfaceProcFsPath:        interfaceProcFsPath,
+			}
+			gorb, _ = New(config)
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
