@@ -47,7 +47,7 @@ var (
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
 	legacyBackendKeepaliveSeconds  int
 	registrationFrontendType       string
-	gorbIngressInstanceIP string
+	gorbIngressInstanceIP          string
 	gorbEndpoint                   string
 	gorbServicesDefinition         string
 	gorbBackendMethod              string
@@ -87,7 +87,7 @@ const (
 	defaultPushgatewayIntervalSeconds        = 60
 	defaultAccessLogDir                      = "/var/log/nginx"
 	defaultRegistrationFrontendType          = "elb"
-	defaultGorbIngressInstanceIP = "127.0.0.1"
+	defaultGorbIngressInstanceIP             = "127.0.0.1"
 	defaultGorbEndpoint                      = "http://127.0.0.1:80"
 	defaultGorbBackendMethod                 = "dr"
 	defaultGorbBackendWeight                 = 1000
