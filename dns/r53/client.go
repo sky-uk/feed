@@ -33,8 +33,8 @@ type client struct {
 }
 
 // New creates a route53 client used to interact with aws
-func New(region string, hostedZone string, retries int) Route53Client {
-	config := aws.Config{Region: aws.String(region), MaxRetries: aws.Int(retries)}
+func New(hostedZone string, retries int) Route53Client {
+	config := aws.Config{MaxRetries: aws.Int(retries)}
 	return &client{
 		r53:              route53.New(session.New(), &config),
 		hostedZone:       hostedZone,

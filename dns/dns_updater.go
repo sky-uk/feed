@@ -39,11 +39,11 @@ type LoadBalancerAdapter interface {
 }
 
 // New creates an updater for dns
-func New(hostedZoneID string, lbAdapter LoadBalancerAdapter, region string, retries int) controller.Updater {
+func New(hostedZoneID string, lbAdapter LoadBalancerAdapter, retries int) controller.Updater {
 	initMetrics()
 
 	return &updater{
-		r53:         r53.New(region, hostedZoneID, retries),
+		r53:         r53.New(hostedZoneID, retries),
 		lbAdapter:   lbAdapter,
 		schemeToDNS: make(map[string]dnsDetails),
 	}

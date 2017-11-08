@@ -95,7 +95,7 @@ func main() {
 	if lbErr != nil {
 		log.Fatal("Error during initialisation: ", lbErr)
 	}
-	dnsUpdater := dns.New(r53HostedZone, lbAdapter, elbRegion, awsAPIRetries)
+	dnsUpdater := dns.New(r53HostedZone, lbAdapter, awsAPIRetries)
 
 	controller := controller.New(controller.Config{
 		KubernetesClient: client,

@@ -141,7 +141,7 @@ func (m *mockR53Client) mockGetHostedZoneDomain() {
 func setupForELB() (*updater, *mockR53Client, *mockELB, *mockALB, *awsAdapter) {
 	lbAdapter, _ := NewAWSAdapter(awsRegion, hostedZoneID, "", albNames)
 	awsAdapter := lbAdapter.(*awsAdapter)
-	dnsUpdater := New(hostedZoneID, lbAdapter, awsRegion, 1).(*updater)
+	dnsUpdater := New(hostedZoneID, lbAdapter, 1).(*updater)
 
 	mockR53 := &mockR53Client{}
 	dnsUpdater.r53 = mockR53
@@ -156,7 +156,7 @@ func setupForExplicitAddresses() (*updater, *mockR53Client) {
 	addresses := map[string]string{internalScheme: internalAddressArgument, externalScheme: externalAddressArgument}
 	lbAdapter := NewStaticHostnameAdapter(addresses, 5*time.Minute)
 
-	dnsUpdater := New(hostedZoneID, lbAdapter, awsRegion, 1).(*updater)
+	dnsUpdater := New(hostedZoneID, lbAdapter, 1).(*updater)
 	mockR53 := &mockR53Client{}
 	dnsUpdater.r53 = mockR53
 	return dnsUpdater, mockR53

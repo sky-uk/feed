@@ -1,0 +1,78 @@
+# Example deployment for launching feed-dns, the route53 ingress controller, where requests are to be directed to
+# load balancers identified by static hostnames.
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: feed-dns
+  namespace: kube-system
+  labels:
+    app: feed-dns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feed-dns
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: feed-dns
+    spec:
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+      containers:
+      - image: skycirrus/feed-dns:v1.2.0
+        name: feed-dns
+
+        resources:
+          limits:
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+
+        ports:
+        - containerPort: 12082
+          name: http
+          protocol: TCP
+
+        args:
+        # Route53 hosted zone ID to manage records in.
+        - -r53-hosted-zone=Z1234ABCDEFG
+
+        # Hostname of the load balancer to which traffic which originated internally should be routed.
+        - -internal-hostname=internal-loadbalancer.example.com
+
+        # Hostname of the load balancer to which traffic which originated from the internet should be routed.
+        - -external-hostname=external-loadbalancer.example.com
+
+        # Use pushgateway for prometheus metrics. Optional - metrics available at /metrics on health port.
+        - -pushgateway=http://mypushgateway.com
+        - -pushgateway-interval=20
+        - -pushgateway-label=k8s_cluster=dev
+        - -pushgateway-label=environment=dev
+        - -pushgateway-label=version=v1.0.2
+
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 12082
+            scheme: HTTP
+          initialDelaySeconds: 1
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /alive
+            port: 12082
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
