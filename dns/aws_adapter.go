@@ -135,3 +135,15 @@ func (a *awsAdapter) createChange(action string, host string, details dnsDetails
 
 	return nil
 }
+
+func (a *awsAdapter) recognise(rrs *route53.ResourceRecordSet) (*consolidatedRecord, bool) {
+	if *rrs.Type == route53.RRTypeA && rrs.AliasTarget != nil {
+		return &consolidatedRecord{
+			name:            *rrs.Name,
+			pointsTo:        *rrs.AliasTarget.DNSName,
+			aliasHostedZone: *rrs.AliasTarget.HostedZoneId,
+		}, true
+	}
+
+	return nil, false
+}

@@ -49,3 +49,18 @@ func (s *staticHostnameAdapter) createChange(action string, host string, details
 
 	return nil
 }
+
+func (s *staticHostnameAdapter) recognise(rrs *route53.ResourceRecordSet) (*consolidatedRecord, bool) {
+	if *rrs.Type == route53.RRTypeCname {
+		record := consolidatedRecord{
+			name:     *rrs.Name,
+			pointsTo: *rrs.ResourceRecords[0].Value,
+		}
+		if rrs.TTL != nil {
+			record.ttl = *rrs.TTL
+		}
+		return &record, true
+	}
+
+	return nil, false
+}

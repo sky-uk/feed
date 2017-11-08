@@ -35,6 +35,7 @@ type updater struct {
 type FrontendAdapter interface {
 	initialise() (map[string]dnsDetails, error)
 	createChange(action string, host string, details dnsDetails, recordExists bool, existingRecord *consolidatedRecord) *route53.Change
+	recognise(*route53.ResourceRecordSet) (*consolidatedRecord, bool)
 }
 
 // New creates an updater for dns
@@ -110,21 +111,8 @@ func (u *updater) consolidateRecordsFromRoute53(rrs []*route53.ResourceRecordSet
 	var records []consolidatedRecord
 
 	for _, recordSet := range rrs {
-		if *recordSet.Type == route53.RRTypeA && recordSet.AliasTarget != nil {
-			records = append(records, consolidatedRecord{
-				name:            *recordSet.Name,
-				pointsTo:        *recordSet.AliasTarget.DNSName,
-				aliasHostedZone: *recordSet.AliasTarget.HostedZoneId,
-			})
-		} else if *recordSet.Type == route53.RRTypeCname {
-			record := consolidatedRecord{
-				name:     *recordSet.Name,
-				pointsTo: *recordSet.ResourceRecords[0].Value,
-			}
-			if recordSet.TTL != nil {
-				record.ttl = *recordSet.TTL
-			}
-			records = append(records, record)
+		if record, recognised := u.lbAdapter.recognise(recordSet); recognised {
+			records = append(records, *record)
 		}
 	}
 
