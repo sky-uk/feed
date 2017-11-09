@@ -1,3 +1,6 @@
+# v1.2.2
+* Add support for non-AWS load balancers, which are referenced by static hostnames.
+
 # v1.2.1
 * Aggressively rotate access logs to avoid excessive file cache usage. This can lead to kernel
   allocation failures when running feed inside a container with a memory limit.

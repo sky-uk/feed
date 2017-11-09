@@ -13,11 +13,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
+	"github.com/sky-uk/feed/dns/adapter"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/util/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/sky-uk/feed/dns/adapter"
 )
 
 func init() {
@@ -159,12 +159,12 @@ func setupForELB(albNames []string, elbLabelValue string) (*updater, *mockR53Cli
 	mockELB := &mockELB{}
 
 	config := adapter.AWSAdapterConfig{
-		HostedZoneID: hostedZoneID,
+		HostedZoneID:  hostedZoneID,
 		ELBLabelValue: elbLabelValue,
-		ALBNames: albNames,
-		ELBClient: mockELB,
-		ALBClient: mockALB,
-		ELBFinder: mockELB.FindFrontEndElbs,
+		ALBNames:      albNames,
+		ELBClient:     mockELB,
+		ALBClient:     mockALB,
+		ELBFinder:     mockELB.FindFrontEndElbs,
 	}
 	lbAdapter, _ := adapter.NewAWSAdapter(&config)
 	dnsUpdater := New(hostedZoneID, lbAdapter, 1).(*updater)
@@ -174,9 +174,8 @@ func setupForELB(albNames []string, elbLabelValue string) (*updater, *mockR53Cli
 	return dnsUpdater, mockR53, mockELB, mockALB
 }
 
-func setupForExplicitAddresses() (*updater, *mockR53Client) {
-	addresses := map[string]string{internalScheme: internalAddressArgument, externalScheme: externalAddressArgument}
-	lbAdapter := adapter.NewStaticHostnameAdapter(addresses, 5*time.Minute)
+func setupForExplicitAddresses(definedFrontends map[string]string) (*updater, *mockR53Client) {
+	lbAdapter := adapter.NewStaticHostnameAdapter(definedFrontends, 5*time.Minute)
 
 	dnsUpdater := New(hostedZoneID, lbAdapter, 1).(*updater)
 	mockR53 := &mockR53Client{}
@@ -555,20 +554,25 @@ func TestRecordSetUpdates(t *testing.T) {
 
 func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 	ttl := aws.Int64(300)
+	internalAndExternalFrontends := map[string]string{internalScheme: internalAddressArgument, externalScheme: externalAddressArgument}
+
 	var tests = []struct {
-		name            string
-		update          controller.IngressEntries
-		records         []*route53.ResourceRecordSet
-		expectedChanges []*route53.Change
+		name             string
+		definedFrontends map[string]string
+		update           controller.IngressEntries
+		records          []*route53.ResourceRecordSet
+		expectedChanges  []*route53.Change
 	}{
 		{
 			"Empty update has no change",
+			internalAndExternalFrontends,
 			controller.IngressEntries{},
 			[]*route53.ResourceRecordSet{},
 			[]*route53.Change{},
 		},
 		{
 			"Add new record",
+			internalAndExternalFrontends,
 			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "cats.james.com",
@@ -593,6 +597,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 		},
 		{
 			"Updating existing record to a new scheme",
+			internalAndExternalFrontends,
 			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -626,6 +631,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 		},
 		{
 			"Deleting existing record",
+			internalAndExternalFrontends,
 			controller.IngressEntries{},
 			[]*route53.ResourceRecordSet{
 				{
@@ -665,6 +671,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 		},
 		{
 			"Adding and deleting records",
+			internalAndExternalFrontends,
 			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -723,6 +730,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 		},
 		{
 			"Non-matching schemes and domains are ignored",
+			internalAndExternalFrontends,
 			[]controller.IngressEntry{
 				// host doesn't match james.com.
 				{
@@ -746,6 +754,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 		},
 		{
 			"Duplicate hosts are not duplicated in changeset",
+			internalAndExternalFrontends,
 			[]controller.IngressEntry{
 				{
 					Name:        "test-entry",
@@ -786,6 +795,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 		},
 		{
 			"Should choose first conflicting scheme",
+			internalAndExternalFrontends,
 			[]controller.IngressEntry{
 				{
 					Name:        "test-entry",
@@ -819,6 +829,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 		},
 		{
 			"Does not update records when current and new entry are the same",
+			internalAndExternalFrontends,
 			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -840,6 +851,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 		},
 		{
 			"Updates TTL on a CNAME record when it has changed",
+			internalAndExternalFrontends,
 			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -873,6 +885,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 		},
 		{
 			"Handles existing records which have no TTL",
+			internalAndExternalFrontends,
 			[]controller.IngressEntry{{
 				Name:        "test-entry",
 				Host:        "foo.james.com",
@@ -903,12 +916,25 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 				},
 			}},
 		},
+		{
+			"Ignores ingresses which use a scheme for which no frontend is defined",
+			map[string]string{internalScheme: internalAddressArgument},
+			[]controller.IngressEntry{{
+				Name:        "test-entry",
+				Host:        "foo.james.com",
+				Path:        "/",
+				ELbScheme:   externalScheme,
+				ServicePort: 80,
+			}},
+			[]*route53.ResourceRecordSet{},
+			[]*route53.Change{},
+		},
 	}
 
 	for _, test := range tests {
 		fmt.Printf("=== test: TestRecordSetUpdatesWithAddressArguments: %s\n", test.name)
 
-		dnsUpdater, mockR53 := setupForExplicitAddresses()
+		dnsUpdater, mockR53 := setupForExplicitAddresses(test.definedFrontends)
 		mockR53.mockGetHostedZoneDomain()
 		mockR53.mockGetRecords(test.records, nil)
 		mockR53.On("UpdateRecordSets", test.expectedChanges).Return(nil)

@@ -10,11 +10,11 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/dns"
+	"github.com/sky-uk/feed/dns/adapter"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
-	"github.com/sky-uk/feed/dns/adapter"
 )
 
 var (
@@ -115,8 +115,16 @@ func main() {
 }
 
 func createFrontendAdapter() (adapter.FrontendAdapter, error) {
-	if internalHostname != "" && externalHostname != "" {
-		addressesWithScheme := map[string]string{"internal": internalHostname, "internet-facing": externalHostname}
+	if internalHostname != "" || externalHostname != "" {
+		addressesWithScheme := make(map[string]string)
+		if internalHostname != "" {
+			addressesWithScheme["internal"] = internalHostname
+		}
+
+		if externalHostname != "" {
+			addressesWithScheme["internet-facing"] = externalHostname
+		}
+
 		return adapter.NewStaticHostnameAdapter(addressesWithScheme, cnameTimeToLive), nil
 	}
 
@@ -135,13 +143,13 @@ func validateConfig() {
 		os.Exit(-1)
 	}
 
-	if (internalHostname != "" || externalHostname != "") && (elbLabelValue != "" || len(albNames) > 0)  {
-		log.Error("Can't supply both ELB/ALB and non-ALB/ELB hostname. Choose one or the other.")
+	if elbLabelValue == "" && len(albNames) == 0 && internalHostname == "" && externalHostname == "" {
+		log.Error("Must specify at least one of alb-names, elb-label-value, internal-hostname or external-hostname")
 		os.Exit(-1)
 	}
 
-	if (internalHostname == "" && externalHostname != "") || (internalHostname != "" && externalHostname == "") {
-		log.Error("Must supply both internal-hostname and external-hostname if any are to be provided.")
+	if (internalHostname != "" || externalHostname != "") && (elbLabelValue != "" || len(albNames) > 0) {
+		log.Error("Can't supply both ELB/ALB and non-ALB/ELB hostname. Choose one or the other.")
 		os.Exit(-1)
 	}
 }

@@ -4,14 +4,14 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
-	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
 
 	"strings"
 
-	"github.com/sky-uk/feed/elb"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/sky-uk/feed/elb"
 )
 
 // FindELBsFunc defines a function which find ELBs based on a label
@@ -59,11 +59,11 @@ func NewAWSAdapter(config *AWSAdapterConfig) (FrontendAdapter, error) {
 	}
 
 	return &awsAdapter{
-		hostedZoneID: aws.String(config.HostedZoneID),
-		elbLabelValue: config.ELBLabelValue,
-		albNames: config.ALBNames,
-		elb: config.ELBClient,
-		alb: config.ALBClient,
+		hostedZoneID:     aws.String(config.HostedZoneID),
+		elbLabelValue:    config.ELBLabelValue,
+		albNames:         config.ALBNames,
+		elb:              config.ELBClient,
+		alb:              config.ALBClient,
 		findFrontEndElbs: config.ELBFinder,
 	}, nil
 }
