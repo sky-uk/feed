@@ -1,4 +1,4 @@
-package dns
+package adapter
 
 import (
 	"time"
@@ -17,26 +17,26 @@ func NewStaticHostnameAdapter(addressesWithScheme map[string]string, ttl time.Du
 	return &staticHostnameAdapter{addressesWithScheme, aws.Int64(int64(ttl.Seconds()))}
 }
 
-func (s *staticHostnameAdapter) initialise() (map[string]dnsDetails, error) {
-	schemeToFrontendMap := make(map[string]dnsDetails)
+func (s *staticHostnameAdapter) Initialise() (map[string]DNSDetails, error) {
+	schemeToFrontendMap := make(map[string]DNSDetails)
 	for scheme, address := range s.addressesWithScheme {
-		schemeToFrontendMap[scheme] = dnsDetails{dnsName: address, hostedZoneID: ""}
+		schemeToFrontendMap[scheme] = DNSDetails{DNSName: address}
 	}
 
 	return schemeToFrontendMap, nil
 }
 
-func (s *staticHostnameAdapter) createChange(action string, host string, details dnsDetails,
-	recordExists bool, existingRecord *consolidatedRecord) *route53.Change {
+func (s *staticHostnameAdapter) CreateChange(action string, host string, details DNSDetails,
+	recordExists bool, existingRecord *ConsolidatedRecord) *route53.Change {
 
-	if recordExists && existingRecord.ttl != *s.ttl || !recordExists || action == "DELETE" {
+	if recordExists && existingRecord.TTL != *s.ttl || !recordExists || action == "DELETE" {
 		rrs := &route53.ResourceRecordSet{
 			Name: aws.String(host),
 			Type: aws.String("CNAME"),
 			TTL:  s.ttl,
 			ResourceRecords: []*route53.ResourceRecord{
 				{
-					Value: aws.String(details.dnsName),
+					Value: aws.String(details.DNSName),
 				},
 			},
 		}
@@ -50,14 +50,14 @@ func (s *staticHostnameAdapter) createChange(action string, host string, details
 	return nil
 }
 
-func (s *staticHostnameAdapter) recognise(rrs *route53.ResourceRecordSet) (*consolidatedRecord, bool) {
+func (s *staticHostnameAdapter) Recognise(rrs *route53.ResourceRecordSet) (*ConsolidatedRecord, bool) {
 	if *rrs.Type == route53.RRTypeCname {
-		record := consolidatedRecord{
-			name:     *rrs.Name,
-			pointsTo: *rrs.ResourceRecords[0].Value,
+		record := ConsolidatedRecord{
+			Name:     *rrs.Name,
+			PointsTo: *rrs.ResourceRecords[0].Value,
 		}
 		if rrs.TTL != nil {
-			record.ttl = *rrs.TTL
+			record.TTL = *rrs.TTL
 		}
 		return &record, true
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	aws_elb "github.com/aws/aws-sdk-go/service/elb"
 	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/prometheus/client_golang/prometheus"
@@ -16,6 +17,7 @@ import (
 	"github.com/sky-uk/feed/util/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/sky-uk/feed/dns/adapter"
 )
 
 func init() {
@@ -26,7 +28,6 @@ func init() {
 const (
 	hostedZoneID                 = "1234"
 	domain                       = "james.com."
-	awsRegion                    = "awsRegion"
 	lbHostedZoneID               = "lb-hosted-zone-id"
 	elbLabelValue                = "elbLabelValue"
 	internalALBName              = "internal-alb"
@@ -83,7 +84,6 @@ func (m *mockALB) mockDescribeLoadBalancers(names []string, lbDetails []lbDetail
 	}).Return(out, err)
 }
 
-// Note that unlike most mocks in this test, this is actually mocking a single function from the package not the actual elb.ELB interface
 type mockELB struct {
 	mock.Mock
 }
@@ -105,6 +105,22 @@ func (m *mockELB) mockFindFrontEndElbs(labelValue string, lbDetails []lbDetail, 
 	}
 
 	m.On("FindFrontEndElbs", mock.Anything, labelValue).Return(lbs, err)
+}
+
+func (m *mockELB) DescribeLoadBalancers(input *aws_elb.DescribeLoadBalancersInput) (*aws_elb.DescribeLoadBalancersOutput, error) {
+	return nil, nil
+}
+
+func (m *mockELB) DescribeTags(input *aws_elb.DescribeTagsInput) (*aws_elb.DescribeTagsOutput, error) {
+	return nil, nil
+}
+
+func (m *mockELB) RegisterInstancesWithLoadBalancer(input *aws_elb.RegisterInstancesWithLoadBalancerInput) (*aws_elb.RegisterInstancesWithLoadBalancerOutput, error) {
+	return nil, nil
+}
+
+func (m *mockELB) DeregisterInstancesFromLoadBalancer(input *aws_elb.DeregisterInstancesFromLoadBalancerInput) (*aws_elb.DeregisterInstancesFromLoadBalancerOutput, error) {
+	return nil, nil
 }
 
 type mockR53Client struct {
@@ -138,23 +154,29 @@ func (m *mockR53Client) mockGetHostedZoneDomain() {
 	m.On("GetHostedZoneDomain").Return(domain, nil)
 }
 
-func setupForELB() (*updater, *mockR53Client, *mockELB, *mockALB, *awsAdapter) {
-	lbAdapter, _ := NewAWSAdapter(awsRegion, hostedZoneID, "", albNames)
-	awsAdapter := lbAdapter.(*awsAdapter)
+func setupForELB(albNames []string, elbLabelValue string) (*updater, *mockR53Client, *mockELB, *mockALB) {
+	mockALB := &mockALB{}
+	mockELB := &mockELB{}
+
+	config := adapter.AWSAdapterConfig{
+		HostedZoneID: hostedZoneID,
+		ELBLabelValue: elbLabelValue,
+		ALBNames: albNames,
+		ELBClient: mockELB,
+		ALBClient: mockALB,
+		ELBFinder: mockELB.FindFrontEndElbs,
+	}
+	lbAdapter, _ := adapter.NewAWSAdapter(&config)
 	dnsUpdater := New(hostedZoneID, lbAdapter, 1).(*updater)
 
 	mockR53 := &mockR53Client{}
 	dnsUpdater.r53 = mockR53
-	mockELB := &mockELB{}
-	mockALB := &mockALB{}
-	awsAdapter.findFrontEndElbs = mockELB.FindFrontEndElbs
-	awsAdapter.alb = mockALB
-	return dnsUpdater, mockR53, mockELB, mockALB, awsAdapter
+	return dnsUpdater, mockR53, mockELB, mockALB
 }
 
 func setupForExplicitAddresses() (*updater, *mockR53Client) {
 	addresses := map[string]string{internalScheme: internalAddressArgument, externalScheme: externalAddressArgument}
-	lbAdapter := NewStaticHostnameAdapter(addresses, 5*time.Minute)
+	lbAdapter := adapter.NewStaticHostnameAdapter(addresses, 5*time.Minute)
 
 	dnsUpdater := New(hostedZoneID, lbAdapter, 1).(*updater)
 	mockR53 := &mockR53Client{}
@@ -163,7 +185,7 @@ func setupForExplicitAddresses() (*updater, *mockR53Client) {
 }
 
 func TestFailsToQueryFrontends(t *testing.T) {
-	dnsUpdater, mockR53, _, mockALB, _ := setupForELB()
+	dnsUpdater, mockR53, _, mockALB := setupForELB(albNames, "")
 	mockALB.mockDescribeLoadBalancers(albNames, nil, errors.New("doh"))
 	mockR53.mockGetHostedZoneDomain()
 
@@ -173,9 +195,7 @@ func TestFailsToQueryFrontends(t *testing.T) {
 }
 
 func TestQueryFrontendElbsFails(t *testing.T) {
-	dnsUpdater, mockR53, mockELB, _, awsAdapter := setupForELB()
-	awsAdapter.albNames = nil
-	awsAdapter.elbLabelValue = elbLabelValue
+	dnsUpdater, mockR53, mockELB, _ := setupForELB(nil, elbLabelValue)
 	mockELB.mockFindFrontEndElbs(elbLabelValue, nil, errors.New("nope"))
 	mockR53.mockGetHostedZoneDomain()
 
@@ -185,13 +205,11 @@ func TestQueryFrontendElbsFails(t *testing.T) {
 }
 
 func TestQueryFrontendElbsTrailingDotOnDomain(t *testing.T) {
-	dnsUpdater, mockR53, mockELB, _, awsAdapter := setupForELB()
+	dnsUpdater, mockR53, mockELB, _ := setupForELB(nil, elbLabelValue)
 	lbDetWithDot := []lbDetail{
 		{scheme: internalScheme, dnsName: internalALBDnsName},
 		{scheme: externalScheme, dnsName: externalALBDnsNameWithPeriod},
 	}
-	awsAdapter.albNames = nil
-	awsAdapter.elbLabelValue = elbLabelValue
 	mockELB.mockFindFrontEndElbs(elbLabelValue, lbDetWithDot, nil)
 	mockR53.mockGetHostedZoneDomain()
 
@@ -201,22 +219,20 @@ func TestQueryFrontendElbsTrailingDotOnDomain(t *testing.T) {
 }
 
 func TestQueryFrontedElbs(t *testing.T) {
-	dnsUpdater, mockR53, mockELB, _, awsAdapter := setupForELB()
-	awsAdapter.albNames = nil
-	awsAdapter.elbLabelValue = elbLabelValue
+	dnsUpdater, mockR53, mockELB, _ := setupForELB(nil, elbLabelValue)
 	mockELB.mockFindFrontEndElbs(elbLabelValue, lbDetails, nil)
 	mockR53.mockGetHostedZoneDomain()
 
 	assert.NoError(t, dnsUpdater.Start())
-	assert.Equal(t, map[string]dnsDetails{
-		internalScheme: {dnsName: internalALBDnsNameWithPeriod, hostedZoneID: lbHostedZoneID},
-		externalScheme: {dnsName: externalALBDnsNameWithPeriod, hostedZoneID: lbHostedZoneID},
+	assert.Equal(t, map[string]adapter.DNSDetails{
+		internalScheme: {DNSName: internalALBDnsNameWithPeriod, HostedZoneID: lbHostedZoneID},
+		externalScheme: {DNSName: externalALBDnsNameWithPeriod, HostedZoneID: lbHostedZoneID},
 	}, dnsUpdater.schemeToFrontendMap)
 	mockR53.AssertExpectations(t)
 }
 
 func TestGetsDomainNameFails(t *testing.T) {
-	dnsUpdater, mockR53, _, mockALB, _ := setupForELB()
+	dnsUpdater, mockR53, _, mockALB := setupForELB(albNames, "")
 	mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
 	mockR53.On("GetHostedZoneDomain").Return("", errors.New("no domain for you"))
 
@@ -227,7 +243,7 @@ func TestGetsDomainNameFails(t *testing.T) {
 
 func TestUpdateRecordSetFail(t *testing.T) {
 	// given
-	dnsUpdater, mockR53, _, mockALB, _ := setupForELB()
+	dnsUpdater, mockR53, _, mockALB := setupForELB(albNames, "")
 	mockR53.mockGetHostedZoneDomain()
 	mockR53.mockGetRecords(nil, nil)
 	mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
@@ -520,7 +536,7 @@ func TestRecordSetUpdates(t *testing.T) {
 	for _, test := range tests {
 		fmt.Printf("=== test: %s\n", test.name)
 
-		dnsUpdater, mockR53, _, mockALB, _ := setupForELB()
+		dnsUpdater, mockR53, _, mockALB := setupForELB(albNames, "")
 		mockALB.mockDescribeLoadBalancers(albNames, lbDetails, nil)
 		mockR53.mockGetHostedZoneDomain()
 		mockR53.mockGetRecords(test.records, nil)

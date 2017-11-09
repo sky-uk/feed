@@ -14,6 +14,7 @@ import (
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
+	"github.com/sky-uk/feed/dns/adapter"
 )
 
 var (
@@ -113,13 +114,19 @@ func main() {
 	select {}
 }
 
-func createFrontendAdapter() (dns.FrontendAdapter, error) {
+func createFrontendAdapter() (adapter.FrontendAdapter, error) {
 	if internalHostname != "" && externalHostname != "" {
 		addressesWithScheme := map[string]string{"internal": internalHostname, "internet-facing": externalHostname}
-		return dns.NewStaticHostnameAdapter(addressesWithScheme, cnameTimeToLive), nil
+		return adapter.NewStaticHostnameAdapter(addressesWithScheme, cnameTimeToLive), nil
 	}
 
-	return dns.NewAWSAdapter(elbRegion, r53HostedZone, elbLabelValue, albNames)
+	config := adapter.AWSAdapterConfig{
+		Region:        elbRegion,
+		HostedZoneID:  r53HostedZone,
+		ELBLabelValue: elbLabelValue,
+		ALBNames:      albNames,
+	}
+	return adapter.NewAWSAdapter(&config)
 }
 
 func validateConfig() {
