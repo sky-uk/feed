@@ -12,7 +12,11 @@ apt-get install --no-install-suggests --no-install-recommends -y \
     libc6 libc6-dev \
     libpcre3 libpcre3-dev libpcrecpp0v5 \
     zlib1g zlib1g-dev \
-    libaio1 libaio-dev
+    libaio1 libaio-dev \
+    sudo
+
+# allow nginx user to manage interfaces and arp configuration
+echo "%nginx ALL=NOPASSWD: /sbin/ip, /bin/echo" >> /etc/sudoers
 
 echo "--- Downloading nginx and modules"
 mkdir /tmp/nginx

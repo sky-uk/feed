@@ -20,6 +20,8 @@ import (
 
 	"path"
 
+	"strconv"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/hashicorp/go-multierror"
 	"github.com/sky-uk/feed/controller"
@@ -87,7 +89,7 @@ func New(c *Config) (controller.Updater, error) {
 		return nil, errors.New("unable to create Gorb updater: missing server ip address")
 	}
 	initMetrics()
-	log.Infof("Gorb server url: %s, drainDelay: %v, instance ip adddress: %s, vipLoadbalancer: %s ", c.ServerBaseURL, c.DrainDelay, c.InstanceIP, c.VipLoadbalancer)
+	log.Infof("Gorb server url: %s, drainDelay: %v, instance ip adddress: %s, vipLoadbalancer: %s", c.ServerBaseURL, c.DrainDelay, c.InstanceIP, c.VipLoadbalancer)
 
 	backendDefinitions := []backend{}
 
@@ -122,13 +124,30 @@ func New(c *Config) (controller.Updater, error) {
 	}
 
 	return &gorb{
+		command:    &SimpleCommandRunner{},
 		config:     c,
 		backend:    backendDefinitions,
 		httpClient: httpClient,
 	}, nil
 }
 
+// CommandRunner is a cut down version of exec.Cmd for running commands
+type CommandRunner interface {
+	Execute(cmd string) ([]byte, error)
+}
+
+// SimpleCommandRunner implements CommandRunner
+type SimpleCommandRunner struct {
+}
+
+// Execute runs the given command and returns its output
+func (c *SimpleCommandRunner) Execute(cmd string) ([]byte, error) {
+	log.Infof(fmt.Sprintf("Executing cmd: %s", cmd))
+	return exec.Command("bash", "-c", cmd).Output()
+}
+
 type gorb struct {
+	command    CommandRunner
 	config     *Config
 	httpClient *http.Client
 	backend    []backend
@@ -179,7 +198,7 @@ func (g *gorb) Health() error {
 		return fmt.Errorf("unable to check service details: %v", err)
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("gorb server is not healthy. Status code: %d, Response Body %s", resp.StatusCode, resp.Body)
 	}
 
@@ -217,45 +236,62 @@ func (g *gorb) Update(controller.IngressEntries) error {
 func (g *gorb) manageLoopBack(action loopbackAction) error {
 	var arpIgnore int
 	var arpAnnounce int
+	var expectedVipCount int
+	var interfaceAction string
 
 	switch action {
 	// disable ARP for the loopback interface - see http://kb.linuxvirtualserver.org/wiki/Using_arp_announce/arp_ignore_to_disable_ARP
 	case addLoopback:
 		arpIgnore = 1
 		arpAnnounce = 2
+		interfaceAction = "add"
+		expectedVipCount = 0
 	case deleteLoopback:
 		arpIgnore = 0
 		arpAnnounce = 0
+		interfaceAction = "del"
+		expectedVipCount = 1
 	default:
 		return fmt.Errorf("unsupported loopback action %s", action)
 	}
 
 	var errorArr *multierror.Error
-	vipLoadbalancerArr := strings.Split(g.config.VipLoadbalancer, ",")
-	for index, vip := range vipLoadbalancerArr {
-		log.Infof(fmt.Sprintf("VIP %s loopback: %s", action, vip))
-		cmd := fmt.Sprintf("ip addr %s %s/32 dev lo label lo:%d", action, vip, index)
-		_, errCmd := exec.Command("bash", "-c", cmd).Output()
-		errorArr = multierror.Append(errorArr, errCmd)
+	vipLoadbalancers := strings.Split(g.config.VipLoadbalancer, ",")
+	for index, vip := range vipLoadbalancers {
+		vipCount, err := g.loopbackInterfaceCount(fmt.Sprintf("lo:%d", index), vip)
+		errorArr = multierror.Append(errorArr, err)
+		if vipCount == expectedVipCount {
+			_, err = g.command.Execute(fmt.Sprintf("sudo ip addr %s %s/32 dev lo label lo:%d", interfaceAction, vip, index))
+			errorArr = multierror.Append(errorArr, err)
+		}
 
-		log.WithFields(log.Fields{"arp_ignore": arpIgnore}).Info("Set arp_ignore to: ")
-		cmd = fmt.Sprintf("echo %d > %s", arpIgnore, path.Join(g.config.InterfaceProcFsPath, "arp_ignore"))
-		_, errCmd = exec.Command("bash", "-c", cmd).Output()
-		errorArr = multierror.Append(errorArr, errCmd)
+		_, err = g.command.Execute(fmt.Sprintf("sudo echo %d > %s", arpIgnore, path.Join(g.config.InterfaceProcFsPath, "arp_ignore")))
+		errorArr = multierror.Append(errorArr, err)
 
-		log.WithFields(log.Fields{"arp_announce": arpAnnounce}).Info("Set arp_announce to: ")
-		cmd = fmt.Sprintf("echo %d > %s", arpAnnounce, path.Join(g.config.InterfaceProcFsPath, "arp_announce"))
-		_, errCmd = exec.Command("bash", "-c", cmd).Output()
-		errorArr = multierror.Append(errorArr, errCmd)
+		_, err = g.command.Execute(fmt.Sprintf("sudo echo %d > %s", arpAnnounce, path.Join(g.config.InterfaceProcFsPath, "arp_announce")))
+		errorArr = multierror.Append(errorArr, err)
 	}
 
 	return errorArr.ErrorOrNil()
 }
 
+func (g *gorb) loopbackInterfaceCount(label string, vip string) (int, error) {
+	cmdOutput, err := g.command.Execute(fmt.Sprintf("sudo ip addr show label %s | grep -c %s/32", label, vip))
+	if err != nil {
+		return -1, fmt.Errorf("unable to check whether loopback interface exists for label: %s and vip: %s, error %v", label, vip, err)
+	}
+
+	vipCount, err := strconv.Atoi(strings.TrimSpace(string(cmdOutput)))
+	if err != nil {
+		return -1, fmt.Errorf("unable to parse loopback interface count from the output: %s, error :%v", string(cmdOutput), err)
+	}
+	return vipCount, nil
+}
+
 func (g *gorb) backendNotFound(backend *backend) (bool, error) {
 	resp, err := g.httpClient.Get(g.serviceRequest(backend))
 	if err != nil {
-		return false, fmt.Errorf("unable to retrieve backend details for instance ip: %s error :%v", g.config.InstanceIP, err)
+		return false, fmt.Errorf("unable to retrieve backend details for instance ip: %s, error :%v", g.config.InstanceIP, err)
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == http.StatusNotFound, nil

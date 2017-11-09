@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util/metrics"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestE2E(t *testing.T) {
@@ -50,6 +51,70 @@ type gorbHandler struct {
 	requestCounter   int
 }
 
+type fakeCommandRunner struct {
+	mock.Mock
+}
+
+func (c *fakeCommandRunner) Execute(cmd string) ([]byte, error) {
+	args := c.Called(cmd)
+	return args.Get(0).([]byte), args.Error(1)
+}
+
+func mockLoopbackExistsCommand(mockCommand *fakeCommandRunner, vip string) {
+	mockLoopbackCheckCommand(mockCommand, vip, "1\n") // may have trailing chars
+}
+
+func mockLoopbackDoesNotExistCommand(mockCommand *fakeCommandRunner, vip string) {
+	mockLoopbackCheckCommand(mockCommand, vip, "0\n") // may have trailing chars
+}
+
+func mockLoopbackCheckCommand(mockCommand *fakeCommandRunner, vip string, expectedCount string) {
+	mockCommand.On("Execute", fmt.Sprintf("sudo ip addr show label lo:0 | grep -c %s/32", vip)).Return([]byte(expectedCount), nil)
+}
+
+func mockDisableArpCommand(mockCommand *fakeCommandRunner) {
+	mockCommand.On("Execute", "sudo echo 1 > /host_ipv4_proc/arp_ignore").Return([]byte{}, nil)
+	mockCommand.On("Execute", "sudo echo 2 > /host_ipv4_proc/arp_announce").Return([]byte{}, nil)
+}
+
+func mockEnableArpCommand(mockCommand *fakeCommandRunner) {
+	mockCommand.On("Execute", "sudo echo 0 > /host_ipv4_proc/arp_ignore").Return([]byte{}, nil)
+	mockCommand.On("Execute", "sudo echo 0 > /host_ipv4_proc/arp_announce").Return([]byte{}, nil)
+}
+
+func singleServiceConfig(serverURL string) *Config {
+	config := newConfig(serverURL)
+	config.ServicesDefinition = []VirtualService{{Name: "http-proxy", Port: 80}}
+	return config
+}
+
+func multipleServicesConfig(serverURL string) *Config {
+	config := newConfig(serverURL)
+	config.ServicesDefinition = []VirtualService{{Name: "http-proxy", Port: 80}, {Name: "https-proxy", Port: 443}}
+	return config
+}
+
+func loopbackManagingConfig(serverURL string) *Config {
+	config := newConfig(serverURL)
+	config.ManageLoopback = true
+	return config
+}
+
+func newConfig(serverURL string) *Config {
+	return &Config{
+		ServerBaseURL:              serverURL,
+		InstanceIP:                 instanceIP,
+		DrainDelay:                 drainImmediately,
+		ServicesDefinition:         []VirtualService{},
+		BackendMethod:              backendMethod,
+		BackendWeight:              backendWeight,
+		VipLoadbalancer:            vipLoadbalancer,
+		ManageLoopback:             manageLoopback,
+		BackendHealthcheckInterval: backendHealthcheckInterval,
+		InterfaceProcFsPath:        interfaceProcFsPath,
+	}
+}
+
 func (h *gorbHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	recordedRequest := gorbRecordedRequest{url: r.URL, body: &BackendConfig{}, method: r.Method}
 	h.recordedRequests = append(h.recordedRequests, recordedRequest)
@@ -80,7 +145,7 @@ func (h *gorbHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 var _ = Describe("Gorb", func() {
 	var (
-		gorb             controller.Updater
+		g                controller.Updater
 		server           *httptest.Server
 		serverURL        string
 		responsePrimers  []gorbResponsePrimer
@@ -94,22 +159,7 @@ var _ = Describe("Gorb", func() {
 		recordedRequests = []gorbRecordedRequest{}
 		gorbH = &gorbHandler{responsePrimers: responsePrimers, recordedRequests: recordedRequests}
 		server = httptest.NewServer(gorbH)
-
 		serverURL = server.URL
-		log.Info("url ", serverURL)
-		config := &Config{
-			ServerBaseURL:              serverURL,
-			InstanceIP:                 instanceIP,
-			DrainDelay:                 drainImmediately,
-			ServicesDefinition:         []VirtualService{{Name: "http-proxy", Port: 80}},
-			BackendMethod:              backendMethod,
-			BackendWeight:              backendWeight,
-			VipLoadbalancer:            vipLoadbalancer,
-			ManageLoopback:             manageLoopback,
-			BackendHealthcheckInterval: backendHealthcheckInterval,
-			InterfaceProcFsPath:        interfaceProcFsPath,
-		}
-		gorb, _ = New(config)
 	})
 
 	BeforeEach(func() {
@@ -125,14 +175,21 @@ var _ = Describe("Gorb", func() {
 	Describe("Health endpoint", func() {
 		It("should be healthy when status code is 200", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
-			err := gorb.Health()
+
+			g, _ = New(singleServiceConfig(serverURL))
+			err := g.Health()
+
 			Expect(len(gorbH.recordedRequests)).To(Equal(1))
 			Expect(gorbH.recordedRequests[0].url.RequestURI()).To(Equal("/service"))
 			Expect(err).NotTo(HaveOccurred())
 		})
+
 		It("should return error when status code is not 200", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
-			err := gorb.Health()
+
+			g, _ = New(singleServiceConfig(serverURL))
+			err := g.Health()
+
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -141,11 +198,13 @@ var _ = Describe("Gorb", func() {
 		It("should add itself as new backend", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
-			err := gorb.Update(controller.IngressEntries{})
+
+			g, _ = New(singleServiceConfig(serverURL))
+			err := g.Update(controller.IngressEntries{})
+
 			Expect(len(gorbH.recordedRequests)).To(Equal(2))
 			Expect(gorbH.recordedRequests[0].method).To(Equal("GET"))
 			Expect(gorbH.recordedRequests[0].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-http-proxy-%s", instanceIP)))
-
 			Expect(gorbH.recordedRequests[1].method).To(Equal("PUT"))
 			Expect(gorbH.recordedRequests[1].body.Host).To(Equal("10.10.0.1"))
 			Expect(gorbH.recordedRequests[1].body.Port).To(Equal(80))
@@ -158,7 +217,10 @@ var _ = Describe("Gorb", func() {
 		It("should remove itself on shutdown", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
-			err := gorb.Stop()
+
+			g, _ = New(singleServiceConfig(serverURL))
+			err := g.Stop()
+
 			Expect(len(gorbH.recordedRequests)).To(Equal(2))
 			Expect(gorbH.recordedRequests[0].method).To(Equal("PATCH"))
 			Expect(gorbH.recordedRequests[0].body.Host).To(Equal("10.10.0.1"))
@@ -175,7 +237,10 @@ var _ = Describe("Gorb", func() {
 		It("should return an error when failing to add a backend", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
-			err := gorb.Update(controller.IngressEntries{})
+
+			g, _ = New(singleServiceConfig(serverURL))
+			err := g.Update(controller.IngressEntries{})
+
 			Expect(len(gorbH.recordedRequests)).To(Equal(2))
 			Expect(err).To(HaveOccurred())
 		})
@@ -184,31 +249,76 @@ var _ = Describe("Gorb", func() {
 
 	Describe("Multiple services", func() {
 		It("should all have their backends", func() {
-			config := &Config{
-				ServerBaseURL:              serverURL,
-				InstanceIP:                 instanceIP,
-				DrainDelay:                 drainImmediately,
-				ServicesDefinition:         []VirtualService{{Name: "http-proxy", Port: 80}, {Name: "https-proxy", Port: 443}},
-				BackendMethod:              backendMethod,
-				BackendWeight:              backendWeight,
-				VipLoadbalancer:            vipLoadbalancer,
-				ManageLoopback:             manageLoopback,
-				BackendHealthcheckInterval: backendHealthcheckInterval,
-				InterfaceProcFsPath:        interfaceProcFsPath,
-			}
-			gorb, _ = New(config)
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
-			err := gorb.Update(controller.IngressEntries{})
+
+			g, _ = New(multipleServicesConfig(serverURL))
+			err := g.Update(controller.IngressEntries{})
+
 			Expect(len(gorbH.recordedRequests)).To(Equal(4))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(gorbH.recordedRequests[1].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-http-proxy-%s", instanceIP)))
 			Expect(gorbH.recordedRequests[1].body.Port).To(Equal(80))
-
 			Expect(gorbH.recordedRequests[3].url.RequestURI()).To(Equal(fmt.Sprintf("/service/https-proxy/node-https-proxy-%s", instanceIP)))
 			Expect(gorbH.recordedRequests[3].body.Port).To(Equal(443))
+		})
+	})
+
+	Describe("Loopback interface", func() {
+		It("should be added when does not exists", func() {
+			g, _ = New(loopbackManagingConfig(serverURL))
+			mockCommand := &fakeCommandRunner{}
+			g.(*gorb).command = mockCommand
+
+			mockLoopbackDoesNotExistCommand(mockCommand, vipLoadbalancer)
+			mockCommand.On("Execute", fmt.Sprintf("sudo ip addr add %s/32 dev lo label lo:0", vipLoadbalancer)).Return([]byte{}, nil)
+			mockDisableArpCommand(mockCommand)
+
+			err := g.Update(controller.IngressEntries{})
+			Expect(err).NotTo(HaveOccurred())
+			mockCommand.AssertExpectations(GinkgoT())
+		})
+
+		It("should be not be added when alredy exists", func() {
+			g, _ = New(loopbackManagingConfig(serverURL))
+			mockCommand := &fakeCommandRunner{}
+			g.(*gorb).command = mockCommand
+
+			mockLoopbackExistsCommand(mockCommand, vipLoadbalancer)
+			mockDisableArpCommand(mockCommand)
+
+			err := g.Update(controller.IngressEntries{})
+			Expect(err).NotTo(HaveOccurred())
+			mockCommand.AssertExpectations(GinkgoT())
+		})
+
+		It("should be deleted on stop", func() {
+			g, _ = New(loopbackManagingConfig(serverURL))
+			mockCommand := &fakeCommandRunner{}
+			g.(*gorb).command = mockCommand
+
+			mockLoopbackExistsCommand(mockCommand, vipLoadbalancer)
+			mockCommand.On("Execute", fmt.Sprintf("sudo ip addr del %s/32 dev lo label lo:0", vipLoadbalancer)).Return([]byte{}, nil)
+			mockEnableArpCommand(mockCommand)
+
+			err := g.Stop()
+			Expect(err).NotTo(HaveOccurred())
+			mockCommand.AssertExpectations(GinkgoT())
+		})
+
+		It("should not be deleted on stop if not present", func() {
+			g, _ = New(loopbackManagingConfig(serverURL))
+			mockCommand := &fakeCommandRunner{}
+			g.(*gorb).command = mockCommand
+
+			mockLoopbackDoesNotExistCommand(mockCommand, vipLoadbalancer)
+			mockEnableArpCommand(mockCommand)
+
+			err := g.Stop()
+			Expect(err).NotTo(HaveOccurred())
+			mockCommand.AssertExpectations(GinkgoT())
 		})
 	})
 })

@@ -291,7 +291,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			VipLoadbalancer:            gorbVipLoadbalancer,
 			ManageLoopback:             gorbManageLoopback,
 			BackendHealthcheckInterval: gorbBackendHealthcheckInterval,
-			InterfaceProcFsPath:        gorbBackendHealthcheckInterval,
+			InterfaceProcFsPath:        gorbInterfaceProcFsPath,
 		}
 		gorbUpdater, err := gorb.New(&config)
 		if err != nil {
