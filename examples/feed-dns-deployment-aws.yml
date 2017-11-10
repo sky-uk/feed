@@ -1,4 +1,5 @@
-# Example deployment for launching feed-dns, the route53 ingress controller.
+# Example deployment for launching feed-dns, the route53 ingress controller, where requests are to be directed to
+# AWS load balancers.
 #
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -23,7 +24,7 @@ spec:
       terminationGracePeriodSeconds: 30
 
       containers:
-      - image: skycirrus/feed-dns:v1.2.0
+      - image: skycirrus/feed-dns:v1.3.0
         name: feed-dns
 
         resources:

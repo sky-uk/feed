@@ -27,7 +27,12 @@ func New(region string, targetGroupNames []string, targetGroupDeregistrationDela
 	}
 	initMetrics()
 	log.Infof("ALB frontend region: %s target groups: %v", region, targetGroupNames)
-	session := session.New(&aws.Config{Region: &region})
+	session, err := session.NewSession(&aws.Config{Region: &region})
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to create ALB updater: %v", err)
+	}
+
 	return &alb{
 		metadata:                       ec2metadata.New(session),
 		awsALB:                         aws_alb.New(session),

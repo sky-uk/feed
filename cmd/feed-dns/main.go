@@ -10,6 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/dns"
+	"github.com/sky-uk/feed/dns/adapter"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/cmd"
@@ -29,6 +30,9 @@ var (
 	pushgatewayIntervalSeconds int
 	pushgatewayLabels          cmd.KeyValues
 	awsAPIRetries              int
+	internalHostname           string
+	externalHostname           string
+	cnameTimeToLive            time.Duration
 )
 
 func init() {
@@ -40,6 +44,7 @@ func init() {
 		defaultHostedZone                 = ""
 		defaultPushgatewayIntervalSeconds = 60
 		defaultAwsAPIRetries              = 5
+		defaultCnameTTL                   = 5 * time.Minute
 	)
 
 	flag.BoolVar(&debug, "debug", false,
@@ -67,6 +72,12 @@ func init() {
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
 	flag.IntVar(&awsAPIRetries, "aws-api-retries", defaultAwsAPIRetries,
 		"Number of times a request to the AWS API is retried.")
+	flag.StringVar(&internalHostname, "internal-hostname", "",
+		"Hostname of the internal facing load-balancer. If specified, external-hostname must also be given.")
+	flag.StringVar(&externalHostname, "external-hostname", "",
+		"Hostname of the internet facing load-balancer. If specified, internal-hostname must also be given.")
+	flag.DurationVar(&cnameTimeToLive, "cname-ttl", defaultCnameTTL,
+		"Time-to-live of CNAME records")
 }
 
 func main() {
@@ -81,7 +92,11 @@ func main() {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
 
-	dnsUpdater := dns.New(r53HostedZone, elbRegion, elbLabelValue, albNames, awsAPIRetries)
+	var lbAdapter, lbErr = createFrontendAdapter()
+	if lbErr != nil {
+		log.Fatal("Error during initialisation: ", lbErr)
+	}
+	dnsUpdater := dns.New(r53HostedZone, lbAdapter, awsAPIRetries)
 
 	controller := controller.New(controller.Config{
 		KubernetesClient: client,
@@ -99,9 +114,42 @@ func main() {
 	select {}
 }
 
+func createFrontendAdapter() (adapter.FrontendAdapter, error) {
+	if internalHostname != "" || externalHostname != "" {
+		addressesWithScheme := make(map[string]string)
+		if internalHostname != "" {
+			addressesWithScheme["internal"] = internalHostname
+		}
+
+		if externalHostname != "" {
+			addressesWithScheme["internet-facing"] = externalHostname
+		}
+
+		return adapter.NewStaticHostnameAdapter(addressesWithScheme, cnameTimeToLive), nil
+	}
+
+	config := adapter.AWSAdapterConfig{
+		Region:        elbRegion,
+		HostedZoneID:  r53HostedZone,
+		ELBLabelValue: elbLabelValue,
+		ALBNames:      albNames,
+	}
+	return adapter.NewAWSAdapter(&config)
+}
+
 func validateConfig() {
 	if r53HostedZone == "" {
 		log.Error("Must supply r53-hosted-zone")
+		os.Exit(-1)
+	}
+
+	if elbLabelValue == "" && len(albNames) == 0 && internalHostname == "" && externalHostname == "" {
+		log.Error("Must specify at least one of alb-names, elb-label-value, internal-hostname or external-hostname")
+		os.Exit(-1)
+	}
+
+	if (internalHostname != "" || externalHostname != "") && (elbLabelValue != "" || len(albNames) > 0) {
+		log.Error("Can't supply both ELB/ALB and non-ALB/ELB hostname. Choose one or the other.")
 		os.Exit(-1)
 	}
 }

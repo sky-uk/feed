@@ -15,7 +15,7 @@ const maxRecordChanges = 100
 type Route53Client interface {
 	GetHostedZoneDomain() (string, error)
 	UpdateRecordSets(changes []*route53.Change) error
-	GetARecords() ([]*route53.ResourceRecordSet, error)
+	GetRecords() ([]*route53.ResourceRecordSet, error)
 }
 
 // r53 interface exposes the subset of methods we use of the aws sdk
@@ -33,8 +33,8 @@ type client struct {
 }
 
 // New creates a route53 client used to interact with aws
-func New(region string, hostedZone string, retries int) Route53Client {
-	config := aws.Config{Region: aws.String(region), MaxRetries: aws.Int(retries)}
+func New(hostedZone string, retries int) Route53Client {
+	config := aws.Config{MaxRetries: aws.Int(retries)}
 	return &client{
 		r53:              route53.New(session.New(), &config),
 		hostedZone:       hostedZone,
@@ -74,9 +74,9 @@ func (dns *client) UpdateRecordSets(changes []*route53.Change) error {
 	return nil
 }
 
-// GetARecords gets a list of A Records from aws.
-func (dns *client) GetARecords() ([]*route53.ResourceRecordSet, error) {
-	aRecords := []*route53.ResourceRecordSet{}
+// GetRecords gets a list of DNS records from aws.
+func (dns *client) GetRecords() ([]*route53.ResourceRecordSet, error) {
+	records := []*route53.ResourceRecordSet{}
 	request := &route53.ListResourceRecordSetsInput{
 		HostedZoneId: aws.String(dns.hostedZone),
 	}
@@ -90,8 +90,8 @@ func (dns *client) GetARecords() ([]*route53.ResourceRecordSet, error) {
 		recordSets := recordSetsOutput.ResourceRecordSets
 
 		for _, recordSet := range recordSets {
-			if *recordSet.Type == route53.RRTypeA {
-				aRecords = append(aRecords, recordSet)
+			if *recordSet.Type == route53.RRTypeA || *recordSet.Type == route53.RRTypeCname {
+				records = append(records, recordSet)
 			}
 		}
 
@@ -106,5 +106,5 @@ func (dns *client) GetARecords() ([]*route53.ResourceRecordSet, error) {
 		}
 	}
 
-	return aRecords, nil
+	return records, nil
 }

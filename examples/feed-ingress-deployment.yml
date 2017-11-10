@@ -30,7 +30,7 @@ spec:
       restartPolicy: Always
 
       containers:
-      - image: skycirrus/feed-ingress:v1.2.0
+      - image: skycirrus/feed-ingress:v1.3.0
         name: feed-ingress
 
         resources:
