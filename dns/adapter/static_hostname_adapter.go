@@ -50,7 +50,7 @@ func (s *staticHostnameAdapter) CreateChange(action string, host string, details
 	return nil
 }
 
-func (s *staticHostnameAdapter) Recognise(rrs *route53.ResourceRecordSet) (*ConsolidatedRecord, bool) {
+func (s *staticHostnameAdapter) IsManaged(rrs *route53.ResourceRecordSet) (*ConsolidatedRecord, bool) {
 	if *rrs.Type == route53.RRTypeCname {
 		record := ConsolidatedRecord{
 			Name:     *rrs.Name,

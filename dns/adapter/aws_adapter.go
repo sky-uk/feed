@@ -157,7 +157,7 @@ func (a *awsAdapter) CreateChange(action string, host string, details DNSDetails
 	return nil
 }
 
-func (a *awsAdapter) Recognise(rrs *route53.ResourceRecordSet) (*ConsolidatedRecord, bool) {
+func (a *awsAdapter) IsManaged(rrs *route53.ResourceRecordSet) (*ConsolidatedRecord, bool) {
 	if *rrs.Type == route53.RRTypeA && rrs.AliasTarget != nil {
 		return &ConsolidatedRecord{
 			Name:            *rrs.Name,

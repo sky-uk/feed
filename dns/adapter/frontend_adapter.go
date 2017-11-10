@@ -6,7 +6,7 @@ import "github.com/aws/aws-sdk-go/service/route53"
 type FrontendAdapter interface {
 	Initialise() (map[string]DNSDetails, error)
 	CreateChange(action string, host string, details DNSDetails, recordExists bool, existingRecord *ConsolidatedRecord) *route53.Change
-	Recognise(*route53.ResourceRecordSet) (*ConsolidatedRecord, bool)
+	IsManaged(*route53.ResourceRecordSet) (*ConsolidatedRecord, bool)
 }
 
 // DNSDetails defines a DNS name and, optionally, how it maps to an AWS Route53 zone

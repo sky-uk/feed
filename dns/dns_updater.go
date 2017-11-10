@@ -94,7 +94,7 @@ func (u *updater) consolidateRecordsFromRoute53(rrs []*route53.ResourceRecordSet
 	var records []adapter.ConsolidatedRecord
 
 	for _, recordSet := range rrs {
-		if record, recognised := u.lbAdapter.Recognise(recordSet); recognised {
+		if record, managed := u.lbAdapter.IsManaged(recordSet); managed {
 			records = append(records, *record)
 		}
 	}
