@@ -1,3 +1,7 @@
+# v1.2.2
+* Stop logging out the entire Route53 record set on update at Info in feed-dns: reduce this to Debug,
+  and instead emit the number of records currently in the record set at Info
+
 # v1.2.1
 * Aggressively rotate access logs to avoid excessive file cache usage. This can lead to kernel
   allocation failures when running feed inside a container with a memory limit.
