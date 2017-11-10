@@ -1,4 +1,4 @@
-# v1.2.2
+# v1.3.0
 * Add support for non-AWS load balancers, which are referenced by static hostnames.
 
 # v1.2.1
