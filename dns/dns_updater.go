@@ -127,7 +127,8 @@ func (u *updater) determineManagedRecordSets(rrs []adapter.ConsolidatedRecord) [
 func (u *updater) calculateChanges(originalRecords []adapter.ConsolidatedRecord,
 	entries controller.IngressEntries) []*route53.Change {
 
-	log.Infof("Current %s records: %v", u.domain, originalRecords)
+	log.Infof("Current %s records: %d", u.domain, len(originalRecords))
+	log.Debugf("Current %s record set: %v", u.domain, originalRecords)
 	log.Debug("Processing ingress update: ", entries)
 
 	hostToIngress, skipped := u.indexByHost(entries)
