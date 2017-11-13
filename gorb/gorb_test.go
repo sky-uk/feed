@@ -69,17 +69,17 @@ func mockLoopbackDoesNotExistCommand(mockCommand *fakeCommandRunner, vip string)
 }
 
 func mockLoopbackCheckCommand(mockCommand *fakeCommandRunner, vip string, expectedCount string) {
-	mockCommand.On("Execute", fmt.Sprintf("sudo ip addr show label lo:0 | grep -c %s/32", vip)).Return([]byte(expectedCount), nil)
+	mockCommand.On("Execute", fmt.Sprintf("sudo ip addr show label lo:0 | grep -c %s/32 | xargs echo", vip)).Return([]byte(expectedCount), nil)
 }
 
 func mockDisableArpCommand(mockCommand *fakeCommandRunner) {
-	mockCommand.On("Execute", "sudo echo 1 > /host_ipv4_proc/arp_ignore").Return([]byte{}, nil)
-	mockCommand.On("Execute", "sudo echo 2 > /host_ipv4_proc/arp_announce").Return([]byte{}, nil)
+	mockCommand.On("Execute", "echo 1 | sudo tee /host_ipv4_proc/arp_ignore > /dev/null").Return([]byte{}, nil)
+	mockCommand.On("Execute", "echo 2 | sudo tee /host_ipv4_proc/arp_announce > /dev/null").Return([]byte{}, nil)
 }
 
 func mockEnableArpCommand(mockCommand *fakeCommandRunner) {
-	mockCommand.On("Execute", "sudo echo 0 > /host_ipv4_proc/arp_ignore").Return([]byte{}, nil)
-	mockCommand.On("Execute", "sudo echo 0 > /host_ipv4_proc/arp_announce").Return([]byte{}, nil)
+	mockCommand.On("Execute", "echo 0 | sudo tee /host_ipv4_proc/arp_ignore > /dev/null").Return([]byte{}, nil)
+	mockCommand.On("Execute", "echo 0 | sudo tee /host_ipv4_proc/arp_announce > /dev/null").Return([]byte{}, nil)
 }
 
 func singleServiceConfig(serverURL string) *Config {

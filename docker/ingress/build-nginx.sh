@@ -16,7 +16,7 @@ apt-get install --no-install-suggests --no-install-recommends -y \
     sudo
 
 # allow nginx user to manage interfaces and arp configuration
-echo "%nginx ALL=NOPASSWD: /sbin/ip, /bin/echo" >> /etc/sudoers
+echo "%nginx ALL=NOPASSWD: /sbin/ip, /usr/bin/tee" >> /etc/sudoers
 
 echo "--- Downloading nginx and modules"
 mkdir /tmp/nginx
