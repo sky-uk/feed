@@ -1,3 +1,6 @@
+# v1.4.1
+* Fix wrong output direction when managing loopback interface using sudo
+
 # v1.4.0
 * Add support for configuring IPVS via [gorb](https://github.com/sky-uk/gorb) with Direct Server Return packet-forwarding method.
   Various flags prefixed with `gorb-` have been added to feed-ingress to customise gorb configuration.

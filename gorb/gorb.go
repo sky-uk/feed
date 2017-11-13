@@ -265,10 +265,10 @@ func (g *gorb) manageLoopBack(action loopbackAction) error {
 			errorArr = multierror.Append(errorArr, err)
 		}
 
-		_, err = g.command.Execute(fmt.Sprintf("sudo echo %d > %s", arpIgnore, path.Join(g.config.InterfaceProcFsPath, "arp_ignore")))
+		_, err = g.command.Execute(fmt.Sprintf("echo %d | sudo tee %s > /dev/null", arpIgnore, path.Join(g.config.InterfaceProcFsPath, "arp_ignore")))
 		errorArr = multierror.Append(errorArr, err)
 
-		_, err = g.command.Execute(fmt.Sprintf("sudo echo %d > %s", arpAnnounce, path.Join(g.config.InterfaceProcFsPath, "arp_announce")))
+		_, err = g.command.Execute(fmt.Sprintf("echo %d | sudo tee %s > /dev/null", arpAnnounce, path.Join(g.config.InterfaceProcFsPath, "arp_announce")))
 		errorArr = multierror.Append(errorArr, err)
 	}
 
@@ -276,7 +276,7 @@ func (g *gorb) manageLoopBack(action loopbackAction) error {
 }
 
 func (g *gorb) loopbackInterfaceCount(label string, vip string) (int, error) {
-	cmdOutput, err := g.command.Execute(fmt.Sprintf("sudo ip addr show label %s | grep -c %s/32", label, vip))
+	cmdOutput, err := g.command.Execute(fmt.Sprintf("sudo ip addr show label %s | grep -c %s/32 | xargs echo", label, vip))
 	if err != nil {
 		return -1, fmt.Errorf("unable to check whether loopback interface exists for label: %s and vip: %s, error %v", label, vip, err)
 	}
