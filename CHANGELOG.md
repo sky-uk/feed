@@ -1,3 +1,9 @@
+# v1.4.0
+* Add support for configuring IPVS via [gorb](https://github.com/sky-uk/gorb) with Direct Server Return packet-forwarding method.
+  Various flags prefixed with `gorb-` have been added to feed-ingress to customise gorb configuration.
+* Add `registration-frontend-type` feed-ingress flag to specify either elb, alb or gorb.
+* Deprecate `elb-drain-delay` feed-ingress flag in favour of the more generic `drain-delay`.
+
 # v1.3.0
 * Add support for non-AWS load balancers, which are referenced by static hostnames.
 

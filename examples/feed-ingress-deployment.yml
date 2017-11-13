@@ -22,8 +22,8 @@ spec:
       hostNetwork: true
 
       # Time to wait for requests to gracefully terminate when updating the deployment.
-      # Needs to be at least as long as the -elb-drain-delay setting below, with a buffer for other teardown.
-      # Recommend to set this to 2x -elb-drain-delay.
+      # Needs to be at least as long as the -drain-delay setting below, with a buffer for other teardown.
+      # Recommend to set this to 2x -drain-delay.
       terminationGracePeriodSeconds: 60
 
       # Always restart on death.
@@ -87,7 +87,7 @@ spec:
 
         # ELB drain time - time to wait while ELB drains requests from feed when stopping. Should be
         # at least as long as the ELBs drain timeout.
-        - -elb-drain-delay=30s
+        - -drain-delay=30s
 
         # Each worker uses a full cpu, so scale up vertically on a box by increasing this value.
         - -nginx-workers=1

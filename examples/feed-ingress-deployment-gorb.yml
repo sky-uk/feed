@@ -1,0 +1,191 @@
+# Example deployment for launching feed-ingress, the nginx ingress controller.
+#
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: feed-ingress
+  namespace: kube-system
+  labels:
+    app: feed-ingress
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: feed-ingress
+  template:
+    metadata:
+      labels:
+        app: feed-ingress
+    spec:
+
+      # Listen directly on host interface, required so ELBs can contact nginx.
+      hostNetwork: true
+
+      # Time to wait for requests to gracefully terminate when updating the deployment.
+      # Needs to be at least as long as the -drain-delay setting below, with a buffer for other teardown.
+      # Recommend to set this to 2x -drain-delay.
+      terminationGracePeriodSeconds: 60
+
+      # Always restart on death.
+      restartPolicy: Always
+
+      containers:
+      - image: skycirrus/feed-ingress:v1.2.0
+        name: feed-ingress
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - NET_BIND_SERVICE
+        env:
+        - name: INSTANCEIP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+
+        resources:
+          requests:
+            cpu: "1"
+            memory: 300Mi
+          limits:
+            memory: 300Mi
+
+        ports:
+        - hostPort: 80
+          containerPort: 80
+          name: ingress
+          protocol: TCP
+        - hostPort: 8081
+          containerPort: 8081
+          name: ingress-health
+          protocol: TCP
+        # Health port of the controller.
+        - containerPort: 12082
+          name: health
+          protocol: TCP
+
+        args:
+        # Ingress nginx port that ELBs will direct traffic towards.
+        - -ingress-port=80
+
+        # Health port on nginx, used by ELBs to determine health.
+        - -ingress-health-port=8081
+
+        # Default security whitelist for ingress. Can be overridden with the sky.uk/allow annotation.
+        - -ingress-allow=10.0.0.0/8
+
+        # Health port for the controller to respond on.
+        - -health-port=12082
+
+        # Log level of nginx. Recommended to leave at error, or set to crit if too much spam.
+        - -nginx-loglevel=error
+
+        # How often to reload nginx if needed. Setting too low can cause 504s from the ELB in the case of heavy
+        # ingress updates.
+        - -nginx-update-period=5m
+
+        # Use pushgateway for prometheus metrics. Optional - metrics available at /metrics on health port.
+        - -pushgateway=mypushgateway.com
+        - -pushgateway-interval=20
+        - -pushgateway-label=k8s_cluster=dev
+        - -pushgateway-label=environment=dev
+        - -pushgateway-label=version=v1.0.2
+
+        # Specify gorb as the registration component
+        - -registration-frontend-type=gorb
+
+        # VIP of the IPVS managed via gor
+        - -gorb-vip-loadbalancer=10.10.0.10
+
+        # Define gorb base url
+        - -gorb-endpoint=http://10.154.0.11:4672
+
+        # Comma separated list of virtual service definition to create via gorb
+        - -gorb-services-definition=http-proxy:80
+
+        # Enable loopback management to make Direct Return effective
+        - -gorb-management-loopback=true
+
+        # Path to the proc file system containing the main interface definition
+        - -gorb-interface-proc-fs-path=/host-ipv4-proc/
+
+        # packet-forwarding method to set via gorb
+        - -gorb-backend-method=dr
+
+        # gorb backend weight
+        - -gorb-backend-weight=1000
+
+        # gorb backend healthcheck interval
+        - -gorb-backend-healthcheck-interval=1s
+
+        # nginx host ip address to use when the ingress is not in AWS
+        - -gorb-ingress-instance-ip=$(INSTANCEIP)
+
+        # LB drain time - time to wait while the load balancer drains requests from feed when stopping. Should be
+        # at least as long as the ELBs drain timeout.
+        - -drain-delay=30s
+
+        # Each worker uses a full cpu, so scale up vertically on a box by increasing this value.
+        - -nginx-workers=1
+
+        # Connections*workers needs to be less than available ephemeral ports. Linux default is 60999-32768=28231.
+        - -nginx-worker-connections=20000
+
+        # Needs to be greater than the ELB idle timeout, see `aws_provisioning/kubernetes` for ELB value.
+        - -nginx-keepalive-seconds=304
+
+        # CIDRs of the ELBs to trust X-Forwarded-For, for determining client IP allow/deny.
+        - -nginx-trusted-frontends=10.0.0.0/8
+
+        # Max number of idle connections to a backend.
+        - -nginx-backend-keepalive-count=1024
+
+        # Default max time for a request to a backend. Can be overridden by an annotation on the ingress resource.
+        - -nginx-default-backend-timeout-seconds=5
+
+        # Needs to be greater than 64 to support very large domain names.
+        - -nginx-server-names-hash-bucket-size=128
+
+        # Access logs turned on - add or remove the "-access-log" flag to turn them on/off.
+        - -access-log
+        - -access-log-dir=/var/log/nginx
+
+        # Add custom headers to the access logs.
+        - -nginx-log-headers=X-Amzn-Trace-Id
+
+        # Controller health determines readiness. This has no effect on ingress traffic from ELBs.
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 12082
+            scheme: HTTP
+          initialDelaySeconds: 1
+          timeoutSeconds: 1
+          periodSeconds: 1
+          failureThreshold: 1
+
+        # Only consider liveness of ingress itself, favouring uptime over controller health.
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 30
+          timeoutSeconds: 1
+          periodSeconds: 10
+          failureThreshold: 3
+
+        volumeMounts:
+        # Access logs volume.
+        - name: nginx-log
+          mountPath: /var/log/nginx
+        # Used for loopback address management
+        - name: ipv4-proc
+          mountPath: /host-ipv4-proc/
+
+      volumes:
+      - name: nginx-log
+        emptyDir: {}
+      - name: ipv4-proc
+        hostPath:
+          path: /proc/sys/net/ipv4/conf/ens160/

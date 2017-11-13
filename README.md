@@ -2,9 +2,9 @@
 
 # Feed
 
-This project contains Kubernetes controllers for managing external ingress with AWS. There are two controllers provided,
-`feed-ingress` which runs an nginx instance, and `feed-dns` which manages route53 entries. They can be run independently
-as needed, or together to provide a full ingress solution.
+This project contains Kubernetes controllers for managing external ingress with AWS or [IPVS/gorb](https://github.com/sky-uk/gorb). 
+There are two controllers provided, `feed-ingress` which runs an nginx instance, and `feed-dns` which manages route53 entries. 
+They can be run independently as needed, or together to provide a full ingress solution.
 
 Feed is actively used in production and should be stable enough for general usage. We can scale to many thousands of
 requests per second with only a handful of replicas.
@@ -47,6 +47,36 @@ See the command line options with:
 approach for production usage. Unfortunately, ELBs don't support SNI at this time, so this limits SSL usage to
 a single domain. One workaround is to use a wildcard certificate for the entire zone that `feed-dns` manages.
 Another is to place an SSL termination EC2 instance in front of the ELBs.
+
+### Gorb / IPVS Support
+
+feed has support for configuring IPVS via [gorb](https://github.com/sky-uk/gorb).
+Gorb exposes a REST api to interrogate and modify the IPVS configuration such as virtual services and backends.
+The configuration can be stored in a distributed key/value store.
+
+Although IPVS supports multiple packet-forwarding methods, feed currently only supports 'DR' aka Direct Server Return.
+It provides the ability to manage the loopback interface so the ingress instance can pretend to be IPVS at the IP level.  
+feed-ingress pod will need to define the `NET_ADMIN` Linux capability to be able to manage the loopback interface.
+
+```
+securityContext:
+  capabilities:
+    add:
+    - NET_ADMIN
+```
+
+See the [example ingress for gorb](examples/feed-ingress-deployment-gorb.yml)
+
+### Running feed-ingress on privileged ports
+
+feed-ingress can be run on privileged ports by defining  the `NET_BIND_SERVICE` Linux capability.
+```
+securityContext:
+  capabilities:
+    add:
+    - NET_BIND_SERVICE
+
+```
 
 ## feed-dns
 

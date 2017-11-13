@@ -7,6 +7,7 @@ RUN apt-get update \
         dnsutils \
         vim-tiny \
         lsof \
+        iproute2 \
     && apt-get clean -y \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* /tmp/*
@@ -22,6 +23,7 @@ RUN /bin/bash /tmp/build-nginx.sh
 COPY feed-ingress /
 COPY nginx.tmpl /nginx/
 RUN chown nginx:nginx /nginx/nginx.tmpl
+RUN setcap "cap_net_bind_service=+ep" /usr/sbin/nginx
 
 ADD logrotate.config /etc/logrotate.d/nginx
 RUN chmod 600 /etc/logrotate.d/nginx
