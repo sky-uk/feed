@@ -1,3 +1,6 @@
+# v1.4.2
+* Reduce logging each ingress in the controller from Info to Debug, introduced in v1.3.0
+
 # v1.4.1
 * Fix wrong output direction when managing loopback interface using sudo
 

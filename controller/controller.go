@@ -163,7 +163,7 @@ func (c *controller) updateIngresses() error {
 						CreationTimestamp:     ingress.CreationTimestamp.Time,
 					}
 
-					log.Infof("Found ingress to update: %s", ingress.Name)
+					log.Debugf("Found ingress to update: %s", ingress.Name)
 
 					if elbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
 						entry.ELbScheme = elbScheme
