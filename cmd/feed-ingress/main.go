@@ -24,17 +24,15 @@ import (
 )
 
 var (
-	debug             bool
-	kubeconfig        string
-	resyncPeriod      time.Duration
-	ingressPort       int
-	ingressHealthPort int
-	healthPort        int
-	region            string
-	elbLabelValue     string
-	elbExpectedNumber int
-	// Deprecated: retained to maintain backwards compatibility. Use drainDelay instead
-	legacyDrainDelay               time.Duration
+	debug                          bool
+	kubeconfig                     string
+	resyncPeriod                   time.Duration
+	ingressPort                    int
+	ingressHealthPort              int
+	healthPort                     int
+	region                         string
+	elbLabelValue                  string
+	elbExpectedNumber              int
 	drainDelay                     time.Duration
 	targetGroupNames               cmd.CommaSeparatedValues
 	targetGroupDeregistrationDelay time.Duration
@@ -81,7 +79,7 @@ const (
 	defaultNginxProxyProtocol                = false
 	defaultNginxUpdatePeriod                 = time.Second * 30
 	defaultElbLabelValue                     = ""
-	defaultDrainDelay                        = time.Second * 30
+	defaultDrainDelay                        = time.Second * 60
 	defaultTargetGroupDeregistrationDelay    = time.Second * 300
 	defaultRegion                            = "eu-west-1"
 	defaultElbExpectedNumber                 = 0
@@ -181,8 +179,7 @@ func init() {
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
-	flag.DurationVar(&legacyDrainDelay, "elb-drain-delay", unset, "Deprecated. Used drain-delay instead.")
-	flag.DurationVar(&drainDelay, "drain-delay", unset, "Delay to wait"+
+	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
 		" for feed-ingress to drain from the registration component on shutdown. Should match the ELB's drain time.")
 	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
@@ -258,12 +255,6 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
 	nginxUpdater := nginx.New(nginxConfig)
-
-	if legacyDrainDelay != unset && drainDelay == unset {
-		drainDelay = legacyDrainDelay
-	} else if drainDelay == unset {
-		drainDelay = defaultDrainDelay
-	}
 
 	updaters := []controller.Updater{nginxUpdater}
 

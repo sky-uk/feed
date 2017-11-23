@@ -1,5 +1,6 @@
 # v1.5.0
 * Add `gorb-backend-healthcheck-type` that can be either 'tcp', 'http' or 'none'
+* Remove deprecated `elb-drain-delay` feed-ingress flag 
 
 # v1.4.2
 * Reduce logging each ingress in the controller from Info to Debug, introduced in v1.3.0
