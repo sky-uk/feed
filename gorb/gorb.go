@@ -67,6 +67,7 @@ type Config struct {
 	VipLoadbalancer            string
 	ManageLoopback             bool
 	BackendHealthcheckInterval string
+	BackendHealthcheckType     string
 	InterfaceProcFsPath        string
 }
 
@@ -95,16 +96,18 @@ func New(c *Config) (controller.Updater, error) {
 
 	var backendDefinition backend
 	for _, service := range c.ServicesDefinition {
-		args := PulseArgs{
-			Method: "GET",
-			Path:   "/",
-			Expect: "404",
-		}
 		pulse := Pulse{
-			Args:            args,
-			TypeHealthcheck: "http",
+			TypeHealthcheck: c.BackendHealthcheckType,
 			Interval:        c.BackendHealthcheckInterval,
 		}
+		if c.BackendHealthcheckType == "http" {
+			pulse.Args = PulseArgs{
+				Method: "GET",
+				Path:   "/",
+				Expect: "404",
+			}
+		}
+
 		backendDefinition = backend{
 			serviceName: service.Name,
 			backendConfig: BackendConfig{

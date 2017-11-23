@@ -118,6 +118,9 @@ spec:
         # gorb backend healthcheck interval
         - -gorb-backend-healthcheck-interval=1s
 
+        # gorb backend healthcheck type
+        - -gorb-backend-healthcheck-type=http
+
         # nginx host ip address to use when the ingress is not in AWS
         - -gorb-ingress-instance-ip=$(INSTANCEIP)
 

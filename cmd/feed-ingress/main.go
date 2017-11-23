@@ -24,17 +24,15 @@ import (
 )
 
 var (
-	debug             bool
-	kubeconfig        string
-	resyncPeriod      time.Duration
-	ingressPort       int
-	ingressHealthPort int
-	healthPort        int
-	region            string
-	elbLabelValue     string
-	elbExpectedNumber int
-	// Deprecated: retained to maintain backwards compatibility. Use drainDelay instead
-	legacyDrainDelay               time.Duration
+	debug                          bool
+	kubeconfig                     string
+	resyncPeriod                   time.Duration
+	ingressPort                    int
+	ingressHealthPort              int
+	healthPort                     int
+	region                         string
+	elbLabelValue                  string
+	elbExpectedNumber              int
 	drainDelay                     time.Duration
 	targetGroupNames               cmd.CommaSeparatedValues
 	targetGroupDeregistrationDelay time.Duration
@@ -55,6 +53,7 @@ var (
 	gorbVipLoadbalancer            string
 	gorbManageLoopback             bool
 	gorbBackendHealthcheckInterval string
+	gorbBackendHealthcheckType     string
 	gorbInterfaceProcFsPath        string
 )
 
@@ -80,7 +79,7 @@ const (
 	defaultNginxProxyProtocol                = false
 	defaultNginxUpdatePeriod                 = time.Second * 30
 	defaultElbLabelValue                     = ""
-	defaultDrainDelay                        = time.Second * 30
+	defaultDrainDelay                        = time.Second * 60
 	defaultTargetGroupDeregistrationDelay    = time.Second * 300
 	defaultRegion                            = "eu-west-1"
 	defaultElbExpectedNumber                 = 0
@@ -96,6 +95,7 @@ const (
 	defaultGorbManageLoopback                = true
 	defaultGorbInterfaceProcFsPath           = "/host-ipv4-proc/"
 	defaultGorbBackendHealthcheckInterval    = "1s"
+	defaultGorbBackendHealthcheckType        = "http"
 )
 
 func init() {
@@ -179,8 +179,7 @@ func init() {
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
-	flag.DurationVar(&legacyDrainDelay, "elb-drain-delay", unset, "Deprecated. Used drain-delay instead.")
-	flag.DurationVar(&drainDelay, "drain-delay", unset, "Delay to wait"+
+	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
 		" for feed-ingress to drain from the registration component on shutdown. Should match the ELB's drain time.")
 	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
@@ -208,7 +207,9 @@ func init() {
 	flag.StringVar(&gorbInterfaceProcFsPath, "gorb-interface-proc-fs-path", defaultGorbInterfaceProcFsPath,
 		"Path to the interface proc file system. Only necessary when Direct Return is enabled")
 	flag.StringVar(&gorbBackendHealthcheckInterval, "gorb-backend-healthcheck-interval", defaultGorbBackendHealthcheckInterval,
-		"Define the gorb interval http healthcheck for the backend")
+		"Define the gorb healthcheck interval for the backend")
+	flag.StringVar(&gorbBackendHealthcheckType, "gorb-backend-healthcheck-type", defaultGorbBackendHealthcheckType,
+		"Define the gorb healthcheck type for the backend. Must be either 'tcp', 'http' or 'none'")
 
 }
 
@@ -255,12 +256,6 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 	nginxConfig.LogHeaders = nginxLogHeaders
 	nginxUpdater := nginx.New(nginxConfig)
 
-	if legacyDrainDelay != unset && drainDelay == unset {
-		drainDelay = legacyDrainDelay
-	} else if drainDelay == unset {
-		drainDelay = defaultDrainDelay
-	}
-
 	updaters := []controller.Updater{nginxUpdater}
 
 	if registrationFrontendType == "elb" {
@@ -281,6 +276,10 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			return nil, fmt.Errorf("invalid gorb services definition. Must be a comma separated list - e.g. 'http-proxy:80,https-proxy:443', but was %s", gorbServicesDefinition)
 		}
 
+		if gorbBackendHealthcheckType != "tcp" && gorbBackendHealthcheckType != "http" && gorbBackendHealthcheckType != "none" {
+			return nil, fmt.Errorf("invalid gorb backend healthcheck type. Must be either 'tcp', 'http' or 'none', but was %s", gorbBackendHealthcheckType)
+		}
+
 		config := gorb.Config{
 			ServerBaseURL:              gorbEndpoint,
 			InstanceIP:                 gorbIngressInstanceIP,
@@ -291,6 +290,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			VipLoadbalancer:            gorbVipLoadbalancer,
 			ManageLoopback:             gorbManageLoopback,
 			BackendHealthcheckInterval: gorbBackendHealthcheckInterval,
+			BackendHealthcheckType:     gorbBackendHealthcheckType,
 			InterfaceProcFsPath:        gorbInterfaceProcFsPath,
 		}
 		gorbUpdater, err := gorb.New(&config)
