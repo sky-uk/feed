@@ -27,6 +27,7 @@ const (
 	instanceIP                 = "10.10.0.1"
 	drainImmediately           = 0
 	backendHealthcheckInterval = "1s"
+	backendHealthcheckType     = "http"
 	backendWeight              = 1000
 	backendMethod              = "dr"
 	vipLoadbalancer            = "127.0.0.1"
@@ -111,6 +112,7 @@ func newConfig(serverURL string) *Config {
 		VipLoadbalancer:            vipLoadbalancer,
 		ManageLoopback:             manageLoopback,
 		BackendHealthcheckInterval: backendHealthcheckInterval,
+		BackendHealthcheckType:     backendHealthcheckType,
 		InterfaceProcFsPath:        interfaceProcFsPath,
 	}
 }
@@ -210,7 +212,24 @@ var _ = Describe("Gorb", func() {
 			Expect(gorbH.recordedRequests[1].body.Port).To(Equal(80))
 			Expect(gorbH.recordedRequests[1].body.Method).To(Equal("dr"))
 			Expect(gorbH.recordedRequests[1].body.Weight).To(Equal(1000))
+			Expect(gorbH.recordedRequests[1].body.Pulse.TypeHealthcheck).To(Equal("http"))
+			Expect(gorbH.recordedRequests[1].body.Pulse.Interval).To(Equal(backendHealthcheckInterval))
 			Expect(gorbH.recordedRequests[1].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-http-proxy-%s", instanceIP)))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should create the backend healthcheck with tcp type", func() {
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
+
+			config := singleServiceConfig(serverURL)
+			config.BackendHealthcheckType = "tcp"
+			g, _ = New(config)
+			err := g.Update(controller.IngressEntries{})
+
+			Expect(len(gorbH.recordedRequests)).To(Equal(2))
+			Expect(gorbH.recordedRequests[0].url.RequestURI()).To(Equal(fmt.Sprintf("/service/http-proxy/node-http-proxy-%s", instanceIP)))
+			Expect(gorbH.recordedRequests[1].body.Pulse.TypeHealthcheck).To(Equal("tcp"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 

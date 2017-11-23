@@ -55,6 +55,7 @@ var (
 	gorbVipLoadbalancer            string
 	gorbManageLoopback             bool
 	gorbBackendHealthcheckInterval string
+	gorbBackendHealthcheckType     string
 	gorbInterfaceProcFsPath        string
 )
 
@@ -96,6 +97,7 @@ const (
 	defaultGorbManageLoopback                = true
 	defaultGorbInterfaceProcFsPath           = "/host-ipv4-proc/"
 	defaultGorbBackendHealthcheckInterval    = "1s"
+	defaultGorbBackendHealthcheckType        = "http"
 )
 
 func init() {
@@ -208,7 +210,9 @@ func init() {
 	flag.StringVar(&gorbInterfaceProcFsPath, "gorb-interface-proc-fs-path", defaultGorbInterfaceProcFsPath,
 		"Path to the interface proc file system. Only necessary when Direct Return is enabled")
 	flag.StringVar(&gorbBackendHealthcheckInterval, "gorb-backend-healthcheck-interval", defaultGorbBackendHealthcheckInterval,
-		"Define the gorb interval http healthcheck for the backend")
+		"Define the gorb healthcheck interval for the backend")
+	flag.StringVar(&gorbBackendHealthcheckType, "gorb-backend-healthcheck-type", defaultGorbBackendHealthcheckType,
+		"Define the gorb healthcheck type for the backend. Must be either 'tcp', 'http' or 'none'")
 
 }
 
@@ -281,6 +285,10 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			return nil, fmt.Errorf("invalid gorb services definition. Must be a comma separated list - e.g. 'http-proxy:80,https-proxy:443', but was %s", gorbServicesDefinition)
 		}
 
+		if gorbBackendHealthcheckType != "tcp" && gorbBackendHealthcheckType != "http" && gorbBackendHealthcheckType != "none" {
+			return nil, fmt.Errorf("invalid gorb backend healtcheck type. Must be either 'tcp', 'http' or 'none', but was %s", gorbBackendHealthcheckType)
+		}
+
 		config := gorb.Config{
 			ServerBaseURL:              gorbEndpoint,
 			InstanceIP:                 gorbIngressInstanceIP,
@@ -291,6 +299,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			VipLoadbalancer:            gorbVipLoadbalancer,
 			ManageLoopback:             gorbManageLoopback,
 			BackendHealthcheckInterval: gorbBackendHealthcheckInterval,
+			BackendHealthcheckType:     gorbBackendHealthcheckType,
 			InterfaceProcFsPath:        gorbInterfaceProcFsPath,
 		}
 		gorbUpdater, err := gorb.New(&config)
