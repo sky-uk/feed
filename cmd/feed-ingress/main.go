@@ -277,7 +277,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		}
 
 		if gorbBackendHealthcheckType != "tcp" && gorbBackendHealthcheckType != "http" && gorbBackendHealthcheckType != "none" {
-			return nil, fmt.Errorf("invalid gorb backend healtcheck type. Must be either 'tcp', 'http' or 'none', but was %s", gorbBackendHealthcheckType)
+			return nil, fmt.Errorf("invalid gorb backend healthcheck type. Must be either 'tcp', 'http' or 'none', but was %s", gorbBackendHealthcheckType)
 		}
 
 		config := gorb.Config{
