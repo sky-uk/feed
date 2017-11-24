@@ -18,6 +18,25 @@ apt-get install --no-install-suggests --no-install-recommends -y \
 # allow nginx user to manage interfaces and arp configuration
 echo "%nginx ALL=NOPASSWD: /sbin/ip, /usr/bin/tee" >> /etc/sudoers
 
+echo "--- Downloading openSSL"
+mkdir /tmp/openssl
+cd /tmp/openssl
+OPENSSL="1_1_0g"
+OPENSSL_SHA256="8e9516b8635bb9113c51a7b5b27f9027692a56b104e75b709e588c3ffd6a0422"
+OPENSSL_tarball="OpenSSL_${OPENSSL}.tar.gz"
+
+curl -L -O https://github.com/openssl/openssl/archive/${OPENSSL_tarball}
+
+touch hashes_openssl
+echo "${OPENSSL_SHA256} ${OPENSSL_tarball}" >> hashes_openssl
+if ! sha256sum -c hashes_openssl; then
+    echo "sha256 hashes do not match downloaded files"
+    exit 1
+fi
+
+tar xzf ${OPENSSL_tarball}
+mv openssl-OpenSSL_${OPENSSL} openssl
+
 echo "--- Downloading nginx and modules"
 mkdir /tmp/nginx
 cd /tmp/nginx
@@ -62,7 +81,9 @@ echo "--- Configuring nginx"
     --with-http_v2_module \
     --with-ipv6 \
     --with-debug \
-    --add-module=/tmp/nginx/nginx-module-vts-0.1.10
+    --add-module=/tmp/nginx/nginx-module-vts-0.1.10\
+    --with-openssl=/tmp/openssl/openssl \
+    --with-http_ssl_module
 
 echo "--- Building nginx"
 make

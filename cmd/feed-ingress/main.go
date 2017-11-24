@@ -28,6 +28,7 @@ var (
 	kubeconfig                     string
 	resyncPeriod                   time.Duration
 	ingressPort                    int
+	ingressHTTPSPort               int
 	ingressHealthPort              int
 	healthPort                     int
 	region                         string
@@ -43,6 +44,7 @@ var (
 	nginxConfig                    nginx.Conf
 	nginxLogHeaders                cmd.CommaSeparatedValues
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
+	nginxDefaultSslPath            string
 	legacyBackendKeepaliveSeconds  int
 	registrationFrontendType       string
 	gorbIngressInstanceIP          string
@@ -61,6 +63,7 @@ const (
 	unset                                    = -1
 	defaultResyncPeriod                      = time.Minute * 15
 	defaultIngressPort                       = 8080
+	defaultIngressHTTPSPort                  = unset
 	defaultIngressAllow                      = "0.0.0.0/0"
 	defaultIngressHealthPort                 = 8081
 	defaultIngressStripPath                  = true
@@ -78,6 +81,7 @@ const (
 	defaultNginxServerNamesHashMaxSize       = unset
 	defaultNginxProxyProtocol                = false
 	defaultNginxUpdatePeriod                 = time.Second * 30
+	defaultNginxDefaultSslPath               = "/etc/ssl/default-ssl/default-ssl"
 	defaultElbLabelValue                     = ""
 	defaultDrainDelay                        = time.Second * 60
 	defaultTargetGroupDeregistrationDelay    = time.Second * 300
@@ -107,6 +111,8 @@ func init() {
 		"Resync with the apiserver periodically to handle missed updates.")
 	flag.IntVar(&ingressPort, "ingress-port", defaultIngressPort,
 		"Port to serve ingress traffic to backend services.")
+	flag.IntVar(&ingressHTTPSPort, "ingress-https-port", defaultIngressHTTPSPort,
+		"Port to serve ingress https traffic to backend services.")
 	flag.IntVar(&ingressHealthPort, "ingress-health-port", defaultIngressHealthPort,
 		"Port for ingress /health and /status pages. Should be used by frontends to determine if ingress is available.")
 	flag.StringVar(&controllerConfig.DefaultAllow, "ingress-allow", defaultIngressAllow,
@@ -168,6 +174,9 @@ func init() {
 		"Comma separated list of CIDRs to trust when determining the client's real IP from "+
 			"frontends. The client IP is used for allowing or denying ingress access. "+
 			"This will typically be the ELB subnet.")
+	flag.StringVar(&nginxDefaultSslPath, "default-ssl-path", defaultNginxDefaultSslPath,
+		"Define the default ssl path to load the ssl cert - Expected value path + name file without extension, "+
+			" crt and key file should have the same name.")
 
 	flag.StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
@@ -250,8 +259,13 @@ func main() {
 }
 
 func createIngressUpdaters() ([]controller.Updater, error) {
-	nginxConfig.IngressPort = ingressPort
+	nginxConfig.IngressPorts = append(nginxConfig.IngressPorts, nginx.IngressPortConf{Name: "http", Port: ingressPort})
+	if ingressHTTPSPort != unset {
+		nginxConfig.IngressPorts = append(nginxConfig.IngressPorts, nginx.IngressPortConf{Name: "https", Port: ingressHTTPSPort})
+	}
+
 	nginxConfig.HealthPort = ingressHealthPort
+	nginxConfig.DefaultSslPath = nginxDefaultSslPath
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
 	nginxUpdater := nginx.New(nginxConfig)

@@ -38,7 +38,7 @@ func newConf(tmpDir string, binary string) Conf {
 	return Conf{
 		WorkingDir:                   tmpDir,
 		BinaryLocation:               binary,
-		IngressPort:                  port,
+		IngressPorts:                 []IngressPortConf{IngressPortConf{Name: "http", Port: port}},
 		WorkerProcesses:              1,
 		BackendKeepalives:            1024,
 		BackendConnectTimeoutSeconds: 1,
@@ -206,6 +206,9 @@ func TestNginxConfig(t *testing.T) {
 	enabledAccessLogConf.AccessLog = true
 	enabledAccessLogConf.AccessLogDir = "/nginx-access-log"
 
+	sslEndpointConf := defaultConf
+	sslEndpointConf.IngressPorts = []IngressPortConf{IngressPortConf{Name: "https", Port: 443}}
+
 	logHeadersConf := defaultConf
 	logHeadersConf.LogHeaders = []string{"Content-Type", "Authorization"}
 
@@ -309,6 +312,13 @@ func TestNginxConfig(t *testing.T) {
 				"\"$request\" $status Content-Type=$http_Content_Type Authorization=$http_Authorization $body_bytes_sent",
 			},
 		},
+		{
+			"Ssl Endpoint should be created",
+			sslEndpointConf,
+			[]string{
+				"listen 443 default_server ssl ;",
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -341,6 +351,9 @@ func TestNginxIngressEntries(t *testing.T) {
 	defaultConf := newConf(tmpDir, fakeNginx)
 	enableProxyProtocolConf := defaultConf
 	enableProxyProtocolConf.ProxyProtocol = true
+
+	sslEndpointConf := defaultConf
+	sslEndpointConf.IngressPorts = []IngressPortConf{IngressPortConf{Name: "https", Port: 443}}
 
 	var tests = []struct {
 		name            string
@@ -817,6 +830,24 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            \n" +
 					"            deny all;\n" +
 					"        }\n",
+			},
+		},
+		{
+			"SSL endpoint defined",
+			sslEndpointConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "endpoint-ssl.com",
+					Namespace:      "core",
+					Name:           "endpoint-ssl-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+			},
+			nil,
+			[]string{
+				"ssl_protocols TLSv1 TLSv1.1 TLSv1.2;",
 			},
 		},
 	}
