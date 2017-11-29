@@ -44,7 +44,7 @@ var (
 	nginxConfig                    nginx.Conf
 	nginxLogHeaders                cmd.CommaSeparatedValues
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
-	nginxDefaultSslPath            string
+	nginxSSLPath                   string
 	legacyBackendKeepaliveSeconds  int
 	registrationFrontendType       string
 	gorbIngressInstanceIP          string
@@ -81,7 +81,7 @@ const (
 	defaultNginxServerNamesHashMaxSize       = unset
 	defaultNginxProxyProtocol                = false
 	defaultNginxUpdatePeriod                 = time.Second * 30
-	defaultNginxDefaultSslPath               = "/etc/ssl/default-ssl/default-ssl"
+	defaultNginxSSLPath                      = "/etc/ssl/default-ssl/default-ssl"
 	defaultElbLabelValue                     = ""
 	defaultDrainDelay                        = time.Second * 60
 	defaultTargetGroupDeregistrationDelay    = time.Second * 300
@@ -174,9 +174,8 @@ func init() {
 		"Comma separated list of CIDRs to trust when determining the client's real IP from "+
 			"frontends. The client IP is used for allowing or denying ingress access. "+
 			"This will typically be the ELB subnet.")
-	flag.StringVar(&nginxDefaultSslPath, "default-ssl-path", defaultNginxDefaultSslPath,
-		"Define the default ssl path to load the ssl cert - Expected value path + name file without extension, "+
-			" crt and key file should have the same name.")
+	flag.StringVar(&nginxSSLPath, "ssl-path", defaultNginxSSLPath,
+		"Set default ssl path + name file without extension.  Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key).")
 
 	flag.StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
@@ -259,13 +258,13 @@ func main() {
 }
 
 func createIngressUpdaters() ([]controller.Updater, error) {
-	nginxConfig.IngressPorts = append(nginxConfig.IngressPorts, nginx.IngressPortConf{Name: "http", Port: ingressPort})
+	nginxConfig.Ports = []nginx.Port{{Name: "http", Port: ingressPort}}
 	if ingressHTTPSPort != unset {
-		nginxConfig.IngressPorts = append(nginxConfig.IngressPorts, nginx.IngressPortConf{Name: "https", Port: ingressHTTPSPort})
+		nginxConfig.Ports = append(nginxConfig.Ports, nginx.Port{Name: "https", Port: ingressHTTPSPort})
 	}
 
 	nginxConfig.HealthPort = ingressHealthPort
-	nginxConfig.DefaultSslPath = nginxDefaultSslPath
+	nginxConfig.SSLPath = nginxSSLPath
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
 	nginxUpdater := nginx.New(nginxConfig)

@@ -30,8 +30,8 @@ const (
 	metricsUpdateInterval = time.Second * 10
 )
 
-// IngressPortConf configuration
-type IngressPortConf struct {
+// Port configuration
+type Port struct {
 	Name string
 	Port int
 }
@@ -49,7 +49,7 @@ type Conf struct {
 	ServerNamesHashMaxSize       int
 	HealthPort                   int
 	TrustedFrontends             []string
-	IngressPorts                 []IngressPortConf
+	Ports                        []Port
 	LogLevel                     string
 	ProxyProtocol                bool
 	AccessLog                    bool
@@ -57,7 +57,7 @@ type Conf struct {
 	LogHeaders                   []string
 	AccessLogHeaders             string
 	UpdatePeriod                 time.Duration
-	DefaultSslPath               string
+	SSLPath                      string
 }
 
 type nginx struct {

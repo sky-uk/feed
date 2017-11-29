@@ -38,7 +38,7 @@ func newConf(tmpDir string, binary string) Conf {
 	return Conf{
 		WorkingDir:                   tmpDir,
 		BinaryLocation:               binary,
-		IngressPorts:                 []IngressPortConf{IngressPortConf{Name: "http", Port: port}},
+		Ports:                        []Port{{Name: "http", Port: port}},
 		WorkerProcesses:              1,
 		BackendKeepalives:            1024,
 		BackendConnectTimeoutSeconds: 1,
@@ -207,7 +207,7 @@ func TestNginxConfig(t *testing.T) {
 	enabledAccessLogConf.AccessLogDir = "/nginx-access-log"
 
 	sslEndpointConf := defaultConf
-	sslEndpointConf.IngressPorts = []IngressPortConf{IngressPortConf{Name: "https", Port: 443}}
+	sslEndpointConf.Ports = []Port{{Name: "https", Port: 443}}
 
 	logHeadersConf := defaultConf
 	logHeadersConf.LogHeaders = []string{"Content-Type", "Authorization"}
@@ -316,7 +316,7 @@ func TestNginxConfig(t *testing.T) {
 			"Ssl Endpoint should be created",
 			sslEndpointConf,
 			[]string{
-				"listen 443 default_server ssl ;",
+				"listen 443 ssl default_server;",
 			},
 		},
 	}
@@ -353,7 +353,7 @@ func TestNginxIngressEntries(t *testing.T) {
 	enableProxyProtocolConf.ProxyProtocol = true
 
 	sslEndpointConf := defaultConf
-	sslEndpointConf.IngressPorts = []IngressPortConf{IngressPortConf{Name: "https", Port: 443}}
+	sslEndpointConf.Ports = []Port{{Name: "https", Port: 443}}
 
 	var tests = []struct {
 		name            string
