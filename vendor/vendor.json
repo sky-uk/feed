@@ -675,6 +675,12 @@
 			"revisionTime": "2016-04-11T19:08:41Z"
 		},
 		{
+			"checksumSHA1": "0V9YhjDv2UlkQaAbSK41fzlx3JA=",
+			"path": "github.com/sethgrid/pester",
+			"revision": "760f8913c0483b776294e1bee43f1d687527127b",
+			"revisionTime": "2017-11-27T02:50:28Z"
+		},
+		{
 			"checksumSHA1": "GxPD7A0NjMDom1xte0mghkpzr0E=",
 			"path": "github.com/spf13/pflag",
 			"revision": "5ccb023bc27df288a957c5e994cd44fd19619465",
