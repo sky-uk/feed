@@ -1,3 +1,9 @@
+# v1.6.0
+* Enable SSL termination
+Set default ssl path + name file without extension.
+Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key), for example:
+-ssl-path=/etc/ssl/default-ssl/default-ssl
+
 # v1.5.0
 * Add `gorb-backend-healthcheck-type` that can be either 'tcp', 'http' or 'none'
 * Remove deprecated `elb-drain-delay` feed-ingress flag 

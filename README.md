@@ -56,7 +56,7 @@ SSL termination can be done on feed-ingress. This approach still requires a laye
 For the moment you can setup a default wildcard ssl:
 ```
  # Set default ssl path + name file without extension.  Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key), for example:
- -default-ssl-path=/etc/ssl/default-ssl/default-ssl
+ -ssl-path=/etc/ssl/default-ssl/default-ssl
  # ... will cause feed to look for /etc/ssl/default-ssl.crt and /etc/ssl/default.ssl.key
 ```
 

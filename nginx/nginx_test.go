@@ -847,7 +847,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			},
 			nil,
 			[]string{
-				"ssl_protocols TLSv1 TLSv1.1 TLSv1.2;",
+				"ssl_protocols TLSv1.2;",
 			},
 		},
 	}
