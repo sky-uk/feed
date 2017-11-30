@@ -21,7 +21,6 @@ can be applied to a cluster.
 
 ## Known Limitations
 
-* SSL termination is not supported directly. It is expected the ELB or something else will be terminating SSL.
 * nginx reloads can be disruptive. On reload, nginx will finish in-flight requests, then abruptly
   close all server connections. This is a limitation of nginx, and affects all nginx solutions. We mitigate this by:
     * Rate limiting reloads. This is user configurable.
@@ -43,10 +42,25 @@ See the command line options with:
 
 ### SSL/TLS
 
-`feed-ingress` expects your ELBs to terminate SSL traffic. We believe this is the safest and best performing
+## SSL termination on ELB
+
+SSL termination could be done on ELBS, and we believe that this is the safest and best performing
 approach for production usage. Unfortunately, ELBs don't support SNI at this time, so this limits SSL usage to
 a single domain. One workaround is to use a wildcard certificate for the entire zone that `feed-dns` manages.
 Another is to place an SSL termination EC2 instance in front of the ELBs.
+
+## SSL termination on feed-ingress
+
+SSL termination can be done on feed-ingress. This approach still requires a layer 4 load balancer, eg. ELB or IPVS with GORB, in front.
+
+For the moment you can setup a default wildcard ssl:
+```
+ # Set default ssl path + name file without extension.  Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key), for example:
+ -ssl-path=/etc/ssl/default-ssl/default-ssl
+ # ... will cause feed to look for /etc/ssl/default-ssl.crt and /etc/ssl/default.ssl.key
+```
+
+You can mount the `.key` and `.crt` though a Kubernetes Secret see [feed-ingress-deployment-ssl](examples/feed-ingress-deployment-ssl.yml).
 
 ### Gorb / IPVS Support
 

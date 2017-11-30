@@ -13,7 +13,7 @@ apt-get install --no-install-suggests --no-install-recommends -y \
     libpcre3 libpcre3-dev libpcrecpp0v5 \
     zlib1g zlib1g-dev \
     libaio1 libaio-dev \
-    sudo
+    sudo libssl-dev
 
 # allow nginx user to manage interfaces and arp configuration
 echo "%nginx ALL=NOPASSWD: /sbin/ip, /usr/bin/tee" >> /etc/sudoers
@@ -62,7 +62,8 @@ echo "--- Configuring nginx"
     --with-http_v2_module \
     --with-ipv6 \
     --with-debug \
-    --add-module=/tmp/nginx/nginx-module-vts-0.1.10
+    --add-module=/tmp/nginx/nginx-module-vts-0.1.10\
+    --with-http_ssl_module
 
 echo "--- Building nginx"
 make

@@ -89,7 +89,6 @@ http {
     proxy_redirect off;
 
     # Start ingresses
-    {{- $port := .IngressPort }}
     {{- $keepalive := .BackendKeepalives }}
     {{- $proxyprotocol := .ProxyProtocol }}
     
@@ -100,11 +99,29 @@ http {
     }
 {{ end }}
 
+{{- $IngressPorts := .Ports }}
+{{- $SSLPath := .SSLPath }}
+{{define "HTTPSConf"}}
+        # https://mozilla.github.io/server-side-tls/ssl-config-generator/ - Nginx, Modern Profile + TLSv1, TLSv1.1
+        ssl_certificate {{ . }}.crt;
+        ssl_certificate_key {{ . }}.key;
+        ssl_session_timeout 1d;
+        ssl_session_cache shared:SSL:50m;
+        ssl_session_tickets off;
+        ssl_protocols TLSv1.2;
+        ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256';
+        ssl_prefer_server_ciphers on;
+{{ end }}
+
 {{- range $entry := .Servers }}
     # ingress: {{ $entry.Name }}
+  {{- range $portConf := $IngressPorts }}
     server {
-        listen {{ $port }}{{ if $proxyprotocol }} proxy_protocol{{ end }};
+        listen {{ $portConf.Port }}{{- if eq $portConf.Name "https" }} ssl{{ end }}{{ if $proxyprotocol }} proxy_protocol{{ end }};
         server_name {{ $entry.ServerName }};
+{{- if eq $portConf.Name "https" }}
+{{ template "HTTPSConf" $SSLPath  }}
+{{- end }}
 
         # disable any limits to avoid HTTP 413 for large uploads
         client_max_body_size 0; 
@@ -138,16 +155,23 @@ http {
         }
         {{- end }}
     }
+  {{- end }}
 {{- end }}
     # End ingresses
 
     # Default backend
+  {{- range $portConf := $IngressPorts }}
     server {
-        listen {{ .IngressPort }} default_server;
-        location / {
+        listen {{ $portConf.Port }}{{- if eq $portConf.Name "https" }} ssl{{ end }} default_server;
+{{- if eq $portConf.Name "https" }}
+{{ template "HTTPSConf" $SSLPath  }}
+{{- end }}
+
+       location / {
             return 404;
         }
     }
+  {{- end }}
 
     # Status port. This should be firewalled to only allow internal access.
     server {
