@@ -16,6 +16,7 @@ import (
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util/metrics"
 	"github.com/stretchr/testify/mock"
+	"time"
 )
 
 func TestE2E(t *testing.T) {
@@ -33,6 +34,8 @@ const (
 	vipLoadbalancer            = "127.0.0.1"
 	interfaceProcFsPath        = "/host_ipv4_proc/"
 	manageLoopback             = false
+	httpClientTimeout          = time.Second * 1
+	httpClientMaxRetries       = 2
 )
 
 type gorbResponsePrimer struct {
@@ -114,6 +117,8 @@ func newConfig(serverURL string) *Config {
 		BackendHealthcheckInterval: backendHealthcheckInterval,
 		BackendHealthcheckType:     backendHealthcheckType,
 		InterfaceProcFsPath:        interfaceProcFsPath,
+		HTTPClientTimeout:          httpClientTimeout,
+		HTTPClientMaxRetries:       httpClientMaxRetries,
 	}
 }
 
@@ -188,6 +193,7 @@ var _ = Describe("Gorb", func() {
 
 		It("should return error when status code is not 200", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
 
 			g, _ = New(singleServiceConfig(serverURL))
 			err := g.Health()
@@ -256,11 +262,12 @@ var _ = Describe("Gorb", func() {
 		It("should return an error when failing to add a backend", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
 
 			g, _ = New(singleServiceConfig(serverURL))
 			err := g.Update(controller.IngressEntries{})
 
-			Expect(len(gorbH.recordedRequests)).To(Equal(2))
+			Expect(len(gorbH.recordedRequests)).To(Equal(3))
 			Expect(err).To(HaveOccurred())
 		})
 
