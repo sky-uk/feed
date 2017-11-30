@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"testing"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -16,7 +18,6 @@ import (
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util/metrics"
 	"github.com/stretchr/testify/mock"
-	"time"
 )
 
 func TestE2E(t *testing.T) {
