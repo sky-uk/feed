@@ -70,8 +70,6 @@ type Config struct {
 	BackendHealthcheckInterval string
 	BackendHealthcheckType     string
 	InterfaceProcFsPath        string
-	HTTPClientTimeout          time.Duration
-	HTTPClientMaxRetries       int
 }
 
 // Backend defines the backend configuration + service name
@@ -126,9 +124,8 @@ func New(c *Config) (controller.Updater, error) {
 	}
 
 	httpClient := pester.New()
-	httpClient.Timeout = c.HTTPClientTimeout
-	httpClient.MaxRetries = c.HTTPClientMaxRetries
-	httpClient.Backoff = pester.ExponentialBackoff
+	httpClient.Timeout = time.Second * 2
+	httpClient.MaxRetries = 3
 
 	return &gorb{
 		command:    &SimpleCommandRunner{},

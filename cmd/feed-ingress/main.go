@@ -57,8 +57,6 @@ var (
 	gorbBackendHealthcheckInterval string
 	gorbBackendHealthcheckType     string
 	gorbInterfaceProcFsPath        string
-	gorbHTTPClientTimeout          time.Duration
-	gorbHTTPClientMaxRetries       int
 )
 
 const (
@@ -102,8 +100,6 @@ const (
 	defaultGorbInterfaceProcFsPath           = "/host-ipv4-proc/"
 	defaultGorbBackendHealthcheckInterval    = "1s"
 	defaultGorbBackendHealthcheckType        = "http"
-	defaultGorbHTTPClientTimeout             = time.Second * 2
-	defaultGorbHTTPClientMaxRetries          = 3
 )
 
 func init() {
@@ -222,10 +218,6 @@ func init() {
 		"Define the gorb healthcheck interval for the backend")
 	flag.StringVar(&gorbBackendHealthcheckType, "gorb-backend-healthcheck-type", defaultGorbBackendHealthcheckType,
 		"Define the gorb healthcheck type for the backend. Must be either 'tcp', 'http' or 'none'")
-	flag.DurationVar(&gorbHTTPClientTimeout, "gorb-http-client-timeout", defaultGorbHTTPClientTimeout,
-		"Define the timeout for calls to gorb.")
-	flag.IntVar(&gorbHTTPClientMaxRetries, "gorb-http-client-max-retries", defaultGorbHTTPClientMaxRetries,
-		"Define the number of retries for calls to gorb.")
 
 }
 
@@ -313,8 +305,6 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			BackendHealthcheckInterval: gorbBackendHealthcheckInterval,
 			BackendHealthcheckType:     gorbBackendHealthcheckType,
 			InterfaceProcFsPath:        gorbInterfaceProcFsPath,
-			HTTPClientTimeout:          gorbHTTPClientTimeout,
-			HTTPClientMaxRetries:       gorbHTTPClientMaxRetries,
 		}
 		gorbUpdater, err := gorb.New(&config)
 		if err != nil {
