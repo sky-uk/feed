@@ -1,3 +1,7 @@
+# v1.6.1
+* Moved to using [pester](https://github.com/sethgrid/pester) as an http client
+* Implemented retries on calls to the gorb API
+
 # v1.6.0
 * Enable SSL termination
 Set default ssl path + name file without extension.

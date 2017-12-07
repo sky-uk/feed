@@ -188,6 +188,8 @@ var _ = Describe("Gorb", func() {
 
 		It("should return error when status code is not 200", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
 
 			g, _ = New(singleServiceConfig(serverURL))
 			err := g.Health()
@@ -256,11 +258,13 @@ var _ = Describe("Gorb", func() {
 		It("should return an error when failing to add a backend", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 404})
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
+			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 500})
 
 			g, _ = New(singleServiceConfig(serverURL))
 			err := g.Update(controller.IngressEntries{})
 
-			Expect(len(gorbH.recordedRequests)).To(Equal(2))
+			Expect(len(gorbH.recordedRequests)).To(Equal(4))
 			Expect(err).To(HaveOccurred())
 		})
 

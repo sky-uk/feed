@@ -24,6 +24,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/hashicorp/go-multierror"
+	"github.com/sethgrid/pester"
 	"github.com/sky-uk/feed/controller"
 )
 
@@ -122,9 +123,9 @@ func New(c *Config) (controller.Updater, error) {
 		backendDefinitions = append(backendDefinitions, backendDefinition)
 	}
 
-	var httpClient = &http.Client{
-		Timeout: time.Second * 5,
-	}
+	httpClient := pester.New()
+	httpClient.Timeout = time.Second * 2
+	httpClient.MaxRetries = 3
 
 	return &gorb{
 		command:    &SimpleCommandRunner{},
@@ -152,7 +153,7 @@ func (c *SimpleCommandRunner) Execute(cmd string) ([]byte, error) {
 type gorb struct {
 	command    CommandRunner
 	config     *Config
-	httpClient *http.Client
+	httpClient *pester.Client
 	backend    []backend
 }
 
