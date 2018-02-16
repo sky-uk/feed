@@ -128,11 +128,10 @@ they don't respect the deregistration delay). As a result, we don't recommend us
 
 # Development
 
-Requires these tools:
+Install the required tools and setup dependencies:
 
-    go get -u github.com/golang/lint/golint
-    go get -u golang.org/x/tools/cmd/goimports
-    
+    make setup
+
 Build and test with:
 
     make
@@ -143,14 +142,5 @@ Tag the commit in master and push it to release it. Only maintainers can do this
 
 ## Dependencies
 
-Dependencies are managed with [govendor](https://github.com/kardianos/govendor). 
-This is a thin wrapper for golang 1.6 support of a `vendor` directory.
-
-    go get -u github.com/kardianos/govendor
-
-To add a dependency:
-
-    govendor fetch github.com/golang/glog
-
-Make sure to commit changes to `vendor`, ideally as a separate commit to any other code change.
-
+Dependencies are managed with [dep](https://golang.github.io/dep/). Run `dep ensure` to keep your vendor folder up
+to date after a pull.

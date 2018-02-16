@@ -9,9 +9,7 @@ before_install:
   - sudo apt-get -y install python3.6
   - python3.6 -V
 
-install:
-  - go get github.com/golang/lint/golint
-  - go get golang.org/x/tools/cmd/goimports
+install: make setup
 
 services:
   - docker
