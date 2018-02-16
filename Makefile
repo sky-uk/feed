@@ -7,6 +7,13 @@ all : format check build
 check : vet lint test
 travis : checkformat check docker
 
+setup:
+	@echo "== setup"
+	go get github.com/golang/lint/golint
+	go get golang.org/x/tools/cmd/goimports
+	go get github.com/golang/dep/cmd/dep
+	dep ensure
+
 format :
 	@echo "== format"
 	@goimports -w $(files)
@@ -40,7 +47,7 @@ test :
 	@echo "== run tests"
 	@go test -race $(pkgs)
 
-# Docker build 
+# Docker build
 git_rev := $(shell git rev-parse --short HEAD)
 git_tag := $(shell git tag --points-at=$(git_rev))
 image_prefix := skycirrus/feed
