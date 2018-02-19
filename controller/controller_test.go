@@ -11,6 +11,8 @@ import (
 
 	"strconv"
 
+	"errors"
+
 	"github.com/sky-uk/feed/k8s"
 	fake "github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
@@ -140,6 +142,33 @@ func TestControllerStartsAndStopsUpdatersInCorrectOrder(t *testing.T) {
 	// then
 	assert.Equal(started, []*fakeUpdater{updater1, updater2}, "should start in order")
 	assert.Equal(stopped, []*fakeUpdater{updater2, updater1}, "should stop in reverse order")
+}
+
+func TestControllerStopsAnyStartedUpdatersIfOneFailsToStart(t *testing.T) {
+	// given
+	assert := assert.New(t)
+	updater1 := new(fakeUpdater)
+	updater1.On("Start").Return(nil)
+	updater1.On("Stop").Return(nil)
+
+	updater2 := new(fakeUpdater)
+	updater2.TestData().Set("name", "updater2")
+	updater2.On("Start").Return(errors.New("kaboom"))
+
+	_, client := createDefaultStubs()
+	controller := New(Config{
+		Updaters:                     []Updater{updater1, updater2},
+		KubernetesClient:             client,
+		DefaultAllow:                 ingressDefaultAllow,
+		DefaultBackendTimeoutSeconds: backendTimeout,
+	})
+
+	// when
+	assert.Error(controller.Start())
+
+	// then
+	updater1.AssertExpectations(t)
+	updater2.AssertExpectations(t)
 }
 
 func TestControllerCannotBeRestarted(t *testing.T) {
@@ -283,43 +312,43 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			"ingress without corresponding service",
 			createDefaultIngresses(),
 			[]*v1.Service{},
-			[]IngressEntry{},
+			nil,
 		},
 		{
 			"ingress with service with non-matching namespace",
 			createDefaultIngresses(),
 			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
-			[]IngressEntry{},
+			nil,
 		},
 		{
 			"ingress with service with non-matching name",
 			createDefaultIngresses(),
 			createServiceFixture("lalala service", ingressNamespace, serviceIP),
-			[]IngressEntry{},
+			nil,
 		},
 		{
 			"ingress with missing host name",
 			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
-			[]IngressEntry{},
+			nil,
 		},
 		{
 			"ingress with missing service name",
 			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
-			[]IngressEntry{},
+			nil,
 		},
 		{
 			"ingress with missing service port",
 			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation),
 			createDefaultServices(),
-			[]IngressEntry{},
+			nil,
 		},
 		{
 			"ingress with missing service IP",
 			createDefaultIngresses(),
 			createServiceFixture(ingressSvcName, ingressNamespace, ""),
-			[]IngressEntry{},
+			nil,
 		},
 		{
 			"ingress with default allow",

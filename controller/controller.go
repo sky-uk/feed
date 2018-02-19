@@ -89,10 +89,17 @@ func (c *controller) Start() error {
 		return errors.New("can't restart controller")
 	}
 
+	var startedUpdaters []Updater
 	for _, u := range c.updaters {
 		if err := u.Start(); err != nil {
+			for _, started := range startedUpdaters {
+				if err := started.Stop(); err != nil {
+					log.Warnf("unable to stop %s: %v", u, err)
+				}
+			}
 			return fmt.Errorf("unable to start %v: %v", u, err)
 		}
+		startedUpdaters = append(startedUpdaters, u)
 	}
 
 	c.watchForUpdates()
@@ -142,7 +149,7 @@ func (c *controller) updateIngresses() error {
 	serviceMap := mapNamesToAddresses(services)
 
 	var skipped []string
-	entries := []IngressEntry{}
+	var entries []IngressEntry
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
 			for _, path := range rule.HTTP.Paths {

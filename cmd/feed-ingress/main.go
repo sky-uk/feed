@@ -18,6 +18,7 @@ import (
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/gorb"
 	"github.com/sky-uk/feed/k8s"
+	"github.com/sky-uk/feed/merlin"
 	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
@@ -57,6 +58,14 @@ var (
 	gorbBackendHealthcheckInterval string
 	gorbBackendHealthcheckType     string
 	gorbInterfaceProcFsPath        string
+	merlinEndpoint                 string
+	merlinServiceID                string
+	merlinInstanceIP               string
+	merlinInstancePort             uint
+	merlinForwardMethod            string
+	merlinDrainDelay               time.Duration
+	merlinVIP                      string
+	merlinVIPInterface             string
 )
 
 const (
@@ -100,9 +109,12 @@ const (
 	defaultGorbInterfaceProcFsPath           = "/host-ipv4-proc/"
 	defaultGorbBackendHealthcheckInterval    = "1s"
 	defaultGorbBackendHealthcheckType        = "http"
+	defaultMerlinForwardMethod               = "route"
+	defaultMerlinVIPInterface                = "lo"
 )
 
 func init() {
+	// general flags
 	flag.BoolVar(&debug, "debug", false,
 		"Enable debug logging.")
 	flag.StringVar(&kubeconfig, "kubeconfig", "",
@@ -128,6 +140,7 @@ func init() {
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
 
+	// nginx flags
 	flag.StringVar(&nginxConfig.BinaryLocation, "nginx-binary", defaultNginxBinary,
 		"Location of nginx binary.")
 	flag.StringVar(&nginxConfig.WorkingDir, "nginx-workdir", defaultNginxWorkingDir,
@@ -165,9 +178,6 @@ func init() {
 	flag.DurationVar(&nginxConfig.UpdatePeriod, "nginx-update-period", defaultNginxUpdatePeriod,
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
-	flag.StringVar(&gorbEndpoint, "gorb-endpoint", defaultGorbEndpoint, "Define the endpoint to talk to gorb for registration.")
-	flag.StringVar(&gorbIngressInstanceIP, "gorb-ingress-instance-ip", defaultGorbIngressInstanceIP,
-		"Define the ingress instance ip, the ip of the node where feed-ingress is running.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
 	flag.Var(&nginxLogHeaders, "nginx-log-headers", "Comma separated list of headers to be logged in access logs")
 	flag.Var(&nginxTrustedFrontends, "nginx-trusted-frontends",
@@ -177,13 +187,13 @@ func init() {
 	flag.StringVar(&nginxSSLPath, "ssl-path", defaultNginxSSLPath,
 		"Set default ssl path + name file without extension.  Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key).")
 
+	// elb/alb flags
 	flag.StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
-
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
 	flag.StringVar(&registrationFrontendType, "registration-frontend-type", defaultRegistrationFrontendType,
-		"Define the registration frontend type. Must be gorb, elb or alb.")
+		"Define the registration frontend type. Must be merlin, gorb, elb or alb.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
@@ -196,12 +206,18 @@ func init() {
 		"Delay to wait for feed-ingress to deregister from the ALB target group on shutdown. Should match"+
 			" the target group setting in AWS.")
 
+	// prometheus flags
 	flag.StringVar(&pushgatewayURL, "pushgateway", "",
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
 	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
+
+	// gorb flags
+	flag.StringVar(&gorbEndpoint, "gorb-endpoint", defaultGorbEndpoint, "Define the endpoint to talk to gorb for registration.")
+	flag.StringVar(&gorbIngressInstanceIP, "gorb-ingress-instance-ip", defaultGorbIngressInstanceIP,
+		"Define the ingress instance ip, the ip of the node where feed-ingress is running.")
 	flag.StringVar(&gorbServicesDefinition, "gorb-services-definition", defaultGorbServicesDefinition,
 		"Comma separated list of Service Definition (e.g. 'http-proxy:80,https-proxy:443') to register via Gorb")
 	flag.StringVar(&gorbBackendMethod, "gorb-backend-method", defaultGorbBackendMethod,
@@ -219,6 +235,19 @@ func init() {
 	flag.StringVar(&gorbBackendHealthcheckType, "gorb-backend-healthcheck-type", defaultGorbBackendHealthcheckType,
 		"Define the gorb healthcheck type for the backend. Must be either 'tcp', 'http' or 'none'")
 
+	// merlin flags
+	flag.StringVar(&merlinEndpoint, "merlin-endpoint", "",
+		"Merlin gRPC endpoint to connect to. Expected format is scheme://authority/endpoint_name (see "+
+			"https://github.com/grpc/grpc/blob/master/doc/naming.md). Will load balance between all available servers.")
+	flag.StringVar(&merlinServiceID, "merlin-service-id", "", "Merlin virtual service ID to attach to.")
+	flag.StringVar(&merlinInstanceIP, "merlin-instance-ip", "", "Ingress IP to register with merlin")
+	flag.UintVar(&merlinInstancePort, "merlin-instance-port", 0, "Ingress port to register with merlin")
+	flag.StringVar(&merlinForwardMethod, "merlin-forward-method", defaultMerlinForwardMethod, "IPVS forwarding method,"+
+		" must be one of route, tunnel, or masq.")
+	flag.DurationVar(&merlinDrainDelay, "merlin-drain-delay", defaultDrainDelay, "Delay to wait after for connections"+
+		" to bleed off when deregistering from merlin. Real server weight is set to 0 during this delay.")
+	flag.StringVar(&merlinVIP, "merlin-vip", "", "VIP to assign to loopback to support direct route and tunnel.")
+	flag.StringVar(&merlinVIPInterface, "merlin-vip-interface", defaultMerlinVIPInterface, "VIP interface to assign the VIP.")
 }
 
 func main() {
@@ -271,19 +300,23 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 
 	updaters := []controller.Updater{nginxUpdater}
 
-	if registrationFrontendType == "elb" {
+	switch registrationFrontendType {
+
+	case "elb":
 		elbUpdater, err := elb.New(region, elbLabelValue, elbExpectedNumber, drainDelay)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, elbUpdater)
-	} else if registrationFrontendType == "alb" {
+
+	case "alb":
 		albUpdater, err := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, albUpdater)
-	} else if registrationFrontendType == "gorb" {
+
+	case "gorb":
 		virtualServices, err := toVirtualServices(gorbServicesDefinition)
 		if err != nil {
 			return nil, fmt.Errorf("invalid gorb services definition. Must be a comma separated list - e.g. 'http-proxy:80,https-proxy:443', but was %s", gorbServicesDefinition)
@@ -311,11 +344,28 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			return updaters, err
 		}
 		updaters = append(updaters, gorbUpdater)
-	} else {
+
+	case "merlin":
+		config := merlin.Config{
+			Endpoint:      merlinEndpoint,
+			ServiceID:     merlinServiceID,
+			InstanceIP:    merlinInstanceIP,
+			InstancePort:  uint16(merlinInstancePort),
+			ForwardMethod: merlinForwardMethod,
+			DrainDelay:    merlinDrainDelay,
+			VIP:           merlinVIP,
+			VIPInterface:  merlinVIPInterface,
+		}
+		merlinUpdater, err := merlin.New(config)
+		if err != nil {
+			return updaters, err
+		}
+		updaters = append(updaters, merlinUpdater)
+
+	default:
 		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
 	}
 
-	// update nginx before attaching to front ends
 	return updaters, nil
 }
 
