@@ -328,19 +328,19 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with missing host name",
-			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation),
+			createIngressesFixture("", ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
 			nil,
 		},
 		{
 			"ingress with missing service name",
-			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation),
+			createIngressesFixture(ingressHost, "", ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
 			nil,
 		},
 		{
 			"ingress with missing service port",
-			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation),
+			createIngressesFixture(ingressHost, ingressSvcName, 0, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
 			nil,
 		},
@@ -352,7 +352,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING", stripPath, backendTimeout, frontendElbSchemeAnnotation),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING", stripPath, backendTimeout, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:      ingressNamespace,
@@ -367,7 +367,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with empty allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", stripPath, backendTimeout, frontendElbSchemeAnnotation),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", stripPath, backendTimeout, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:      ingressNamespace,
@@ -383,7 +383,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with strip paths set to true",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "true", backendTimeout, frontendElbSchemeAnnotation),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "true", backendTimeout, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -400,7 +400,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with strip paths set to false",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", backendTimeout, frontendElbSchemeAnnotation),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", backendTimeout, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -417,7 +417,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with overridden backend timeout",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20, frontendElbSchemeAnnotation),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -434,7 +434,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default backend timeout",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", -1, frontendElbSchemeAnnotation),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", -1, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -447,6 +447,42 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: backendTimeout,
+			}},
+		},
+		{
+			"ingress with overridden backend max connections",
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20, frontendElbSchemeAnnotation, 512),
+			createDefaultServices(),
+			[]IngressEntry{{
+				Namespace:             ingressNamespace,
+				Name:                  ingressName,
+				Host:                  ingressHost,
+				Path:                  ingressPath,
+				ServiceAddress:        serviceIP,
+				ServicePort:           ingressSvcPort,
+				ELbScheme:             "internal",
+				Allow:                 []string{},
+				StripPaths:            false,
+				BackendTimeoutSeconds: 20,
+				BackendMaxConnections: 512,
+			}},
+		},
+		{
+			"ingress with default backend max connections",
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "", "false", 20, frontendElbSchemeAnnotation, defaultMaxConnections),
+			createDefaultServices(),
+			[]IngressEntry{{
+				Namespace:             ingressNamespace,
+				Name:                  ingressName,
+				Host:                  ingressHost,
+				Path:                  ingressPath,
+				ServiceAddress:        serviceIP,
+				ServicePort:           ingressSvcPort,
+				ELbScheme:             "internal",
+				Allow:                 []string{},
+				StripPaths:            false,
+				BackendTimeoutSeconds: 20,
+				BackendMaxConnections: defaultMaxConnections,
 			}},
 		},
 	}
@@ -498,30 +534,31 @@ func createLbEntriesFixture() IngressEntries {
 }
 
 const (
-	ingressHost         = "foo.sky.com"
-	ingressPath         = "/foo"
-	ingressName         = "foo-ingress"
-	ingressSvcName      = "foo-svc"
-	ingressSvcPort      = 80
-	ingressNamespace    = "happysky"
-	ingressAllow        = "10.82.0.0/16,10.44.0.0/16"
-	ingressDefaultAllow = "10.50.0.0/16,10.1.0.0/16"
-	serviceIP           = "10.254.0.82"
-	elbScheme           = "internal"
-	stripPath           = "MISSING"
-	backendTimeout      = 10
+	ingressHost           = "foo.sky.com"
+	ingressPath           = "/foo"
+	ingressName           = "foo-ingress"
+	ingressSvcName        = "foo-svc"
+	ingressSvcPort        = 80
+	ingressNamespace      = "happysky"
+	ingressAllow          = "10.82.0.0/16,10.44.0.0/16"
+	ingressDefaultAllow   = "10.50.0.0/16,10.1.0.0/16"
+	serviceIP             = "10.254.0.82"
+	elbScheme             = "internal"
+	stripPath             = "MISSING"
+	backendTimeout        = 10
+	defaultMaxConnections = 0
 )
 
 func createDefaultIngresses() []*v1beta1.Ingress {
-	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation)
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendElbSchemeAnnotation, defaultMaxConnections)
 }
 
 func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
-	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendSchemeAnnotation)
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, ingressAllow, stripPath, backendTimeout, frontendSchemeAnnotation, defaultMaxConnections)
 }
 
 func createIngressesFixture(host string, serviceName string, servicePort int, allow string, stripPath string,
-	backendTimeout int, schemeAnnotationKey string) []*v1beta1.Ingress {
+	backendTimeout int, schemeAnnotationKey string, upstreamMaxConnections int) []*v1beta1.Ingress {
 
 	paths := []v1beta1.HTTPIngressPath{{
 		Path: ingressPath,
@@ -542,6 +579,10 @@ func createIngressesFixture(host string, serviceName string, servicePort int, al
 
 	if backendTimeout != -1 {
 		annotations[backendTimeoutSeconds] = strconv.Itoa(backendTimeout)
+	}
+
+	if upstreamMaxConnections > 0 {
+		annotations[backendMaxConnections] = strconv.Itoa(upstreamMaxConnections)
 	}
 
 	return []*v1beta1.Ingress{

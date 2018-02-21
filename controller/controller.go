@@ -32,6 +32,9 @@ const stripPathAnnotation = "sky.uk/strip-path"
 const legacyBackendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
 const backendTimeoutSeconds = "sky.uk/backend-timeout-seconds"
 
+// sets Nginx (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
+const backendMaxConnections = "sky.uk/backend-max-connections"
+
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
 type Controller interface {
 	// Run the controller, returning immediately after it starts or an error occurs.
@@ -43,16 +46,17 @@ type Controller interface {
 }
 
 type controller struct {
-	client                k8s.Client
-	updaters              []Updater
-	defaultAllow          []string
-	defaultStripPath      bool
-	defaultBackendTimeout int
-	watcher               k8s.Watcher
-	doneCh                chan struct{}
-	watcherDone           sync.WaitGroup
-	started               bool
-	updatesHealth         util.SafeError
+	client                       k8s.Client
+	updaters                     []Updater
+	defaultAllow                 []string
+	defaultStripPath             bool
+	defaultBackendTimeout        int
+	defaultBackendMaxConnections int
+	watcher                      k8s.Watcher
+	doneCh                       chan struct{}
+	watcherDone                  sync.WaitGroup
+	started                      bool
+	updatesHealth                util.SafeError
 	sync.Mutex
 }
 
@@ -63,17 +67,19 @@ type Config struct {
 	DefaultAllow                 string
 	DefaultStripPath             bool
 	DefaultBackendTimeoutSeconds int
+	DefaultBackendMaxConnections int
 }
 
 // New creates an ingress controller.
 func New(conf Config) Controller {
 	return &controller{
-		client:                conf.KubernetesClient,
-		updaters:              conf.Updaters,
-		defaultAllow:          strings.Split(conf.DefaultAllow, ","),
-		defaultStripPath:      conf.DefaultStripPath,
-		defaultBackendTimeout: conf.DefaultBackendTimeoutSeconds,
-		doneCh:                make(chan struct{}),
+		client:                       conf.KubernetesClient,
+		updaters:                     conf.Updaters,
+		defaultAllow:                 strings.Split(conf.DefaultAllow, ","),
+		defaultStripPath:             conf.DefaultStripPath,
+		defaultBackendTimeout:        conf.DefaultBackendTimeoutSeconds,
+		defaultBackendMaxConnections: conf.DefaultBackendMaxConnections,
+		doneCh: make(chan struct{}),
 	}
 }
 
@@ -168,6 +174,7 @@ func (c *controller) updateIngresses() error {
 						Allow:                 c.defaultAllow,
 						StripPaths:            c.defaultStripPath,
 						BackendTimeoutSeconds: c.defaultBackendTimeout,
+						BackendMaxConnections: c.defaultBackendMaxConnections,
 						CreationTimestamp:     ingress.CreationTimestamp.Time,
 					}
 
@@ -193,7 +200,7 @@ func (c *controller) updateIngresses() error {
 						} else if stripPath == "false" {
 							entry.StripPaths = false
 						} else {
-							log.Warnf("Ingress %s has an invalid strip path annotation: %s. Uing default", ingress.Name, stripPath)
+							log.Warnf("Ingress %s has an invalid strip path annotation: %s. Using default", ingress.Name, stripPath)
 						}
 					}
 
@@ -202,9 +209,14 @@ func (c *controller) updateIngresses() error {
 						entry.BackendTimeoutSeconds = tmp
 					}
 
-					if backendKeepAlive, ok := ingress.Annotations[backendTimeoutSeconds]; ok {
-						tmp, _ := strconv.Atoi(backendKeepAlive)
+					if timeout, ok := ingress.Annotations[backendTimeoutSeconds]; ok {
+						tmp, _ := strconv.Atoi(timeout)
 						entry.BackendTimeoutSeconds = tmp
+					}
+
+					if maxConnections, ok := ingress.Annotations[backendMaxConnections]; ok {
+						tmp, _ := strconv.Atoi(maxConnections)
+						entry.BackendMaxConnections = tmp
 					}
 
 					if err := entry.validate(); err == nil {

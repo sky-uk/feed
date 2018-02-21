@@ -85,6 +85,7 @@ const (
 	defaultNginxBackendKeepalives            = 512
 	defaultNginxBackendTimeoutSeconds        = 60
 	defaultNginxBackendConnectTimeoutSeconds = 1
+	defaultNginxBackendMaxConnections        = 1024
 	defaultNginxLogLevel                     = "warn"
 	defaultNginxServerNamesHashBucketSize    = unset
 	defaultNginxServerNamesHashMaxSize       = unset
@@ -163,6 +164,9 @@ func init() {
 	flag.IntVar(&nginxConfig.BackendConnectTimeoutSeconds, "nginx-backend-connect-timeout-seconds",
 		defaultNginxBackendConnectTimeoutSeconds,
 		"Connect timeout to backend services.")
+	flag.IntVar(&controllerConfig.DefaultBackendMaxConnections, "nginx-default-backend-max-connections",
+		defaultNginxBackendMaxConnections,
+		"Maximum connections to backends. Can be overridden per ingress with the sky.uk/backend-max-connections annotation.")
 	flag.StringVar(&nginxConfig.LogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 	flag.IntVar(&nginxConfig.ServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,
