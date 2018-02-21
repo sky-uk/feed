@@ -16,6 +16,8 @@ import (
 	"github.com/sky-uk/feed/merlin/mocks"
 	"github.com/sky-uk/merlin/types"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestMerlin(t *testing.T) {
@@ -27,7 +29,7 @@ var _ = Describe("merlin", func() {
 	var (
 		merlin controller.Updater
 		client *mocks.MerlinClient
-		nl     = &nlMock{}
+		nl     *nlMock
 		conf   Config
 
 		emptyResponse = &empty.Empty{}
@@ -35,6 +37,7 @@ var _ = Describe("merlin", func() {
 
 	BeforeEach(func() {
 		client = &mocks.MerlinClient{}
+		nl = &nlMock{}
 		conf = Config{
 			ServiceID:     "service1",
 			InstanceIP:    "172.16.16.1",
@@ -70,6 +73,29 @@ var _ = Describe("merlin", func() {
 
 		Expect(err).ToNot(HaveOccurred())
 		client.AssertExpectations(GinkgoT())
+	})
+
+	It("updates itself on start if already exists", func() {
+		expectedServer := &types.RealServer{
+			ServiceID: conf.ServiceID,
+			Key: &types.RealServer_Key{
+				Ip:   conf.InstanceIP,
+				Port: uint32(conf.InstancePort),
+			},
+			Config: &types.RealServer_Config{
+				Weight:  &wrappers.UInt32Value{Value: 1},
+				Forward: types.ForwardMethod_ROUTE,
+			},
+		}
+		client.On("CreateServer", mock.Anything, expectedServer).Return(emptyResponse,
+			status.Error(codes.AlreadyExists, "already exists"))
+		client.On("UpdateServer", mock.Anything, expectedServer).Return(emptyResponse, nil)
+
+		err := merlin.Start()
+
+		Expect(err).ToNot(HaveOccurred())
+		client.AssertExpectations(GinkgoT())
+
 	})
 
 	It("deregisters itself on stop", func() {

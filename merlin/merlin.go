@@ -13,6 +13,8 @@ import (
 	"github.com/sky-uk/merlin/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const merlinTimeout = time.Second * 10
@@ -101,9 +103,15 @@ func (u *updater) attach() error {
 		Forward: types.ForwardMethod(forward),
 	}
 
-	if _, err := u.client.CreateServer(ctx, server); err != nil {
+	_, err := u.client.CreateServer(ctx, server)
+	if status.Code(err) == codes.AlreadyExists {
+		if _, err := u.client.UpdateServer(ctx, server); err != nil {
+			return fmt.Errorf("unable to register with merlin: %v", err)
+		}
+	} else if err != nil {
 		return fmt.Errorf("unable to register with merlin: %v", err)
 	}
+
 	return nil
 }
 
