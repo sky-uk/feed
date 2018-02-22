@@ -15,7 +15,10 @@ metadata:
     sky.uk/strip-path: "true"
 
     # Max timeout for requests.
-    sky.uk/backend-timeout-seconds: 20
+    sky.uk/backend-timeout-seconds: "20"
+
+    # Maximum backend connections (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
+    sky.uk/backend-max-connections: "512"
 spec:
   rules:
   - host: example.bskyb.com
