@@ -14,10 +14,10 @@ metadata:
     # Strip the path from the path passed to the backend service.
     sky.uk/strip-path: "true"
 
-    # Max timeout for requests.
+    # Max timeout for requests. Values must be quoted or they'll be silently dropped by kubectl.
     sky.uk/backend-timeout-seconds: "20"
 
-    # Maximum backend connections (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
+    # Maximum backend connections (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns). Values must be quoted or they'll be silently dropped by kubectl.
     sky.uk/backend-max-connections: "512"
 spec:
   rules:

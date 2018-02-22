@@ -1,7 +1,7 @@
 # v1.8.0
 * Upgraded to Nginx 1.12.2 and VTS 0.1.15
 * Introduced `sky.uk/backend-max-connections` annotation that sets upstream.max_conns (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
-* Introduced flag to set global value for upstream.max_conns (default: 0 - unlimited)
+* Introduced flag to set global value for upstream.max_conns (default: 1024)
 
 # v1.7.0
 * Add support for [merlin](https://github.com/sky-uk/merlin) frontend
