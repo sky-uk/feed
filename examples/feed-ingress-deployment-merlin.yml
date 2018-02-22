@@ -124,7 +124,7 @@ spec:
         # Connections*workers needs to be less than available ephemeral ports. Linux default is 60999-32768=28231.
         - -nginx-worker-connections=20000
 
-        # Needs to be greater than the frontend idle timeout, see `aws_provisioning/kubernetes` for frontend value.
+        # Needs to be greater than any frontend idle timeout.
         - -nginx-keepalive-seconds=304
 
         # CIDRs of the frontend to trust X-Forwarded-For, for determining client IP allow/deny.
