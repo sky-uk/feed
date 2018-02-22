@@ -92,6 +92,7 @@ func (c *controller) Start() error {
 	var startedUpdaters []Updater
 	for _, u := range c.updaters {
 		if err := u.Start(); err != nil {
+			// stop all updaters started so far, to ensure clean up of any state before we bail.
 			for _, started := range startedUpdaters {
 				if err := started.Stop(); err != nil {
 					log.Warnf("unable to stop %s: %v", u, err)

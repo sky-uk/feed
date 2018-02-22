@@ -18,19 +18,19 @@ spec:
         app: feed-ingress
     spec:
 
-      # Listen directly on host interface, required so ELBs can contact nginx.
+      # Listen directly on host interface, required so frontends can contact nginx.
       hostNetwork: true
 
       # Time to wait for requests to gracefully terminate when updating the deployment.
       # Needs to be at least as long as the -drain-delay setting below, with a buffer for other teardown.
-      # Recommend to set this to 2x -drain-delay.
-      terminationGracePeriodSeconds: 60
+      # Recommend to set this to 2x -merlin-drain-delay.
+      terminationGracePeriodSeconds: 120
 
       # Always restart on death.
       restartPolicy: Always
 
       containers:
-      - image: skycirrus/feed-ingress:v1.2.0
+      - image: skycirrus/feed-ingress:v1.7.0
         name: feed-ingress
         securityContext:
           capabilities:
@@ -65,10 +65,10 @@ spec:
           protocol: TCP
 
         args:
-        # Ingress nginx port that ELBs will direct traffic towards.
+        # Ingress nginx port that frontend will direct traffic towards.
         - -ingress-port=80
 
-        # Health port on nginx, used by ELBs to determine health.
+        # Health port on nginx, used by frontend to determine health.
         - -ingress-health-port=8081
 
         # Default security whitelist for ingress. Can be overridden with the sky.uk/allow annotation.
@@ -80,7 +80,7 @@ spec:
         # Log level of nginx. Recommended to leave at error, or set to crit if too much spam.
         - -nginx-loglevel=error
 
-        # How often to reload nginx if needed. Setting too low can cause 504s from the ELB in the case of heavy
+        # How often to reload nginx if needed. Setting too low can cause 504s from the frontend in the case of heavy
         # ingress updates.
         - -nginx-update-period=5m
 
@@ -124,10 +124,10 @@ spec:
         # Connections*workers needs to be less than available ephemeral ports. Linux default is 60999-32768=28231.
         - -nginx-worker-connections=20000
 
-        # Needs to be greater than the ELB idle timeout, see `aws_provisioning/kubernetes` for ELB value.
+        # Needs to be greater than the frontend idle timeout, see `aws_provisioning/kubernetes` for frontend value.
         - -nginx-keepalive-seconds=304
 
-        # CIDRs of the ELBs to trust X-Forwarded-For, for determining client IP allow/deny.
+        # CIDRs of the frontend to trust X-Forwarded-For, for determining client IP allow/deny.
         - -nginx-trusted-frontends=10.0.0.0/8
 
         # Max number of idle connections to a backend.
@@ -146,7 +146,7 @@ spec:
         # Add custom headers to the access logs.
         - -nginx-log-headers=X-Amzn-Trace-Id
 
-        # Controller health determines readiness. This has no effect on ingress traffic from ELBs.
+        # Controller health determines readiness. This has no effect on ingress traffic from frontend.
         readinessProbe:
           httpGet:
             path: /health

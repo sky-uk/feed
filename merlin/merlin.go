@@ -35,14 +35,14 @@ type updater struct {
 	Config
 	clientConn *grpc.ClientConn
 	client     types.MerlinClient
-	nl         nl
+	nl         netlinkWrapper
 }
 
 // New merlin updater.
 func New(conf Config) (controller.Updater, error) {
 	u := &updater{
 		Config: conf,
-		nl:     &nlImpl{},
+		nl:     &netlinkWrapperImpl{},
 	}
 	return u, nil
 }
@@ -54,8 +54,10 @@ func (u *updater) Start() error {
 	if err := u.addVIP(); err != nil {
 		return err
 	}
-	if err := u.attach(); err != nil {
-		u.removeVIP()
+	if err := u.registerWithMerlin(); err != nil {
+		if err := u.removeVIP(); err != nil {
+			log.Warnf("Unable to remove VIP: %v", err)
+		}
 		return err
 	}
 	return nil
@@ -67,7 +69,7 @@ func (u *updater) Stop() error {
 			log.Warnf("error when stopping merlin grpc connection: %v", err)
 		}
 	}
-	u.detach()
+	u.deregisterWithMerlin()
 	return u.removeVIP()
 }
 
@@ -89,7 +91,7 @@ func (u *updater) createBaseRealServer() *types.RealServer {
 	}
 }
 
-func (u *updater) attach() error {
+func (u *updater) registerWithMerlin() error {
 	ctx, cancel := context.WithTimeout(context.Background(), merlinTimeout)
 	defer cancel()
 
@@ -115,7 +117,7 @@ func (u *updater) attach() error {
 	return nil
 }
 
-func (u *updater) detach() {
+func (u *updater) deregisterWithMerlin() {
 	// drain
 	func() {
 		server := u.createBaseRealServer()
