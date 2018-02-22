@@ -158,8 +158,17 @@
 
 [[projects]]
   name = "github.com/golang/protobuf"
-  packages = ["proto"]
-  revision = "3b06fc7a4cad73efce5fe6217ab6c33e7231ab4a"
+  packages = [
+    "proto",
+    "ptypes",
+    "ptypes/any",
+    "ptypes/duration",
+    "ptypes/empty",
+    "ptypes/timestamp",
+    "ptypes/wrappers"
+  ]
+  revision = "925541529c1fa6821df4e44ce2723319eb2be768"
+  version = "v1.0.0"
 
 [[projects]]
   name = "github.com/google/gofuzz"
@@ -286,6 +295,7 @@
   packages = [
     "expfmt",
     "internal/bitbucket.org/ww/goautoneg",
+    "log",
     "model"
   ]
   revision = "a3a8fe85f2579bcfec713dbfacbdd0797a792f3a"
@@ -299,6 +309,12 @@
   name = "github.com/sethgrid/pester"
   packages = ["."]
   revision = "760f8913c0483b776294e1bee43f1d687527127b"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/sky-uk/merlin"
+  packages = ["types"]
+  revision = "629c5f6215afb388ce57e9f2a70ec411abf04a8d"
 
 [[projects]]
   name = "github.com/spf13/pflag"
@@ -324,11 +340,27 @@
   revision = "9c7f9b7a2bc3a520f7c7b30b34b7f85f47fe27b6"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/vishvananda/netlink"
+  packages = [
+    ".",
+    "nl"
+  ]
+  revision = "25d2c79295b361cac34eb41cfae90d5c69078b2a"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/vishvananda/netns"
+  packages = ["."]
+  revision = "be1fbeda19366dea804f00efff2dd73a1642fdcc"
+
+[[projects]]
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
   revision = "8a549a1948fc5271eb24f36dcb0d3b47dec75a16"
 
 [[projects]]
+  branch = "master"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -343,7 +375,7 @@
     "lex/httplex",
     "trace"
   ]
-  revision = "6cdc0daab091c43fc46193327e0047b4f883c613"
+  revision = "cbe0f9307d0156177f9dd5dc85da1a31abc5f2fb"
 
 [[projects]]
   name = "golang.org/x/oauth2"
@@ -357,13 +389,16 @@
   revision = "f6093e37b6cb4092101a298aba5d794eb570757f"
 
 [[projects]]
+  branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "d4feaf1a7e61e1d9e79e6c4e76c6349e9cab0a03"
+  revision = "37707fdb30a5b38865cfb95e5aab41707daec7fd"
 
 [[projects]]
   name = "golang.org/x/text"
   packages = [
+    "collate",
+    "collate/build",
     "encoding",
     "encoding/charmap",
     "encoding/htmlindex",
@@ -374,6 +409,7 @@
     "encoding/simplifiedchinese",
     "encoding/traditionalchinese",
     "encoding/unicode",
+    "internal/colltab",
     "internal/gen",
     "internal/tag",
     "internal/triegen",
@@ -381,9 +417,12 @@
     "internal/utf8internal",
     "language",
     "runes",
+    "secure/bidirule",
     "transform",
+    "unicode/bidi",
     "unicode/cldr",
     "unicode/norm",
+    "unicode/rangetable",
     "width"
   ]
   revision = "6eab0e8f74e86c598ec3b6fad4888e0c11482d48"
@@ -405,22 +444,40 @@
   revision = "ca59ef35f409df61fa4a5f8290ff289b37eccfb8"
 
 [[projects]]
+  branch = "master"
+  name = "google.golang.org/genproto"
+  packages = ["googleapis/rpc/status"]
+  revision = "2b5a72b8730b0b16380010cfe5286c42108d88e7"
+
+[[projects]]
   name = "google.golang.org/grpc"
   packages = [
     ".",
+    "balancer",
+    "balancer/base",
+    "balancer/roundrobin",
     "codes",
+    "connectivity",
     "credentials",
+    "encoding",
+    "encoding/proto",
+    "grpclb/grpc_lb_v1/messages",
     "grpclog",
     "internal",
+    "keepalive",
     "metadata",
     "naming",
     "peer",
+    "resolver",
+    "resolver/dns",
+    "resolver/passthrough",
     "stats",
+    "status",
     "tap",
     "transport"
   ]
-  revision = "708a7f9f3283aa2d4f6132d287d78683babe55c8"
-  version = "v1.0.5"
+  revision = "8e4536a86ab602859c20df5ebfd0bd4228d08655"
+  version = "v1.10.0"
 
 [[projects]]
   name = "gopkg.in/inf.v0"
@@ -556,6 +613,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3c5f95e43c23a2cfddb7b35f06a7d4fecaa4aeec79da9bb4ea42baf18eaecd2b"
+  inputs-digest = "5f67a5b1b739570533e373bf10cc797b0666ea4183bec45d96ac6a598e7fe715"
   solver-name = "gps-cdcl"
   solver-version = 1

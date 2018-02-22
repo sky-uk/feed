@@ -1,3 +1,7 @@
+# v1.7.0
+* Add support for [merlin](https://github.com/sky-uk/merlin) frontend
+* Swap to dep from govendor
+
 # v1.6.1
 * Moved to using [pester](https://github.com/sethgrid/pester) as an http client
 * Implemented retries on calls to the gorb API

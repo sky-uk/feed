@@ -18,20 +18,30 @@ spec:
         app: feed-ingress
     spec:
 
-      # Listen directly on host interface, required so ELBs can contact nginx.
+      # Listen directly on host interface, required so frontends can contact nginx.
       hostNetwork: true
 
       # Time to wait for requests to gracefully terminate when updating the deployment.
       # Needs to be at least as long as the -drain-delay setting below, with a buffer for other teardown.
-      # Recommend to set this to 2x -drain-delay.
-      terminationGracePeriodSeconds: 60
+      # Recommend to set this to 2x -merlin-drain-delay.
+      terminationGracePeriodSeconds: 120
 
       # Always restart on death.
       restartPolicy: Always
 
       containers:
-      - image: skycirrus/feed-ingress:v1.3.0
+      - image: skycirrus/feed-ingress:v1.7.0
         name: feed-ingress
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - NET_BIND_SERVICE
+        env:
+        - name: INSTANCEIP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
 
         resources:
           requests:
@@ -41,8 +51,8 @@ spec:
             memory: 300Mi
 
         ports:
-        - hostPort: 8080
-          containerPort: 8080
+        - hostPort: 80
+          containerPort: 80
           name: ingress
           protocol: TCP
         - hostPort: 8081
@@ -55,20 +65,14 @@ spec:
           protocol: TCP
 
         args:
-        # Ingress nginx port that ELBs will direct traffic towards.
-        - -ingress-port=8080
+        # Ingress nginx port that frontend will direct traffic towards.
+        - -ingress-port=80
 
-        # Ingress nginx port for ssl traffic
-        - -ingress-https-port=8443
-
-        # Health port on nginx, used by ELBs to determine health.
+        # Health port on nginx, used by frontend to determine health.
         - -ingress-health-port=8081
 
         # Default security whitelist for ingress. Can be overridden with the sky.uk/allow annotation.
         - -ingress-allow=10.0.0.0/8
-
-        # Set default ssl path + name file without extension - expected default-ssl.crt and default-ssl.key into /etc/ssl/default-ssl/
-        - -ssl-path=/etc/ssl/default-ssl/default-ssl
 
         # Health port for the controller to respond on.
         - -health-port=12082
@@ -76,7 +80,7 @@ spec:
         # Log level of nginx. Recommended to leave at error, or set to crit if too much spam.
         - -nginx-loglevel=error
 
-        # How often to reload nginx if needed. Setting too low can cause 504s from the ELB in the case of heavy
+        # How often to reload nginx if needed. Setting too low can cause 504s from the frontend in the case of heavy
         # ingress updates.
         - -nginx-update-period=5m
 
@@ -87,13 +91,32 @@ spec:
         - -pushgateway-label=environment=dev
         - -pushgateway-label=version=v1.0.2
 
-        # Attach to the ELBs with label sky.uk/KubernetesClusterFrontend set to this value.
-        - -elb-expected-number=2
-        - -elb-label-value=dev
+        # Specify merlin as the frontend component
+        - -registration-frontend-type=merlin
 
-        # ELB drain time - time to wait while ELB drains requests from feed when stopping. Should be
-        # at least as long as the ELBs drain timeout.
-        - -drain-delay=30s
+        # gRPC endpoint
+        - -merlin-endpoint=dns:///merlin-servers
+
+        # Virtual Service ID to attach to
+        - -merlin-service-id=my-virtual-service
+
+        # Real server IP to associate with virtual service - the IP of the ingress node.
+        - -merlin-instance-ip=$(INSTANCEIP)
+
+        # Real server port to associate with virtual service - the port of nginx.
+        - -merlin-instance-port=80
+
+        # Forward method that IPVS should use - pick route, masq, or tunnel.
+        - -merlin-forward-method=route
+
+        # Drain delay to bleed off connections when detaching.
+        - -merlin-drain-delay=60s
+
+        # Virtual IP to bind to the local interface for tunneling and direct routing. Usually the virtual service IP.
+        - -merlin-vip=10.10.10.1
+
+        # Interface to bind virtual IP to.
+        - -merlin-vip-interface=lo
 
         # Each worker uses a full cpu, so scale up vertically on a box by increasing this value.
         - -nginx-workers=1
@@ -104,7 +127,7 @@ spec:
         # Needs to be greater than any frontend idle timeout.
         - -nginx-keepalive-seconds=304
 
-        # CIDRs of the ELBs to trust X-Forwarded-For, for determining client IP allow/deny.
+        # CIDRs of the frontend to trust X-Forwarded-For, for determining client IP allow/deny.
         - -nginx-trusted-frontends=10.0.0.0/8
 
         # Max number of idle connections to a backend.
@@ -123,7 +146,7 @@ spec:
         # Add custom headers to the access logs.
         - -nginx-log-headers=X-Amzn-Trace-Id
 
-        # Controller health determines readiness. This has no effect on ingress traffic from ELBs.
+        # Controller health determines readiness. This has no effect on ingress traffic from frontend.
         readinessProbe:
           httpGet:
             path: /health
@@ -145,17 +168,17 @@ spec:
           periodSeconds: 10
           failureThreshold: 3
 
-        # Access logs volume.
         volumeMounts:
+        # Access logs volume.
         - name: nginx-log
           mountPath: /var/log/nginx
-        - name: default-ingress-ssl
-          mountPath: "/etc/ssl/default-ssl/"
-          readOnly: true
+        # Used for loopback address management
+        - name: ipv4-proc
+          mountPath: /host-ipv4-proc/
 
       volumes:
       - name: nginx-log
         emptyDir: {}
-      - name: default-ingress-ssl
-        secret:
-          secretName: default-ingress-ssl
+      - name: ipv4-proc
+        hostPath:
+          path: /proc/sys/net/ipv4/conf/ens160/

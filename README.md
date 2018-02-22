@@ -62,7 +62,16 @@ For the moment you can setup a default wildcard ssl:
 
 You can mount the `.key` and `.crt` though a Kubernetes Secret see [feed-ingress-deployment-ssl](examples/feed-ingress-deployment-ssl.yml).
 
+### Merlin support
+
+Merlin is a distributed loadbalancer based on IPVS, with a gRPC based API. feed supports attaching to merlin
+as a frontend for ingress.
+
+See the [example](examples/feed-ingress-deployment-merlin.yml) for details.
+
 ### Gorb / IPVS Support
+
+_Gorb support is deprecated, and will be removed at some point. Use merlin instead._
 
 feed has support for configuring IPVS via [gorb](https://github.com/sky-uk/gorb).
 Gorb exposes a REST api to interrogate and modify the IPVS configuration such as virtual services and backends.
