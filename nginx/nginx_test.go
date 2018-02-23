@@ -387,15 +387,16 @@ func TestNginxIngressEntries(t *testing.T) {
 					Allow:                 []string{"10.86.0.0/16"},
 					StripPaths:            false,
 					BackendTimeoutSeconds: 10,
+					BackendMaxConnections: 1024,
 				},
 			},
 			[]string{
 				"    upstream core.anotherservice.6060 {\n" +
-					"        server anotherservice:6060;\n" +
+					"        server anotherservice:6060 max_conns=1024;\n" +
 					"        keepalive 1024;\n" +
 					"    }",
 				"    upstream core.service.8080 {\n" +
-					"        server service:8080;\n" +
+					"        server service:8080 max_conns=0;\n" +
 					"        keepalive 1024;\n" +
 					"    }",
 			},
@@ -671,7 +672,7 @@ func TestNginxIngressEntries(t *testing.T) {
 
 			[]string{
 				"    upstream core.service.9090 {\n" +
-					"        server service:9090;\n" +
+					"        server service:9090 max_conns=0;\n" +
 					"        keepalive 1024;\n" +
 					"    }",
 			},
@@ -965,7 +966,7 @@ func TestRateLimitedForUpdates(t *testing.T) {
 		{
 			Host:           "chris.com",
 			Path:           "/path",
-			ServiceAddress: "something different",
+			ServiceAddress: "somethingdifferent",
 			ServicePort:    9090,
 		},
 	}

@@ -91,10 +91,10 @@ http {
     # Start ingresses
     {{- $keepalive := .BackendKeepalives }}
     {{- $proxyprotocol := .ProxyProtocol }}
-    
+
 {{- range $upstream := .Upstreams }}
     upstream {{ $upstream.ID }} {
-        server {{ $upstream.Server }};
+        server {{ $upstream.Server }} max_conns={{ $upstream.MaxConnections }};
         keepalive {{ $keepalive }};
     }
 {{ end }}
@@ -124,7 +124,7 @@ http {
 {{- end }}
 
         # disable any limits to avoid HTTP 413 for large uploads
-        client_max_body_size 0; 
+        client_max_body_size 0;
 
         {{- range $location := $entry.Locations }}
 

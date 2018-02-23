@@ -32,6 +32,8 @@ type IngressEntry struct {
 	StripPaths bool
 	// BackendTimeoutSeconds backend timeout
 	BackendTimeoutSeconds int
+	// BackendMaxConnections maximum backend connections
+	BackendMaxConnections int
 	// Ingress creation time
 	CreationTimestamp time.Time
 }

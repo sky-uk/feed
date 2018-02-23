@@ -12,10 +12,10 @@ RUN apt-get update \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* /tmp/*
 
-ENV NGINX_VERSION 1.10.2
-ENV NGINX_SHA256 1045ac4987a396e2fa5d0011daf8987b612dd2f05181b67507da68cbe7d765c2
-ENV VTS_VERSION 0.1.10
-ENV VTS_SHA256 c6f3733e9ff84bfcdc6bfb07e1baf59e72c4e272f06964dd0ed3a1bdc93fa0ca
+ENV NGINX_VERSION 1.12.2
+ENV NGINX_SHA256 305f379da1d5fb5aefa79e45c829852ca6983c7cd2a79328f8e084a324cf0416
+ENV VTS_VERSION 0.1.15
+ENV VTS_SHA256 5112a054b1b1edb4c0042a9a840ef45f22abb3c05c68174e28ebf483164fb7e1
 
 COPY build-nginx.sh /tmp
 RUN /bin/bash /tmp/build-nginx.sh

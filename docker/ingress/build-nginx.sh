@@ -62,7 +62,7 @@ echo "--- Configuring nginx"
     --with-http_v2_module \
     --with-ipv6 \
     --with-debug \
-    --add-module=/tmp/nginx/nginx-module-vts-0.1.10\
+    --add-module=/tmp/nginx/nginx-module-vts-${VTS_VERSION}\
     --with-http_ssl_module
 
 echo "--- Building nginx"

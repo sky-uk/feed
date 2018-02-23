@@ -123,8 +123,9 @@ type server struct {
 }
 
 type upstream struct {
-	ID     string
-	Server string
+	ID             string
+	Server         string
+	MaxConnections int
 }
 
 type location struct {
@@ -401,8 +402,9 @@ func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 
 	for _, ingressEntry := range entries {
 		upstream := &upstream{
-			ID:     upstreamID(ingressEntry),
-			Server: fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
+			ID:             upstreamID(ingressEntry),
+			Server:         fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
+			MaxConnections: ingressEntry.BackendMaxConnections,
 		}
 		idToUpstream[upstream.ID] = upstream
 	}
