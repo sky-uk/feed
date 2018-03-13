@@ -143,8 +143,8 @@ feed was started before the [official nginx ingress controller](https://github.c
     * ELB health checks don't work  - the ELBs will disable arbitrary nodes, rather than a broken ingress pod.
 * feed uses services, while the official controller uses endpoints:
     * To reduce the number of nginx reloads that occur. Nginx reloads are problematic in busy environments. A reload will drop all active connections - breaking any long lived keep alive connections. In addition, every reload increases the memory usage of nginx while the worker bleeds off connections - which inevitably leads to OOMKilled workers or nginx masters. It may be possible to mitigate this though with a dynamic update of nginx (via plugin), and is something we've discussed doing for service updates.
-     * Conceptually, we are not sure it's a good idea to have an ingress-only load balancing mechanism that is different from kube-proxy. This leads to different behaviors depending on whether your traffic is pod-to-pod or ingress-to-pod. We believe a  better approach would be to fix kube-proxy (or use a service mesh) and solve load balancing issues across the entire cluster.
-
+    * It's debateable whether using endpoints is a good idea conceptually. If using a service mesh, you likely wouldn't want to use endpoints. If kube-proxy's load balancing was better, then services would also be preferred. While frequent reloads are the main reason we didn't use endpoints, if we could do dynamic updates then it would become a feasible option.
+  
 # Development
 
 Install the required tools and setup dependencies:
