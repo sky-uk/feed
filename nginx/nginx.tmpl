@@ -19,7 +19,7 @@ http {
     default_type text/html;
 
     # Track extended virtual host stats.
-    vhost_traffic_status_zone;
+    vhost_traffic_status_zone shared:vhost_traffic_status:{{ .VhostStatsSharedMemory }}m;
 
     # Server names hash bucket sizes. Set based on nginx log messages.
     {{ if gt .ServerNamesHashBucketSize 0 }}server_names_hash_bucket_size {{ .ServerNamesHashBucketSize }};{{ end }}

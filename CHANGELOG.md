@@ -1,3 +1,6 @@
+# v1.9.1
+* Introduced flag to set the amount of memory allocated to the vhost statistics module (default: 1 MiB)
+
 # v1.9.0
 * Add ability to specify health checks for merlin frontends.
 
