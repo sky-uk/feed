@@ -138,11 +138,11 @@ they don't respect the deregistration delay). As a result, we don't recommend us
 
 feed was started before the [official nginx ingress controller](https://github.com/kubernetes/ingress-nginx) became production ready. The main differences that exist now are:
 * feed has less features, as we only built it for our needs.
-* feed pods attach directly to ELB/ALBs or IPVS nodes. The official controller relies on the `LoadBalancer` service type, which forwards traffic to every node in your cluster. This has disadvantages which we found problematic in production:
+* feed pods attach directly to ELB/ALBs or IPVS nodes. The official controller relies on the `LoadBalancer` service type, which generally forwards traffic to every node in your cluster (`service.spec.externalTrafficPolicy` can be set in some providers to mitigate this). This has disadvantages which we found problematic in production:
     * It increases the amount of traffic flowing through your cluster, as traffic is routed through every node unnecessarily.
     * ELB health checks don't work  - the ELBs will disable arbitrary nodes, rather than a broken ingress pod.
 * feed uses services, while the official controller uses endpoints:
-    * To reduce the number of nginx reloads that occur. Nginx reloads are problematic in busy environments. A reload will drop all active connections - breaking any long lived keep alive connections. In addition, every reload substantially increases the memory usage of nginx while the worker bleeds off connections - which inevitably leads to OOMKilled workers or nginx masters.
+    * To reduce the number of nginx reloads that occur. Nginx reloads are problematic in busy environments. A reload will drop all active connections - breaking any long lived keep alive connections. In addition, every reload substantially increases the memory usage of nginx while the worker bleeds off connections - which inevitably leads to OOMKilled workers or nginx masters. It may be possible to mitigate this though with a dynamic update of nginx (via plugin), and is something we've discussed doing for service updates.
      * Conceptually, we are not sure it's a good idea to have an ingress-only load balancing mechanism that is different from kube-proxy. This leads to different behaviors depending on whether your traffic is pod-to-pod or ingress-to-pod. We believe it's better to fix kube-proxy (or use a service mesh) and solve load balancing issues across the entire cluster.
 
 # Development
