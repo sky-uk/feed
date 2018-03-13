@@ -200,7 +200,7 @@ func init() {
 			"This will typically be the ELB subnet.")
 	flag.StringVar(&nginxSSLPath, "ssl-path", defaultNginxSSLPath,
 		"Set default ssl path + name file without extension.  Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key).")
-	flag.IntVar(&nginxVhostStatsSharedMemory, "vhost-stats-shared-memory", defaultNginxVhostStatsSharedMemory,
+	flag.IntVar(&nginxVhostStatsSharedMemory, "nginx-vhost-stats-shared-memory", defaultNginxVhostStatsSharedMemory,
 		"Memory (in MiB) which should be allocated for use by the vhost statistics module")
 
 	// elb/alb flags
