@@ -1,3 +1,6 @@
+# v1.9.0
+* Add ability to specify health checks for merlin frontends.
+
 # v1.8.0
 * Upgraded to Nginx 1.12.2 and VTS 0.1.15
 * Introduced `sky.uk/backend-max-connections` annotation that sets upstream.max_conns (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
