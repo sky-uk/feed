@@ -142,8 +142,8 @@ feed was started before the [official nginx ingress controller](https://github.c
     * It increases the amount of traffic flowing through your cluster, as traffic is routed through every node unnecessarily.
     * ELB health checks don't work  - the ELBs will disable arbitrary nodes, rather than a broken ingress pod.
 * feed uses services, while the official controller uses endpoints:
-    * To reduce the number of nginx reloads that occur. Nginx reloads are problematic in busy environments. A reload will drop all active connections - breaking any long lived keep alive connections. In addition, every reload increases the memory usage of nginx while the worker bleeds off connections - which inevitably leads to OOMKilled workers or nginx masters. It may be possible to mitigate this though with a dynamic update of nginx (via plugin), and is something we've discussed doing for service updates.
-    * It's debateable whether using endpoints is a good idea conceptually. If using a service mesh, you likely wouldn't want to use endpoints. If kube-proxy's load balancing was better, then services would also be preferred. While frequent reloads are the main reason we didn't use endpoints, if we could do dynamic updates then it would become a feasible option.
+    * Primarily to reduce the number of nginx reloads that occur, which are problematic in busy environments. It may be possible to mitigate this though with a dynamic update of nginx (via plugin), and is something we've discussed doing for service updates.
+    * It's debateable whether using endpoints directly is a good idea conceptually, as it bypasses kube-proxy and any service mesh in place.
   
 # Development
 
