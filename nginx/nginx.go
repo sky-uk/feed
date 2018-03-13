@@ -58,7 +58,7 @@ type Conf struct {
 	AccessLogHeaders             string
 	UpdatePeriod                 time.Duration
 	SSLPath                      string
-	VhostStatsSharedMemory		 int
+	VhostStatsSharedMemory       int
 }
 
 type nginx struct {
