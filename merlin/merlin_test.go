@@ -7,7 +7,10 @@ import (
 
 	"errors"
 
+	"fmt"
+
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	. "github.com/onsi/ginkgo"
@@ -32,6 +35,7 @@ var _ = Describe("merlin", func() {
 		nl     *nlMock
 		conf   Config
 
+		healthCheck   *types.RealServer_HealthCheck
 		emptyResponse = &empty.Empty{}
 	)
 
@@ -39,11 +43,17 @@ var _ = Describe("merlin", func() {
 		client = &mocks.MerlinClient{}
 		nl = &nlMock{}
 		conf = Config{
-			ServiceID:     "service1",
-			InstanceIP:    "172.16.16.1",
-			InstancePort:  uint16(8080),
-			ForwardMethod: "route",
-			DrainDelay:    time.Millisecond,
+			ServiceID:           "service1",
+			InstanceIP:          "172.16.16.1",
+			InstancePort:        uint16(8080),
+			ForwardMethod:       "route",
+			HealthPort:          uint16(8081),
+			HealthPath:          "health",
+			HealthUpThreshold:   uint32(4),
+			HealthDownThreshold: uint32(2),
+			HealthPeriod:        time.Second * 10,
+			HealthTimeout:       time.Second,
+			DrainDelay:          time.Millisecond,
 		}
 	})
 
@@ -53,6 +63,13 @@ var _ = Describe("merlin", func() {
 		m.(*updater).client = client
 		m.(*updater).nl = nl
 		merlin = m
+		healthCheck = &types.RealServer_HealthCheck{
+			Endpoint:      &wrappers.StringValue{Value: fmt.Sprintf("http://:%d/%s", conf.HealthPort, conf.HealthPath)},
+			UpThreshold:   conf.HealthUpThreshold,
+			DownThreshold: conf.HealthDownThreshold,
+			Period:        ptypes.DurationProto(conf.HealthPeriod),
+			Timeout:       ptypes.DurationProto(conf.HealthTimeout),
+		}
 	})
 
 	It("registers itself on start", func() {
@@ -66,6 +83,7 @@ var _ = Describe("merlin", func() {
 				Weight:  &wrappers.UInt32Value{Value: 1},
 				Forward: types.ForwardMethod_ROUTE,
 			},
+			HealthCheck: healthCheck,
 		}
 		client.On("CreateServer", mock.Anything, expectedServer).Return(emptyResponse, nil)
 
@@ -86,6 +104,7 @@ var _ = Describe("merlin", func() {
 				Weight:  &wrappers.UInt32Value{Value: 1},
 				Forward: types.ForwardMethod_ROUTE,
 			},
+			HealthCheck: healthCheck,
 		}
 		client.On("CreateServer", mock.Anything, expectedServer).Return(emptyResponse,
 			status.Error(codes.AlreadyExists, "already exists"))

@@ -64,6 +64,10 @@ var (
 	merlinInstancePort             uint
 	merlinForwardMethod            string
 	merlinDrainDelay               time.Duration
+	merlinHealthUpThreshold        uint
+	merlinHealthDownThreshold      uint
+	merlinHealthPeriod             time.Duration
+	merlinHealthTimeout            time.Duration
 	merlinVIP                      string
 	merlinVIPInterface             string
 )
@@ -111,6 +115,10 @@ const (
 	defaultGorbBackendHealthcheckInterval    = "1s"
 	defaultGorbBackendHealthcheckType        = "http"
 	defaultMerlinForwardMethod               = "route"
+	defaultMerlinHealthUpThreshold           = 3
+	defaultMerlinHealthDownThreshold         = 2
+	defaultMerlinHealthPeriod                = 10 * time.Second
+	defaultMerlinHealthTimeout               = time.Second
 	defaultMerlinVIPInterface                = "lo"
 )
 
@@ -250,6 +258,14 @@ func init() {
 		" must be one of route, tunnel, or masq.")
 	flag.DurationVar(&merlinDrainDelay, "merlin-drain-delay", defaultDrainDelay, "Delay to wait after for connections"+
 		" to bleed off when deregistering from merlin. Real server weight is set to 0 during this delay.")
+	flag.UintVar(&merlinHealthUpThreshold, "merlin-health-up-threshold", defaultMerlinHealthUpThreshold,
+		"Number of checks before merlin will consider this instance healthy.")
+	flag.UintVar(&merlinHealthDownThreshold, "merlin-health-down-threshold", defaultMerlinHealthDownThreshold,
+		"Number of checks before merlin will consider this instance unhealthy.")
+	flag.DurationVar(&merlinHealthPeriod, "merlin-health-period", defaultMerlinHealthPeriod,
+		"The time between health checks.")
+	flag.DurationVar(&merlinHealthTimeout, "merlin-health-timeout", defaultMerlinHealthTimeout,
+		"The timeout for health checks.")
 	flag.StringVar(&merlinVIP, "merlin-vip", "", "VIP to assign to loopback to support direct route and tunnel.")
 	flag.StringVar(&merlinVIPInterface, "merlin-vip-interface", defaultMerlinVIPInterface, "VIP interface to assign the VIP.")
 }
@@ -357,8 +373,15 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			InstancePort:  uint16(merlinInstancePort),
 			ForwardMethod: merlinForwardMethod,
 			DrainDelay:    merlinDrainDelay,
-			VIP:           merlinVIP,
-			VIPInterface:  merlinVIPInterface,
+			HealthPort:    uint16(ingressHealthPort),
+			// This value is hardcoded into the nginx template.
+			HealthPath:          "health",
+			HealthUpThreshold:   uint32(merlinHealthUpThreshold),
+			HealthDownThreshold: uint32(merlinHealthDownThreshold),
+			HealthPeriod:        merlinHealthPeriod,
+			HealthTimeout:       merlinHealthTimeout,
+			VIP:                 merlinVIP,
+			VIPInterface:        merlinVIPInterface,
 		}
 		merlinUpdater, err := merlin.New(config)
 		if err != nil {

@@ -311,10 +311,10 @@
   revision = "760f8913c0483b776294e1bee43f1d687527127b"
 
 [[projects]]
-  branch = "master"
   name = "github.com/sky-uk/merlin"
   packages = ["types"]
-  revision = "629c5f6215afb388ce57e9f2a70ec411abf04a8d"
+  revision = "0f14a342ba4913d64422892b17da4f138cd14591"
+  version = "0.1.0"
 
 [[projects]]
   name = "github.com/spf13/pflag"

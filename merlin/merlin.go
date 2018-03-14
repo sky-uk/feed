@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/prometheus/common/log"
 	"github.com/sky-uk/feed/controller"
@@ -21,14 +22,20 @@ const merlinTimeout = time.Second * 10
 
 // Config for merlin updater.
 type Config struct {
-	Endpoint      string
-	ServiceID     string
-	InstanceIP    string
-	InstancePort  uint16
-	ForwardMethod string
-	DrainDelay    time.Duration
-	VIP           string
-	VIPInterface  string
+	Endpoint            string
+	ServiceID           string
+	InstanceIP          string
+	InstancePort        uint16
+	ForwardMethod       string
+	HealthPort          uint16
+	HealthPath          string
+	HealthUpThreshold   uint32
+	HealthDownThreshold uint32
+	HealthPeriod        time.Duration
+	HealthTimeout       time.Duration
+	DrainDelay          time.Duration
+	VIP                 string
+	VIPInterface        string
 }
 
 type updater struct {
@@ -103,6 +110,13 @@ func (u *updater) registerWithMerlin() error {
 	server.Config = &types.RealServer_Config{
 		Weight:  &wrappers.UInt32Value{Value: 1},
 		Forward: types.ForwardMethod(forward),
+	}
+	server.HealthCheck = &types.RealServer_HealthCheck{
+		Endpoint:      &wrappers.StringValue{Value: fmt.Sprintf("http://:%d/%s", u.HealthPort, u.HealthPath)},
+		UpThreshold:   u.HealthUpThreshold,
+		DownThreshold: u.HealthDownThreshold,
+		Period:        ptypes.DurationProto(u.HealthPeriod),
+		Timeout:       ptypes.DurationProto(u.HealthTimeout),
 	}
 
 	_, err := u.client.CreateServer(ctx, server)
