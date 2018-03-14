@@ -50,7 +50,7 @@ Another is to place an SSL termination EC2 instance in front of the ELBs.
 
 ### SSL termination on feed-ingress
 
-SSL termination can be done on feed-ingress. This approach still requires a layer 4 load balancer, eg. ELB or IPVS with GORB, in front.
+SSL termination can be done on feed-ingress. This approach still requires a layer 4 load balancer, eg. ELB or IPVS, in front.
 
 For the moment you can setup a default wildcard ssl:
 ```
@@ -137,8 +137,8 @@ they don't respect the deregistration delay). As a result, we don't recommend us
 # Comparison to official nginx ingress controller
 
 feed was started before the [official nginx ingress controller](https://github.com/kubernetes/ingress-nginx) became production ready. The main differences that exist now are:
-* feed has less features, as we only built it for our needs.
-* feed pods attach directly to ELB/ALBs or IPVS nodes. The official controller relies on the `LoadBalancer` service type, which generally forwards traffic to every node in your cluster (`service.spec.externalTrafficPolicy` can be set in some providers to mitigate this). This has disadvantages which we found problematic in production:
+* feed has fewer features, as we only built it for our needs.
+* feed pods attach directly to ELB/ALBs or IPVS nodes. The official controller relies on the `LoadBalancer` service type, which generally forwards traffic to every node in your cluster (`service.spec.externalTrafficPolicy` can be set in some providers to mitigate this). We found this problematic:
     * It increases the amount of traffic flowing through your cluster, as traffic is routed through every node unnecessarily.
     * ELB health checks don't work  - the ELBs will disable arbitrary nodes, rather than a broken ingress pod.
 * feed uses services, while the official controller uses endpoints:
