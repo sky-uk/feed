@@ -2,9 +2,10 @@
 
 # Feed
 
-This project contains Kubernetes controllers for managing external ingress with AWS or [IPVS/gorb](https://github.com/sky-uk/gorb). 
+This project contains Kubernetes controllers for managing external ingress with AWS or [IPVS](https://github.com/sky-uk/merlin). 
+
 There are two controllers provided, `feed-ingress` which runs an nginx instance, and `feed-dns` which manages route53 entries. 
-They can be run independently as needed, or together to provide a full ingress solution.
+They can be run independently as needed, or together to provide a full ingress solution. `feed-ingress` can be arbitrarily scaled up to support any traffic load.
 
 Feed is actively used in production and should be stable enough for general usage. We can scale to many thousands of
 requests per second with only a handful of replicas.
@@ -40,18 +41,16 @@ See the command line options with:
 
     docker run skycirrus/feed-ingress:v1.1.0 -h
 
-### SSL/TLS
-
-## SSL termination on ELB
+### SSL termination on ELB
 
 SSL termination could be done on ELBS, and we believe that this is the safest and best performing
 approach for production usage. Unfortunately, ELBs don't support SNI at this time, so this limits SSL usage to
 a single domain. One workaround is to use a wildcard certificate for the entire zone that `feed-dns` manages.
 Another is to place an SSL termination EC2 instance in front of the ELBs.
 
-## SSL termination on feed-ingress
+### SSL termination on feed-ingress
 
-SSL termination can be done on feed-ingress. This approach still requires a layer 4 load balancer, eg. ELB or IPVS with GORB, in front.
+SSL termination can be done on feed-ingress. This approach still requires a layer 4 load balancer, eg. ELB or IPVS, in front.
 
 For the moment you can setup a default wildcard ssl:
 ```
@@ -135,6 +134,17 @@ The controllers support several annotations on ingress resources. See the [examp
 feed has support for ALBs. Unfortunately, ALBs have a bug that prevents non-disruptive deployments of feed (specifically,
 they don't respect the deregistration delay). As a result, we don't recommend using ALBs at this time.
 
+# Comparison to official nginx ingress controller
+
+feed was started before the [official nginx ingress controller](https://github.com/kubernetes/ingress-nginx) became production ready. The main differences that exist now are:
+* feed has fewer features, as we only built it for our needs.
+* feed pods attach directly to ELB/ALBs or IPVS nodes. The official controller relies on the `LoadBalancer` service type, which generally forwards traffic to every node in your cluster (`service.spec.externalTrafficPolicy` can be set in some providers to mitigate this). We found this problematic:
+    * It increases the amount of traffic flowing through your cluster, as traffic is routed through every node unnecessarily.
+    * ELB health checks don't work  - the ELBs will disable arbitrary nodes, rather than a broken ingress pod.
+* feed uses services, while the official controller uses endpoints:
+    * Primarily to reduce the number of nginx reloads that occur, which are problematic in busy environments. It may be possible to mitigate this though with a dynamic update of nginx (via plugin), and is something we've discussed doing for service updates.
+    * It's debateable whether using endpoints directly is a good idea conceptually, as it bypasses kube-proxy and any service mesh in place.
+  
 # Development
 
 Install the required tools and setup dependencies:
