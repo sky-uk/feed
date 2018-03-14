@@ -45,6 +45,7 @@ func newConf(tmpDir string, binary string) Conf {
 		ServerNamesHashMaxSize:       -1,
 		ServerNamesHashBucketSize:    -1,
 		UpdatePeriod:                 time.Second,
+		VhostStatsSharedMemory:       1,
 	}
 }
 
@@ -317,6 +318,13 @@ func TestNginxConfig(t *testing.T) {
 			sslEndpointConf,
 			[]string{
 				"listen 443 ssl default_server;",
+			},
+		},
+		{
+			"Vhost stats module has 1 MiB of shared memory",
+			defaultConf,
+			[]string{
+				"vhost_traffic_status_zone shared:vhost_traffic_status:1m",
 			},
 		},
 	}

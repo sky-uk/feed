@@ -46,6 +46,7 @@ var (
 	nginxLogHeaders                cmd.CommaSeparatedValues
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
 	nginxSSLPath                   string
+	nginxVhostStatsSharedMemory    int
 	legacyBackendKeepaliveSeconds  int
 	registrationFrontendType       string
 	gorbIngressInstanceIP          string
@@ -96,6 +97,7 @@ const (
 	defaultNginxProxyProtocol                = false
 	defaultNginxUpdatePeriod                 = time.Second * 30
 	defaultNginxSSLPath                      = "/etc/ssl/default-ssl/default-ssl"
+	defaultNginxVhostStatsSharedMemory       = 1
 	defaultElbLabelValue                     = ""
 	defaultDrainDelay                        = time.Second * 60
 	defaultTargetGroupDeregistrationDelay    = time.Second * 300
@@ -198,6 +200,8 @@ func init() {
 			"This will typically be the ELB subnet.")
 	flag.StringVar(&nginxSSLPath, "ssl-path", defaultNginxSSLPath,
 		"Set default ssl path + name file without extension.  Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key).")
+	flag.IntVar(&nginxVhostStatsSharedMemory, "nginx-vhost-stats-shared-memory", defaultNginxVhostStatsSharedMemory,
+		"Memory (in MiB) which should be allocated for use by the vhost statistics module")
 
 	// elb/alb flags
 	flag.StringVar(&region, "region", defaultRegion,
@@ -316,6 +320,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 	nginxConfig.SSLPath = nginxSSLPath
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
+	nginxConfig.VhostStatsSharedMemory = nginxVhostStatsSharedMemory
 	nginxUpdater := nginx.New(nginxConfig)
 
 	updaters := []controller.Updater{nginxUpdater}
