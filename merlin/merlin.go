@@ -184,3 +184,7 @@ func (u *updater) removeVIP() error {
 	}
 	return u.nl.removeVIP(u.VIPInterface, u.VIP)
 }
+
+func (u *updater) String() string {
+	return "merlin attacher"
+}
