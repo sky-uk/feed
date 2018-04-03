@@ -60,9 +60,10 @@ var (
 	gorbBackendHealthcheckType     string
 	gorbInterfaceProcFsPath        string
 	merlinEndpoint                 string
+	merlinRequestTimeout           time.Duration
 	merlinServiceID                string
+	merlinHTTPSServiceID           string
 	merlinInstanceIP               string
-	merlinInstancePort             uint
 	merlinForwardMethod            string
 	merlinDrainDelay               time.Duration
 	merlinHealthUpThreshold        uint
@@ -255,9 +256,11 @@ func init() {
 	flag.StringVar(&merlinEndpoint, "merlin-endpoint", "",
 		"Merlin gRPC endpoint to connect to. Expected format is scheme://authority/endpoint_name (see "+
 			"https://github.com/grpc/grpc/blob/master/doc/naming.md). Will load balance between all available servers.")
-	flag.StringVar(&merlinServiceID, "merlin-service-id", "", "Merlin virtual service ID to attach to.")
+	flag.DurationVar(&merlinRequestTimeout, "merlin-request-timeout", time.Second * 10,
+		"Timeout for any requests to merlin.")
+	flag.StringVar(&merlinServiceID, "merlin-service-id", "", "Merlin http virtual service ID to attach to.")
+	flag.StringVar(&merlinHTTPSServiceID, "merlin-https-service-id", "", "Merlin https virtual service ID to attach to.")
 	flag.StringVar(&merlinInstanceIP, "merlin-instance-ip", "", "Ingress IP to register with merlin")
-	flag.UintVar(&merlinInstancePort, "merlin-instance-port", 0, "Ingress port to register with merlin")
 	flag.StringVar(&merlinForwardMethod, "merlin-forward-method", defaultMerlinForwardMethod, "IPVS forwarding method,"+
 		" must be one of route, tunnel, or masq.")
 	flag.DurationVar(&merlinDrainDelay, "merlin-drain-delay", defaultDrainDelay, "Delay to wait after for connections"+
@@ -271,7 +274,8 @@ func init() {
 	flag.DurationVar(&merlinHealthTimeout, "merlin-health-timeout", defaultMerlinHealthTimeout,
 		"The timeout for health checks.")
 	flag.StringVar(&merlinVIP, "merlin-vip", "", "VIP to assign to loopback to support direct route and tunnel.")
-	flag.StringVar(&merlinVIPInterface, "merlin-vip-interface", defaultMerlinVIPInterface, "VIP interface to assign the VIP.")
+	flag.StringVar(&merlinVIPInterface, "merlin-vip-interface", defaultMerlinVIPInterface,
+		"VIP interface to assign the VIP.")
 }
 
 func main() {
@@ -372,13 +376,16 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 
 	case "merlin":
 		config := merlin.Config{
-			Endpoint:      merlinEndpoint,
-			ServiceID:     merlinServiceID,
-			InstanceIP:    merlinInstanceIP,
-			InstancePort:  uint16(merlinInstancePort),
-			ForwardMethod: merlinForwardMethod,
-			DrainDelay:    merlinDrainDelay,
-			HealthPort:    uint16(ingressHealthPort),
+			Endpoint:          merlinEndpoint,
+			Timeout:           merlinRequestTimeout,
+			ServiceID:         merlinServiceID,
+			HTTPSServiceID:    merlinHTTPSServiceID,
+			InstanceIP:        merlinInstanceIP,
+			InstancePort:      uint16(ingressPort),
+			InstanceHTTPSPort: uint16(ingressHTTPSPort),
+			ForwardMethod:     merlinForwardMethod,
+			DrainDelay:        merlinDrainDelay,
+			HealthPort:        uint16(ingressHealthPort),
 			// This value is hardcoded into the nginx template.
 			HealthPath:          "health",
 			HealthUpThreshold:   uint32(merlinHealthUpThreshold),

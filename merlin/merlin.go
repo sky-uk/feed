@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/prometheus/common/log"
@@ -18,14 +19,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const merlinTimeout = time.Second * 10
-
 // Config for merlin updater.
 type Config struct {
 	Endpoint            string
+	Timeout             time.Duration
 	ServiceID           string
+	HTTPSServiceID      string
 	InstanceIP          string
 	InstancePort        uint16
+	InstanceHTTPSPort   uint16
 	ForwardMethod       string
 	HealthPort          uint16
 	HealthPath          string
@@ -98,10 +100,14 @@ func (u *updater) createBaseRealServer() *types.RealServer {
 	}
 }
 
-func (u *updater) registerWithMerlin() error {
-	ctx, cancel := context.WithTimeout(context.Background(), merlinTimeout)
-	defer cancel()
+func (u *updater) createHTTPSFrom(orig *types.RealServer) *types.RealServer {
+	server := proto.Clone(orig).(*types.RealServer)
+	server.ServiceID = u.HTTPSServiceID
+	server.Key.Port = uint32(u.InstanceHTTPSPort)
+	return server
+}
 
+func (u *updater) registerWithMerlin() error {
 	forward, ok := types.ForwardMethod_value[strings.ToUpper(u.ForwardMethod)]
 	if !ok {
 		return fmt.Errorf("unrecognized forward method: %s", u.ForwardMethod)
@@ -118,41 +124,71 @@ func (u *updater) registerWithMerlin() error {
 		Period:        ptypes.DurationProto(u.HealthPeriod),
 		Timeout:       ptypes.DurationProto(u.HealthTimeout),
 	}
+	if err := u.registerServer(server, "http"); err != nil {
+		return err
+	}
+
+	httpsServer := u.createHTTPSFrom(server)
+	return u.registerServer(httpsServer, "https")
+}
+
+func (u *updater) registerServer(server *types.RealServer, detail string) error {
+	if server.ServiceID == "" || server.Key.Port == 0 {
+		log.Infof("No serviceID provided, skipping merlin registration for %s", detail)
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), u.Timeout)
+	defer cancel()
 
 	_, err := u.client.CreateServer(ctx, server)
 	if status.Code(err) == codes.AlreadyExists {
 		if _, err := u.client.UpdateServer(ctx, server); err != nil {
-			return fmt.Errorf("unable to register with merlin: %v", err)
+			return fmt.Errorf("unable to register %s with merlin: %v", detail, err)
 		}
 	} else if err != nil {
-		return fmt.Errorf("unable to register with merlin: %v", err)
+		return fmt.Errorf("unable to register %s with merlin: %v", detail, err)
 	}
 
 	return nil
 }
 
 func (u *updater) deregisterWithMerlin() {
+	// create server keys
+	server := u.createBaseRealServer()
+	httpsServer := u.createHTTPSFrom(server)
+
 	// drain
-	func() {
-		server := u.createBaseRealServer()
-		server.Config = &types.RealServer_Config{Weight: &wrappers.UInt32Value{Value: 0}}
-
-		ctx, cancel := context.WithTimeout(context.Background(), merlinTimeout)
-		defer cancel()
-		if _, err := u.client.UpdateServer(ctx, server); err != nil {
-			log.Warnf("Unable to set weight to 0 in merlin for draining: %v", err)
-			return
-		}
-
-		time.Sleep(u.DrainDelay)
-	}()
+	u.updateServerForDraining(server, "http")
+	u.updateServerForDraining(httpsServer, "https")
+	time.Sleep(u.DrainDelay)
 
 	// deregister
-	server := u.createBaseRealServer()
-	ctx, cancel := context.WithTimeout(context.Background(), merlinTimeout)
+	u.deregisterServer(server, "http")
+	u.deregisterServer(httpsServer, "https")
+}
+
+func (u *updater) updateServerForDraining(orig *types.RealServer, detail string) {
+	if orig.ServiceID == "" || orig.Key.Port == 0 {
+		return
+	}
+	server := proto.Clone(orig).(*types.RealServer)
+	server.Config = &types.RealServer_Config{Weight: &wrappers.UInt32Value{Value: 0}}
+	ctx, cancel := context.WithTimeout(context.Background(), u.Timeout)
+	defer cancel()
+	if _, err := u.client.UpdateServer(ctx, server); err != nil {
+		log.Warnf("Draining failed for %s, unable to set weight to 0: %v", detail, err)
+	}
+}
+
+func (u *updater) deregisterServer(server *types.RealServer, detail string) {
+	if server.ServiceID == "" || server.Key.Port == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), u.Timeout)
 	defer cancel()
 	if _, err := u.client.DeleteServer(ctx, server); err != nil {
-		log.Errorf("Unable to deregister server from merlin, please remove manually: %v", err)
+		log.Errorf("Unable to deregister %s from merlin, please remove manually: %v", detail, err)
 	}
 }
 

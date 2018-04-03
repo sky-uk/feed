@@ -1,3 +1,6 @@
+# v1.9.3
+* Attach to https in addition to http for merlin.
+
 # v1.9.2
 * Bug fix for merlin attacher - fix netlink and capabilities for feed-ingress.
 

@@ -37,6 +37,9 @@ var _ = Describe("merlin", func() {
 
 		healthCheck   *types.RealServer_HealthCheck
 		emptyResponse = &empty.Empty{}
+
+		expectedServer      *types.RealServer
+		expectedHTTPSServer *types.RealServer
 	)
 
 	BeforeEach(func() {
@@ -44,8 +47,10 @@ var _ = Describe("merlin", func() {
 		nl = &nlMock{}
 		conf = Config{
 			ServiceID:           "service1",
+			HTTPSServiceID:      "https-service1",
 			InstanceIP:          "172.16.16.1",
 			InstancePort:        uint16(8080),
+			InstanceHTTPSPort:   uint16(8443),
 			ForwardMethod:       "route",
 			HealthPort:          uint16(8081),
 			HealthPath:          "health",
@@ -70,10 +75,8 @@ var _ = Describe("merlin", func() {
 			Period:        ptypes.DurationProto(conf.HealthPeriod),
 			Timeout:       ptypes.DurationProto(conf.HealthTimeout),
 		}
-	})
 
-	It("registers itself on start", func() {
-		expectedServer := &types.RealServer{
+		expectedServer = &types.RealServer{
 			ServiceID: conf.ServiceID,
 			Key: &types.RealServer_Key{
 				Ip:   conf.InstanceIP,
@@ -85,7 +88,14 @@ var _ = Describe("merlin", func() {
 			},
 			HealthCheck: healthCheck,
 		}
+		expectedHTTPSServer = proto.Clone(expectedServer).(*types.RealServer)
+		expectedHTTPSServer.ServiceID = conf.HTTPSServiceID
+		expectedHTTPSServer.Key.Port = uint32(conf.InstanceHTTPSPort)
+	})
+
+	It("registers itself on start", func() {
 		client.On("CreateServer", mock.Anything, expectedServer).Return(emptyResponse, nil)
+		client.On("CreateServer", mock.Anything, expectedHTTPSServer).Return(emptyResponse, nil)
 
 		err := merlin.Start()
 
@@ -94,21 +104,14 @@ var _ = Describe("merlin", func() {
 	})
 
 	It("updates itself on start if already exists", func() {
-		expectedServer := &types.RealServer{
-			ServiceID: conf.ServiceID,
-			Key: &types.RealServer_Key{
-				Ip:   conf.InstanceIP,
-				Port: uint32(conf.InstancePort),
-			},
-			Config: &types.RealServer_Config{
-				Weight:  &wrappers.UInt32Value{Value: 1},
-				Forward: types.ForwardMethod_ROUTE,
-			},
-			HealthCheck: healthCheck,
-		}
+		// http
 		client.On("CreateServer", mock.Anything, expectedServer).Return(emptyResponse,
 			status.Error(codes.AlreadyExists, "already exists"))
 		client.On("UpdateServer", mock.Anything, expectedServer).Return(emptyResponse, nil)
+		// https
+		client.On("CreateServer", mock.Anything, expectedHTTPSServer).Return(emptyResponse,
+			status.Error(codes.AlreadyExists, "already exists"))
+		client.On("UpdateServer", mock.Anything, expectedHTTPSServer).Return(emptyResponse, nil)
 
 		err := merlin.Start()
 
@@ -118,25 +121,70 @@ var _ = Describe("merlin", func() {
 	})
 
 	It("deregisters itself on stop", func() {
-		drainServer := &types.RealServer{
-			ServiceID: conf.ServiceID,
-			Key: &types.RealServer_Key{
-				Ip:   conf.InstanceIP,
-				Port: uint32(conf.InstancePort),
-			},
-			Config: &types.RealServer_Config{
-				Weight: &wrappers.UInt32Value{Value: 0},
-			},
-		}
+		// http
+		drainServer := expectedServer
+		drainServer.Config = &types.RealServer_Config{Weight: &wrappers.UInt32Value{Value: 0}}
+		drainServer.HealthCheck = nil
 		delServer := proto.Clone(drainServer).(*types.RealServer)
 		delServer.Config = nil
+		// https
+		drainHTTPSServer := expectedHTTPSServer
+		drainHTTPSServer.Config = &types.RealServer_Config{Weight: &wrappers.UInt32Value{Value: 0}}
+		drainHTTPSServer.HealthCheck = nil
+		delHTTPSServer := proto.Clone(drainHTTPSServer).(*types.RealServer)
+		delHTTPSServer.Config = nil
+
 		client.On("UpdateServer", mock.Anything, drainServer).Return(emptyResponse, nil)
 		client.On("DeleteServer", mock.Anything, delServer).Return(emptyResponse, nil)
+		client.On("UpdateServer", mock.Anything, drainHTTPSServer).Return(emptyResponse, nil)
+		client.On("DeleteServer", mock.Anything, delHTTPSServer).Return(emptyResponse, nil)
 
 		err := merlin.Stop()
 
 		Expect(err).ToNot(HaveOccurred())
 		client.AssertExpectations(GinkgoT())
+	})
+
+	Context("service IDs are empty", func() {
+		BeforeEach(func() {
+			conf.ServiceID = ""
+			conf.HTTPSServiceID = ""
+		})
+
+		It("doesn't register any servers", func() {
+			err := merlin.Start()
+
+			Expect(err).ToNot(HaveOccurred())
+			client.AssertExpectations(GinkgoT())
+		})
+
+		It("doesn't deregister any servers", func() {
+			err := merlin.Stop()
+
+			Expect(err).ToNot(HaveOccurred())
+			client.AssertExpectations(GinkgoT())
+		})
+	})
+
+	Context("instance port is unset", func() {
+		BeforeEach(func() {
+			conf.InstancePort = 0
+			conf.InstanceHTTPSPort = 0
+		})
+
+		It("doesn't register any servers", func() {
+			err := merlin.Start()
+
+			Expect(err).ToNot(HaveOccurred())
+			client.AssertExpectations(GinkgoT())
+		})
+
+		It("doesn't deregister any servers", func() {
+			err := merlin.Stop()
+
+			Expect(err).ToNot(HaveOccurred())
+			client.AssertExpectations(GinkgoT())
+		})
 	})
 
 	Context("manages VIP", func() {
