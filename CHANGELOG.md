@@ -1,3 +1,6 @@
+# v1.9.2
+* Bug fix for merlin attacher - fix netlink and capabilities for feed-ingress.
+
 # v1.9.1
 * Introduced flag to set the amount of memory allocated to the vhost statistics module (default: 1 MiB)
 

@@ -2,10 +2,6 @@
 
 set -ex
 
-useradd -s /sbin/nologin nginx
-mkdir -p /nginx /var/cache/nginx
-chown -R nginx:nginx /nginx /var/cache/nginx
-
 apt-get update
 apt-get install --no-install-suggests --no-install-recommends -y \
     build-essential \
@@ -14,9 +10,6 @@ apt-get install --no-install-suggests --no-install-recommends -y \
     zlib1g zlib1g-dev \
     libaio1 libaio-dev \
     sudo libssl-dev
-
-# allow nginx user to manage interfaces and arp configuration
-echo "%nginx ALL=NOPASSWD: /sbin/ip, /usr/bin/tee" >> /etc/sudoers
 
 echo "--- Downloading nginx and modules"
 mkdir /tmp/nginx
@@ -70,6 +63,6 @@ make
 make install
 
 echo "--- Cleaning up"
-apt-get purge -y build-essential libc6-dev libpcre3-dev zlib1g-dev libaio-dev gcc-5 cpp-5
+apt-get purge -y build-essential ca-certificates libc6-dev libpcre3-dev zlib1g-dev libaio-dev gcc-5
 apt-get clean -y
 rm -rf /var/lib/apt/lists/* /tmp/*

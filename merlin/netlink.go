@@ -3,6 +3,8 @@ package merlin
 import (
 	"fmt"
 
+	"strings"
+
 	"github.com/vishvananda/netlink"
 )
 
@@ -15,6 +17,10 @@ type netlinkWrapper interface {
 type netlinkWrapperImpl struct{}
 
 func (i *netlinkWrapperImpl) handleVIP(vipInterface, vip string, fn func(netlink.Link, *netlink.Addr) error) error {
+	if !strings.Contains(vip, "/") {
+		// Doesn't contain a network, add /32.
+		vip = vip + "/32"
+	}
 	ipNet, err := netlink.ParseIPNet(vip)
 	if err != nil {
 		return fmt.Errorf("unable to parse VIP %s: %v", vip, err)
@@ -23,7 +29,7 @@ func (i *netlinkWrapperImpl) handleVIP(vipInterface, vip string, fn func(netlink
 	if err != nil {
 		return fmt.Errorf("unable to add/remove VIP on %s: %v", vipInterface, err)
 	}
-	if err := fn(lnk, &netlink.Addr{IPNet: ipNet, Label: "feed-vip"}); err != nil {
+	if err := fn(lnk, &netlink.Addr{IPNet: ipNet}); err != nil {
 		return fmt.Errorf("unable to add/remove VIP %s to %s: %v", vip, vipInterface, err)
 	}
 	return nil

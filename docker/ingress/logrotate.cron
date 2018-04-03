@@ -1,3 +1,0 @@
-# Do nginx log rotations more often than the default logrotate daily
-# Run logrotate with a low cpu and io priority
-* * * * * root /usr/bin/nice -n 19 /usr/bin/ionice -c3 /usr/sbin/logrotate /etc/logrotate.d/nginx
