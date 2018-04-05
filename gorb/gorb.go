@@ -22,9 +22,9 @@ import (
 
 	"strconv"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/hashicorp/go-multierror"
 	"github.com/sethgrid/pester"
+	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 )
 

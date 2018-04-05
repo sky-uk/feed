@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
