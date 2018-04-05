@@ -40,26 +40,36 @@ type Config struct {
 	VIPInterface        string
 }
 
+type closeable interface {
+	Close() error
+}
+
 type updater struct {
 	Config
-	clientConn *grpc.ClientConn
-	client     types.MerlinClient
-	nl         netlinkWrapper
+	clientFactory func(*Config) (types.MerlinClient, closeable, error)
+	nl            netlinkWrapper
 }
 
 // New merlin updater.
 func New(conf Config) (controller.Updater, error) {
 	u := &updater{
-		Config: conf,
-		nl:     &netlinkWrapperImpl{},
+		Config:        conf,
+		clientFactory: createRealClient,
+		nl:            &netlinkWrapperImpl{},
 	}
 	return u, nil
 }
 
-func (u *updater) Start() error {
-	if err := u.createClient(); err != nil {
-		return err
+func createRealClient(conf *Config) (types.MerlinClient, closeable, error) {
+	c, err := grpc.Dial(conf.Endpoint, grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to create merlin grpc client: %v", err)
 	}
+	client := types.NewMerlinClient(c)
+	return client, c, nil
+}
+
+func (u *updater) Start() error {
 	if err := u.addVIP(); err != nil {
 		return err
 	}
@@ -69,25 +79,6 @@ func (u *updater) Start() error {
 		}
 		return err
 	}
-	return nil
-}
-
-func (u *updater) Stop() error {
-	u.deregisterWithMerlin()
-	// must be done last, _after_ deregistration
-	if u.clientConn != nil {
-		if err := u.clientConn.Close(); err != nil {
-			log.Warnf("error when stopping merlin grpc connection: %v", err)
-		}
-	}
-	return u.removeVIP()
-}
-
-func (u *updater) Update(controller.IngressEntries) error {
-	return nil
-}
-
-func (u *updater) Health() error {
 	return nil
 }
 
@@ -109,6 +100,7 @@ func (u *updater) createHTTPSFrom(orig *types.RealServer) *types.RealServer {
 }
 
 func (u *updater) registerWithMerlin() error {
+	// create merlin server values
 	forward, ok := types.ForwardMethod_value[strings.ToUpper(u.ForwardMethod)]
 	if !ok {
 		return fmt.Errorf("unrecognized forward method: %s", u.ForwardMethod)
@@ -125,15 +117,23 @@ func (u *updater) registerWithMerlin() error {
 		Period:        ptypes.DurationProto(u.HealthPeriod),
 		Timeout:       ptypes.DurationProto(u.HealthTimeout),
 	}
-	if err := u.registerServer(server, "http"); err != nil {
+
+	// create gRPC client
+	client, conn, err := u.clientFactory(&u.Config)
+	if err != nil {
 		return err
 	}
+	defer conn.Close()
 
+	// register with merlin
+	if err := u.registerServer(client, server, "http"); err != nil {
+		return err
+	}
 	httpsServer := u.createHTTPSFrom(server)
-	return u.registerServer(httpsServer, "https")
+	return u.registerServer(client, httpsServer, "https")
 }
 
-func (u *updater) registerServer(server *types.RealServer, detail string) error {
+func (u *updater) registerServer(client types.MerlinClient, server *types.RealServer, detail string) error {
 	if server.ServiceID == "" || server.Key.Port == 0 {
 		log.Infof("Skipping merlin registration for %s", detail)
 		return nil
@@ -142,9 +142,9 @@ func (u *updater) registerServer(server *types.RealServer, detail string) error 
 	ctx, cancel := context.WithTimeout(context.Background(), u.Timeout)
 	defer cancel()
 
-	_, err := u.client.CreateServer(ctx, server)
+	_, err := client.CreateServer(ctx, server)
 	if status.Code(err) == codes.AlreadyExists {
-		if _, err := u.client.UpdateServer(ctx, server); err != nil {
+		if _, err := client.UpdateServer(ctx, server); err != nil {
 			return fmt.Errorf("unable to register to %s in merlin: %v", server.ServiceID, err)
 		}
 	} else if err != nil {
@@ -155,22 +155,34 @@ func (u *updater) registerServer(server *types.RealServer, detail string) error 
 	return nil
 }
 
+func (u *updater) Stop() error {
+	u.deregisterWithMerlin()
+	return u.removeVIP()
+}
+
 func (u *updater) deregisterWithMerlin() {
+	// create gRPC client
+	client, conn, err := u.clientFactory(&u.Config)
+	if err != nil {
+		log.Warnf("Unable to create client connection to merlin: %v", err)
+	}
+	defer conn.Close()
+
 	// create server keys
 	server := u.createBaseRealServer()
 	httpsServer := u.createHTTPSFrom(server)
 
 	// drain
-	u.updateServerForDraining(server)
-	u.updateServerForDraining(httpsServer)
+	u.updateServerForDraining(client, server)
+	u.updateServerForDraining(client, httpsServer)
 	time.Sleep(u.DrainDelay)
 
 	// deregister
-	u.deregisterServer(server)
-	u.deregisterServer(httpsServer)
+	u.deregisterServer(client, server)
+	u.deregisterServer(client, httpsServer)
 }
 
-func (u *updater) updateServerForDraining(orig *types.RealServer) {
+func (u *updater) updateServerForDraining(client types.MerlinClient, orig *types.RealServer) {
 	if orig.ServiceID == "" || orig.Key.Port == 0 {
 		return
 	}
@@ -178,39 +190,24 @@ func (u *updater) updateServerForDraining(orig *types.RealServer) {
 	server.Config = &types.RealServer_Config{Weight: &wrappers.UInt32Value{Value: 0}}
 	ctx, cancel := context.WithTimeout(context.Background(), u.Timeout)
 	defer cancel()
-	if _, err := u.client.UpdateServer(ctx, server); err != nil {
+	if _, err := client.UpdateServer(ctx, server); err != nil {
 		log.Warnf("Draining failed for %s, unable to set weight to 0: %v", server.ServiceID, err)
 	} else {
 		log.Infof("Started draining for %s, server weight set to 0", server.ServiceID)
 	}
 }
 
-func (u *updater) deregisterServer(server *types.RealServer) {
+func (u *updater) deregisterServer(client types.MerlinClient, server *types.RealServer) {
 	if server.ServiceID == "" || server.Key.Port == 0 {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), u.Timeout)
 	defer cancel()
-	if _, err := u.client.DeleteServer(ctx, server); err != nil {
+	if _, err := client.DeleteServer(ctx, server); err != nil {
 		log.Errorf("Unable to deregister from %s in merlin, please remove manually: %v", server.ServiceID, err)
 	} else {
 		log.Infof("Successfully deregistered from %s in merlin", server.ServiceID)
 	}
-}
-
-func (u *updater) createClient() error {
-	if u.client != nil {
-		return nil
-	}
-
-	c, err := grpc.Dial(u.Endpoint, grpc.WithInsecure(), grpc.WithBalancerName(roundrobin.Name))
-	if err != nil {
-		return fmt.Errorf("unable to create merlin grpc client: %v", err)
-	}
-	u.clientConn = c
-	u.client = types.NewMerlinClient(c)
-
-	return nil
 }
 
 func (u *updater) addVIP() error {
@@ -225,6 +222,14 @@ func (u *updater) removeVIP() error {
 		return nil
 	}
 	return u.nl.removeVIP(u.VIPInterface, u.VIP)
+}
+
+func (u *updater) Update(controller.IngressEntries) error {
+	return nil
+}
+
+func (u *updater) Health() error {
+	return nil
 }
 
 func (u *updater) String() string {

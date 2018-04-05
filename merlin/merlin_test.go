@@ -30,10 +30,11 @@ func TestMerlin(t *testing.T) {
 
 var _ = Describe("merlin", func() {
 	var (
-		merlin controller.Updater
-		client *mocks.MerlinClient
-		nl     *nlMock
-		conf   Config
+		merlin        controller.Updater
+		client        *mocks.MerlinClient
+		nlMock        *netlinkMockType
+		closeableMock *closeableMockType
+		conf          Config
 
 		healthCheck   *types.RealServer_HealthCheck
 		emptyResponse = &empty.Empty{}
@@ -44,7 +45,9 @@ var _ = Describe("merlin", func() {
 
 	BeforeEach(func() {
 		client = &mocks.MerlinClient{}
-		nl = &nlMock{}
+		nlMock = &netlinkMockType{}
+		closeableMock = &closeableMockType{}
+		closeableMock.On("Close").Return(nil)
 		conf = Config{
 			ServiceID:           "service1",
 			HTTPSServiceID:      "https-service1",
@@ -65,8 +68,10 @@ var _ = Describe("merlin", func() {
 	JustBeforeEach(func() {
 		m, err := New(conf)
 		Expect(err).ToNot(HaveOccurred())
-		m.(*updater).client = client
-		m.(*updater).nl = nl
+		m.(*updater).clientFactory = func(c *Config) (types.MerlinClient, closeable, error) {
+			return client, closeableMock, nil
+		}
+		m.(*updater).nl = nlMock
 		merlin = m
 		healthCheck = &types.RealServer_HealthCheck{
 			Endpoint:      &wrappers.StringValue{Value: fmt.Sprintf("http://:%d/%s", conf.HealthPort, conf.HealthPath)},
@@ -101,6 +106,7 @@ var _ = Describe("merlin", func() {
 
 		Expect(err).ToNot(HaveOccurred())
 		client.AssertExpectations(GinkgoT())
+		closeableMock.AssertExpectations(GinkgoT())
 	})
 
 	It("updates itself on start if already exists", func() {
@@ -117,7 +123,6 @@ var _ = Describe("merlin", func() {
 
 		Expect(err).ToNot(HaveOccurred())
 		client.AssertExpectations(GinkgoT())
-
 	})
 
 	It("deregisters itself on stop", func() {
@@ -143,6 +148,7 @@ var _ = Describe("merlin", func() {
 
 		Expect(err).ToNot(HaveOccurred())
 		client.AssertExpectations(GinkgoT())
+		closeableMock.AssertExpectations(GinkgoT())
 	})
 
 	Context("service IDs are empty", func() {
@@ -194,49 +200,58 @@ var _ = Describe("merlin", func() {
 		})
 
 		It("should add VIP on start", func() {
-			nl.On("addVIP", conf.VIPInterface, conf.VIP).Return(nil)
+			nlMock.On("addVIP", conf.VIPInterface, conf.VIP).Return(nil)
 			client.On("CreateServer", mock.Anything, mock.Anything).Return(emptyResponse, nil)
 
 			err := merlin.Start()
 
 			Expect(err).ToNot(HaveOccurred())
-			nl.AssertExpectations(GinkgoT())
+			nlMock.AssertExpectations(GinkgoT())
 		})
 
 		It("should remove VIP on stop", func() {
-			nl.On("removeVIP", conf.VIPInterface, conf.VIP).Return(nil)
+			nlMock.On("removeVIP", conf.VIPInterface, conf.VIP).Return(nil)
 			client.On("UpdateServer", mock.Anything, mock.Anything).Return(emptyResponse, nil)
 			client.On("DeleteServer", mock.Anything, mock.Anything).Return(emptyResponse, nil)
 
 			err := merlin.Stop()
 
 			Expect(err).ToNot(HaveOccurred())
-			nl.AssertExpectations(GinkgoT())
+			nlMock.AssertExpectations(GinkgoT())
 		})
 
 		It("should remove the VIP if attach fails on start", func() {
-			nl.On("addVIP", conf.VIPInterface, conf.VIP).Return(nil)
+			nlMock.On("addVIP", conf.VIPInterface, conf.VIP).Return(nil)
 			client.On("CreateServer", mock.Anything, mock.Anything).Return(nil, errors.New("kaboom"))
-			nl.On("removeVIP", conf.VIPInterface, conf.VIP).Return(nil)
+			nlMock.On("removeVIP", conf.VIPInterface, conf.VIP).Return(nil)
 
 			err := merlin.Start()
 
 			Expect(err).To(HaveOccurred())
-			nl.AssertExpectations(GinkgoT())
+			nlMock.AssertExpectations(GinkgoT())
 		})
 	})
 })
 
-type nlMock struct {
+type netlinkMockType struct {
 	mock.Mock
 }
 
-func (m *nlMock) addVIP(vipInterface, vip string) error {
+func (m *netlinkMockType) addVIP(vipInterface, vip string) error {
 	args := m.Called(vipInterface, vip)
 	return args.Error(0)
 }
 
-func (m *nlMock) removeVIP(vipInterface, vip string) error {
+func (m *netlinkMockType) removeVIP(vipInterface, vip string) error {
 	args := m.Called(vipInterface, vip)
+	return args.Error(0)
+}
+
+type closeableMockType struct {
+	mock.Mock
+}
+
+func (m *closeableMockType) Close() error {
+	args := m.Called()
 	return args.Error(0)
 }
