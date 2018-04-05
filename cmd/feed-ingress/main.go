@@ -256,7 +256,7 @@ func init() {
 	flag.StringVar(&merlinEndpoint, "merlin-endpoint", "",
 		"Merlin gRPC endpoint to connect to. Expected format is scheme://authority/endpoint_name (see "+
 			"https://github.com/grpc/grpc/blob/master/doc/naming.md). Will load balance between all available servers.")
-	flag.DurationVar(&merlinRequestTimeout, "merlin-request-timeout", time.Second * 10,
+	flag.DurationVar(&merlinRequestTimeout, "merlin-request-timeout", time.Second*10,
 		"Timeout for any requests to merlin.")
 	flag.StringVar(&merlinServiceID, "merlin-service-id", "", "Merlin http virtual service ID to attach to.")
 	flag.StringVar(&merlinHTTPSServiceID, "merlin-https-service-id", "", "Merlin https virtual service ID to attach to.")

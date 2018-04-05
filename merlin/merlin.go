@@ -134,7 +134,7 @@ func (u *updater) registerWithMerlin() error {
 
 func (u *updater) registerServer(server *types.RealServer, detail string) error {
 	if server.ServiceID == "" || server.Key.Port == 0 {
-		log.Infof("No serviceID provided, skipping merlin registration for %s", detail)
+		log.Infof("Skipping merlin registration for %s", detail)
 		return nil
 	}
 
@@ -144,12 +144,13 @@ func (u *updater) registerServer(server *types.RealServer, detail string) error 
 	_, err := u.client.CreateServer(ctx, server)
 	if status.Code(err) == codes.AlreadyExists {
 		if _, err := u.client.UpdateServer(ctx, server); err != nil {
-			return fmt.Errorf("unable to register %s with merlin: %v", detail, err)
+			return fmt.Errorf("unable to register to %s in merlin: %v", server.ServiceID, err)
 		}
 	} else if err != nil {
-		return fmt.Errorf("unable to register %s with merlin: %v", detail, err)
+		return fmt.Errorf("unable to register to %s in merlin: %v", server.ServiceID, err)
 	}
 
+	log.Infof("Successfully registered to %s in merlin", server.ServiceID)
 	return nil
 }
 
@@ -159,16 +160,16 @@ func (u *updater) deregisterWithMerlin() {
 	httpsServer := u.createHTTPSFrom(server)
 
 	// drain
-	u.updateServerForDraining(server, "http")
-	u.updateServerForDraining(httpsServer, "https")
+	u.updateServerForDraining(server)
+	u.updateServerForDraining(httpsServer)
 	time.Sleep(u.DrainDelay)
 
 	// deregister
-	u.deregisterServer(server, "http")
-	u.deregisterServer(httpsServer, "https")
+	u.deregisterServer(server)
+	u.deregisterServer(httpsServer)
 }
 
-func (u *updater) updateServerForDraining(orig *types.RealServer, detail string) {
+func (u *updater) updateServerForDraining(orig *types.RealServer) {
 	if orig.ServiceID == "" || orig.Key.Port == 0 {
 		return
 	}
@@ -177,19 +178,21 @@ func (u *updater) updateServerForDraining(orig *types.RealServer, detail string)
 	ctx, cancel := context.WithTimeout(context.Background(), u.Timeout)
 	defer cancel()
 	if _, err := u.client.UpdateServer(ctx, server); err != nil {
-		log.Warnf("Draining failed for %s, unable to set weight to 0: %v", detail, err)
+		log.Warnf("Draining failed for %s, unable to set weight to 0: %v", server.ServiceID, err)
 	}
+	log.Infof("Started draining for %s, server weight set to 0", server.ServiceID)
 }
 
-func (u *updater) deregisterServer(server *types.RealServer, detail string) {
+func (u *updater) deregisterServer(server *types.RealServer) {
 	if server.ServiceID == "" || server.Key.Port == 0 {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), u.Timeout)
 	defer cancel()
 	if _, err := u.client.DeleteServer(ctx, server); err != nil {
-		log.Errorf("Unable to deregister %s from merlin, please remove manually: %v", detail, err)
+		log.Errorf("Unable to deregister from %s in merlin, please remove manually: %v", server.ServiceID, err)
 	}
+	log.Infof("Successfully deregistered from %s in merlin", server.ServiceID)
 }
 
 func (u *updater) createClient() error {
