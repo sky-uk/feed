@@ -73,12 +73,13 @@ func (u *updater) Start() error {
 }
 
 func (u *updater) Stop() error {
+	u.deregisterWithMerlin()
+	// must be done last, _after_ deregistration
 	if u.clientConn != nil {
 		if err := u.clientConn.Close(); err != nil {
 			log.Warnf("error when stopping merlin grpc connection: %v", err)
 		}
 	}
-	u.deregisterWithMerlin()
 	return u.removeVIP()
 }
 
@@ -179,8 +180,9 @@ func (u *updater) updateServerForDraining(orig *types.RealServer) {
 	defer cancel()
 	if _, err := u.client.UpdateServer(ctx, server); err != nil {
 		log.Warnf("Draining failed for %s, unable to set weight to 0: %v", server.ServiceID, err)
+	} else {
+		log.Infof("Started draining for %s, server weight set to 0", server.ServiceID)
 	}
-	log.Infof("Started draining for %s, server weight set to 0", server.ServiceID)
 }
 
 func (u *updater) deregisterServer(server *types.RealServer) {
@@ -191,8 +193,9 @@ func (u *updater) deregisterServer(server *types.RealServer) {
 	defer cancel()
 	if _, err := u.client.DeleteServer(ctx, server); err != nil {
 		log.Errorf("Unable to deregister from %s in merlin, please remove manually: %v", server.ServiceID, err)
+	} else {
+		log.Infof("Successfully deregistered from %s in merlin", server.ServiceID)
 	}
-	log.Infof("Successfully deregistered from %s in merlin", server.ServiceID)
 }
 
 func (u *updater) createClient() error {
