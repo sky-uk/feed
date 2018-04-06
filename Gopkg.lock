@@ -21,11 +21,6 @@
   revision = "5bd2802263f21d8788851d5305584c82a5c75d7e"
 
 [[projects]]
-  name = "github.com/Sirupsen/logrus"
-  packages = ["."]
-  revision = "6d9ae300aaf85d6acd2e5424081c7fcddb21dab8"
-
-[[projects]]
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -228,6 +223,12 @@
   revision = "c12348ce28de40eed0136aa2b644d0ee0650e56c"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/onrik/logrus"
+  packages = ["filename"]
+  revision = "6a64e23a4923a8d0d4db2806dcf3e55af1e48f61"
+
+[[projects]]
   name = "github.com/onsi/ginkgo"
   packages = [
     ".",
@@ -295,7 +296,6 @@
   packages = [
     "expfmt",
     "internal/bitbucket.org/ww/goautoneg",
-    "log",
     "model"
   ]
   revision = "a3a8fe85f2579bcfec713dbfacbdd0797a792f3a"
@@ -309,6 +309,11 @@
   name = "github.com/sethgrid/pester"
   packages = ["."]
   revision = "760f8913c0483b776294e1bee43f1d687527127b"
+
+[[projects]]
+  name = "github.com/sirupsen/logrus"
+  packages = ["."]
+  revision = "6d9ae300aaf85d6acd2e5424081c7fcddb21dab8"
 
 [[projects]]
   name = "github.com/sky-uk/merlin"
@@ -613,6 +618,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "16569a087390fa911eb364c26d60f93d1b9889eff1cbd977e94e242816e4f464"
+  inputs-digest = "8a7e22c97b367f32e922692010ce85120547c9b46b841b643257d6359ab66826"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -7,7 +7,7 @@ import (
 
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/dns"
 	"github.com/sky-uk/feed/dns/adapter"

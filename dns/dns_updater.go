@@ -5,8 +5,8 @@ import (
 
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/service/route53"
+	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/dns/adapter"
 	"github.com/sky-uk/feed/dns/r53"

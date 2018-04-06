@@ -67,6 +67,7 @@ spec:
         args:
         # Ingress nginx port that frontend will direct traffic towards.
         - -ingress-port=80
+        - -ingress-https-port=443
 
         # Health port on nginx, used by frontend to determine health.
         - -ingress-health-port=8081
@@ -97,14 +98,12 @@ spec:
         # gRPC endpoint
         - -merlin-endpoint=dns:///merlin-servers
 
-        # Virtual Service ID to attach to
+        # Virtual Service IDs to attach to
         - -merlin-service-id=my-virtual-service
+        - -merlin-https-service-id=my-https-virtual-service
 
         # Real server IP to associate with virtual service - the IP of the ingress node.
         - -merlin-instance-ip=$(INSTANCEIP)
-
-        # Real server port to associate with virtual service - the port of nginx.
-        - -merlin-instance-port=80
 
         # Forward method that IPVS should use - pick route, masq, or tunnel.
         - -merlin-forward-method=route

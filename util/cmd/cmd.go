@@ -12,8 +12,9 @@ import (
 
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/onrik/logrus/filename"
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/util/metrics"
 )
 
@@ -105,6 +106,9 @@ func ConfigureLogging(debug bool) {
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
+	filenameHook := filename.NewHook()
+	filenameHook.Field = "source"
+	log.AddHook(filenameHook)
 }
 
 // ConfigureMetrics sets up metrics pushing and default labels. This must be called before any metrics

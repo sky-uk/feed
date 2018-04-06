@@ -5,7 +5,7 @@ import (
 
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // Watcher provides channels for receiving updates. It tries its best to run forever, retrying
