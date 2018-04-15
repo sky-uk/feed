@@ -2,24 +2,28 @@ package main
 
 import (
 	"flag"
-	"fmt"
+
 	_ "net/http/pprof"
+
+	"time"
+
+	"fmt"
+
 	"strconv"
 	"strings"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
-	elb_status "github.com/sky-uk/feed/elb/status"
 	"github.com/sky-uk/feed/gorb"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/merlin"
-	merlin_status "github.com/sky-uk/feed/merlin/status"
 	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
+	"github.com/sky-uk/feed/gclb"
+	"errors"
 )
 
 var (
@@ -45,8 +49,6 @@ var (
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
 	nginxSSLPath                   string
 	nginxVhostStatsSharedMemory    int
-	nginxOpenTracingPluginPath     string
-	nginxOpenTracingConfigPath     string
 	legacyBackendKeepaliveSeconds  int
 	registrationFrontendType       string
 	gorbIngressInstanceIP          string
@@ -72,8 +74,8 @@ var (
 	merlinHealthTimeout            time.Duration
 	merlinVIP                      string
 	merlinVIPInterface             string
-	merlinInternalHostname         string
-	merlinInternetFacingHostname   string
+	gclbInstanceGroupPrefix        string
+	gclbExpectedNumber             int
 )
 
 const (
@@ -84,20 +86,16 @@ const (
 	defaultIngressAllow                      = "0.0.0.0/0"
 	defaultIngressHealthPort                 = 8081
 	defaultIngressStripPath                  = true
-	defaultIngressExactPath                  = false
 	defaultHealthPort                        = 12082
 	defaultNginxBinary                       = "/usr/sbin/nginx"
 	defaultNginxWorkingDir                   = "/nginx"
 	defaultNginxWorkers                      = 1
 	defaultNginxWorkerConnections            = 1024
-	defaultNginxWorkerShutdownTimeoutSeconds = 0
 	defaultNginxKeepAliveSeconds             = 60
 	defaultNginxBackendKeepalives            = 512
 	defaultNginxBackendTimeoutSeconds        = 60
 	defaultNginxBackendConnectTimeoutSeconds = 1
-	defaultNginxBackendMaxConnections        = 0
-	defaultNginxProxyBufferSize              = 16
-	defaultNginxProxyBufferBlocks            = 4
+	defaultNginxBackendMaxConnections        = 1024
 	defaultNginxLogLevel                     = "warn"
 	defaultNginxServerNamesHashBucketSize    = unset
 	defaultNginxServerNamesHashMaxSize       = unset
@@ -105,8 +103,6 @@ const (
 	defaultNginxUpdatePeriod                 = time.Second * 30
 	defaultNginxSSLPath                      = "/etc/ssl/default-ssl/default-ssl"
 	defaultNginxVhostStatsSharedMemory       = 1
-	defaultNginxOpenTracingPluginPath        = ""
-	defaultNginxOpenTracingConfigPath        = ""
 	defaultElbLabelValue                     = ""
 	defaultDrainDelay                        = time.Second * 60
 	defaultTargetGroupDeregistrationDelay    = time.Second * 300
@@ -131,9 +127,8 @@ const (
 	defaultMerlinHealthPeriod                = 10 * time.Second
 	defaultMerlinHealthTimeout               = time.Second
 	defaultMerlinVIPInterface                = "lo"
-	defaultClientHeaderBufferSize            = 16
-	defaultClientBodyBufferSize              = 16
-	defaultLargeClientHeaderBufferBlocks     = 4
+	defaultGclbInstanceGroupPrefix           = ""
+	defaultGclbExpectedNumber                = 0
 )
 
 func init() {
@@ -160,11 +155,6 @@ func init() {
 			"limitations. URL encoded characters will not work correctly in some cases, and backend services will "+
 			"need to take care to properly construct URLs, such as by using the 'X-Original-URI' header."+
 			"Can be overridden with the sky.uk/strip-path annotation per ingress")
-	flag.BoolVar(&controllerConfig.DefaultExactPath, "ingress-exact-path", defaultIngressExactPath,
-		"Whether to consider the ingress path to be an exact match rather than as a prefix. For example, "+
-			"if enabled 'myhost/myapp/health' would match 'myhost/myapp/health' but not 'myhost/myapp/health/x'."+
-			" If disabled, it would match both (and redirect requests from 'myhost/myapp/health' to "+
-			" '/myhost/myapp/health/'. Can be overridden with the sky.uk/exact-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
 
@@ -177,8 +167,6 @@ func init() {
 		"Number of nginx worker processes.")
 	flag.IntVar(&nginxConfig.WorkerConnections, "nginx-worker-connections", defaultNginxWorkerConnections,
 		"Max number of connections per nginx worker. Includes both client and proxy connections.")
-	flag.IntVar(&nginxConfig.WorkerShutdownTimeoutSeconds, "nginx-worker-shutdown-timeout-seconds", defaultNginxWorkerShutdownTimeoutSeconds,
-		"Timeout for a graceful shutdown of worker processes.")
 	flag.IntVar(&nginxConfig.KeepaliveSeconds, "nginx-keepalive-seconds", defaultNginxKeepAliveSeconds,
 		"Keep alive time for persistent client connections to nginx. Should generally be set larger than frontend "+
 			"keep alive times to prevent stale connections.")
@@ -196,12 +184,6 @@ func init() {
 	flag.IntVar(&controllerConfig.DefaultBackendMaxConnections, "nginx-default-backend-max-connections",
 		defaultNginxBackendMaxConnections,
 		"Maximum number of connections to a single backend. Can be overridden per ingress with the sky.uk/backend-max-connections annotation.")
-	flag.IntVar(&controllerConfig.DefaultProxyBufferSize, "nginx-default-proxy-buffer-size",
-		defaultNginxProxyBufferSize,
-		"Proxy buffer size for response. Can be overridden per ingress with the sky.uk/proxy-buffer-size-in-kb annotation.")
-	flag.IntVar(&controllerConfig.DefaultProxyBufferBlocks, "nginx-default-proxy-buffer-blocks",
-		defaultNginxProxyBufferBlocks,
-		"Proxy buffer blocks for response. Can be overridden per ingress with the sky.uk/proxy-buffer-blocks annotation.")
 	flag.StringVar(&nginxConfig.LogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 	flag.IntVar(&nginxConfig.ServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,
@@ -227,26 +209,21 @@ func init() {
 		"Set default ssl path + name file without extension.  Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key).")
 	flag.IntVar(&nginxVhostStatsSharedMemory, "nginx-vhost-stats-shared-memory", defaultNginxVhostStatsSharedMemory,
 		"Memory (in MiB) which should be allocated for use by the vhost statistics module")
-	flag.StringVar(&nginxOpenTracingPluginPath, "nginx-opentracing-plugin-path", defaultNginxOpenTracingPluginPath,
-		"Path to OpenTracing plugin on disk (eg. /usr/local/lib/libjaegertracing_plugin.so)")
-	flag.StringVar(&nginxOpenTracingConfigPath, "nginx-opentracing-config-path", defaultNginxOpenTracingConfigPath,
-		"Path to OpenTracing config on disk (eg. /etc/jaeger-nginx-config.json)")
-	flag.IntVar(&nginxConfig.ClientHeaderBufferSize, "nginx-client-header-buffer-size-in-kb", defaultClientHeaderBufferSize, "Sets buffer size for reading client request header")
-	flag.IntVar(&nginxConfig.ClientBodyBufferSize, "nginx-client-body-buffer-size-in-kb", defaultClientBodyBufferSize, "Sets buffer size for reading client request body")
-	flag.IntVar(&nginxConfig.LargeClientHeaderBufferBlocks, "nginx-large-client-header-buffer-blocks", defaultLargeClientHeaderBufferBlocks, "Sets the maximum number of buffers used for reading large client request header")
+
+	// elb/alb/gclb flags
+	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
+		" for feed-ingress to drain from the registration component on shutdown. Should match the LB's drain time.")
+	flag.StringVar(&registrationFrontendType, "registration-frontend-type", defaultRegistrationFrontendType,
+		"Define the registration frontend type. Must be merlin, gorb, elb, alb or gclb.")
 
 	// elb/alb flags
 	flag.StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
-	flag.StringVar(&registrationFrontendType, "registration-frontend-type", defaultRegistrationFrontendType,
-		"Define the registration frontend type. Must be merlin, gorb, elb or alb.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
-	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
-		" for feed-ingress to drain from the registration component on shutdown. Should match the ELB's drain time.")
 	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
 	flag.DurationVar(&targetGroupDeregistrationDelay, "alb-target-group-deregistration-delay",
@@ -307,10 +284,13 @@ func init() {
 	flag.StringVar(&merlinVIP, "merlin-vip", "", "VIP to assign to loopback to support direct route and tunnel.")
 	flag.StringVar(&merlinVIPInterface, "merlin-vip-interface", defaultMerlinVIPInterface,
 		"VIP interface to assign the VIP.")
-	flag.StringVar(&merlinInternalHostname, "merlin-internal-hostname", "",
-		"Hostname of the internal facing load-balancer.")
-	flag.StringVar(&merlinInternetFacingHostname, "merlin-internet-facing-hostname", "",
-		"Hostname of the internet facing load-balancer")
+
+	// gclb flags
+	flag.StringVar(&gclbInstanceGroupPrefix, "gclb-instance-group-prefix", defaultGclbInstanceGroupPrefix,
+		"GCLB backend Instance Group prefix..")
+	flag.IntVar(&gclbExpectedNumber, "gclb-expected-number", defaultGclbExpectedNumber,
+		"Expected number of GCLBs to attach to. If 0 the controller will not check,"+
+			" otherwise it fails to start if it can't attach to this number.")
 }
 
 func main() {
@@ -325,7 +305,7 @@ func main() {
 	}
 	controllerConfig.KubernetesClient = client
 
-	controllerConfig.Updaters, err = createIngressUpdaters(client)
+	controllerConfig.Updaters, err = createIngressUpdaters()
 	if err != nil {
 		log.Fatal("Unable to create ingress updaters: ", err)
 	}
@@ -349,7 +329,7 @@ func main() {
 	select {}
 }
 
-func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, error) {
+func createIngressUpdaters() ([]controller.Updater, error) {
 	nginxConfig.Ports = []nginx.Port{{Name: "http", Port: ingressPort}}
 	if ingressHTTPSPort != unset {
 		nginxConfig.Ports = append(nginxConfig.Ports, nginx.Port{Name: "https", Port: ingressHTTPSPort})
@@ -360,38 +340,25 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
 	nginxConfig.VhostStatsSharedMemory = nginxVhostStatsSharedMemory
-	nginxConfig.OpenTracingPlugin = nginxOpenTracingPluginPath
-	nginxConfig.OpenTracingConfig = nginxOpenTracingConfigPath
 	nginxUpdater := nginx.New(nginxConfig)
 
 	updaters := []controller.Updater{nginxUpdater}
+	frontendUpdater, err := createFrontendRegistrationUpdater()
+	if err != nil {
+		return updaters, err
+	}
+	updaters = append(updaters, frontendUpdater)
+	return updaters, nil
+}
 
+func createFrontendRegistrationUpdater() (updater controller.Updater, err error) {
 	switch registrationFrontendType {
 
 	case "elb":
-		elbUpdater, err := elb.New(region, elbLabelValue, elbExpectedNumber, drainDelay)
-		if err != nil {
-			return updaters, err
-		}
-		updaters = append(updaters, elbUpdater)
-
-		statusConfig := elb_status.Config{
-			Region:           region,
-			LabelValue:       elbLabelValue,
-			KubernetesClient: kubernetesClient,
-		}
-		elbStatusUpdater, err := elb_status.New(statusConfig)
-		if err != nil {
-			return updaters, err
-		}
-		updaters = append(updaters, elbStatusUpdater)
+		updater, err = elb.New(region, elbLabelValue, elbExpectedNumber, drainDelay)
 
 	case "alb":
-		albUpdater, err := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
-		if err != nil {
-			return updaters, err
-		}
-		updaters = append(updaters, albUpdater)
+		updater, err = alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
 
 	case "gorb":
 		virtualServices, err := toVirtualServices(gorbServicesDefinition)
@@ -416,11 +383,7 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 			BackendHealthcheckType:     gorbBackendHealthcheckType,
 			InterfaceProcFsPath:        gorbInterfaceProcFsPath,
 		}
-		gorbUpdater, err := gorb.New(&config)
-		if err != nil {
-			return updaters, err
-		}
-		updaters = append(updaters, gorbUpdater)
+		updater, err = gorb.New(&config)
 
 	case "merlin":
 		config := merlin.Config{
@@ -443,31 +406,23 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 			VIP:                 merlinVIP,
 			VIPInterface:        merlinVIPInterface,
 		}
-		merlinUpdater, err := merlin.New(config)
-		if err != nil {
-			return updaters, err
-		}
-		updaters = append(updaters, merlinUpdater)
+		updater, err = merlin.New(config)
 
-		if merlinInternalHostname != "" || merlinInternetFacingHostname != "" {
-			statusConfig := merlin_status.Config{
-				InternalHostname:       merlinInternalHostname,
-				InternetFacingHostname: merlinInternetFacingHostname,
-				KubernetesClient:       kubernetesClient,
-			}
-			merlinStatusUpdater, err := merlin_status.New(statusConfig)
-			if err != nil {
-				return updaters, err
-			}
-			updaters = append(updaters, merlinStatusUpdater)
+	case "gclb":
+		if gclbInstanceGroupPrefix == "" {
+			return nil, errors.New("missing GCLB Instance Group prefix")
 		}
 
+		config := gclb.Config{
+			InstanceGroupPrefix: gclbInstanceGroupPrefix,
+			ExpectedFrontends:   gclbExpectedNumber,
+			DrainDelay:          drainDelay,
+		}
+		updater, err = gclb.New(config)
 	default:
-		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb, merlin but"+
-			"was %s", registrationFrontendType)
+		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
 	}
-
-	return updaters, nil
+	return updater, err
 }
 
 func toVirtualServices(servicesCsv string) ([]gorb.VirtualService, error) {

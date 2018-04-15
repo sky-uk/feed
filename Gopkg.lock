@@ -2,12 +2,10 @@
 
 
 [[projects]]
+  branch = "master"
   name = "cloud.google.com/go"
-  packages = [
-    "compute/metadata",
-    "internal"
-  ]
-  revision = "29c858f6cd9f29989c4916b2d2a20097e86d2612"
+  packages = ["compute/metadata"]
+  revision = "ce4a6d38fb6a22f17ff6bfccb76183cd85d609af"
 
 [[projects]]
   name = "github.com/PuerkitoBio/purell"
@@ -169,11 +167,6 @@
   name = "github.com/google/gofuzz"
   packages = ["."]
   revision = "44d81051d367757e1c7c6a5a86423ece9afcf63c"
-
-[[projects]]
-  name = "github.com/googleapis/gax-go"
-  packages = ["."]
-  revision = "da06d194a00e19ce00d9011a13931c3f6f6887c7"
 
 [[projects]]
   branch = "master"
@@ -433,6 +426,17 @@
   revision = "6eab0e8f74e86c598ec3b6fad4888e0c11482d48"
 
 [[projects]]
+  branch = "master"
+  name = "google.golang.org/api"
+  packages = [
+    "compute/v1",
+    "gensupport",
+    "googleapi",
+    "googleapi/internal/uritemplates"
+  ]
+  revision = "fca24fcb41126b846105a93fb9e30f416bdd55ce"
+
+[[projects]]
   name = "google.golang.org/appengine"
   packages = [
     ".",
@@ -618,6 +622,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8a7e22c97b367f32e922692010ce85120547c9b46b841b643257d6359ab66826"
+  inputs-digest = "6546020eb20557f1560a7f48679e8d3a0a98eb81d79bbe80a0b8c8d86b638be1"
   solver-name = "gps-cdcl"
   solver-version = 1
