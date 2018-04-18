@@ -418,7 +418,7 @@ func createFrontendRegistrationUpdater() (updater controller.Updater, err error)
 			ExpectedFrontends:   gclbExpectedNumber,
 			DrainDelay:          drainDelay,
 		}
-		updater, err = gclb.New(config)
+		updater, err = gclb.NewUpdater(config)
 	default:
 		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
 	}
