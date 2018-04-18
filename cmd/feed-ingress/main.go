@@ -12,18 +12,19 @@ import (
 	"strconv"
 	"strings"
 
+	"errors"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
+	"github.com/sky-uk/feed/gclb"
 	"github.com/sky-uk/feed/gorb"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/merlin"
 	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
-	"github.com/sky-uk/feed/gclb"
-	"errors"
 )
 
 var (

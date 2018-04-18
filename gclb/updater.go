@@ -1,14 +1,15 @@
 package gclb
 
 import (
+	"errors"
 	"fmt"
 	"sync"
-	"errors"
-	"github.com/sky-uk/feed/controller"
-	"google.golang.org/api/compute/v1"
-	log "github.com/sirupsen/logrus"
-	"github.com/sky-uk/feed/util"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/sky-uk/feed/controller"
+	"github.com/sky-uk/feed/util"
+	"google.golang.org/api/compute/v1"
 )
 
 // Config for GCLB
@@ -20,25 +21,25 @@ type Config struct {
 
 // NewUpdater Google Cloud Load Balancer updater.
 func NewUpdater(config Config) (controller.Updater, error) {
-	client, err := NewClient()
+	client, err := newGLBClient()
 	if err != nil {
 		return nil, err
 	}
-	return &gclb {
-		Client: client,
-		initialised:          initialised{},
-		config:               config,
+	return &gclb{
+		glbClient:   client,
+		initialised: initialised{},
+		config:      config,
 	}, err
 }
 
 type gclb struct {
-	*Client
-	initialised          initialised
-	readyForHealthCheck  util.SafeBool
-	instance             *Instance
-	instanceGroups       []*compute.InstanceGroup
-	registeredFrontends  util.SafeInt
-	config               Config
+	glbClient           GLBClient
+	initialised         initialised
+	readyForHealthCheck util.SafeBool
+	instance            *Instance
+	instanceGroups      []*compute.InstanceGroup
+	registeredFrontends util.SafeInt
+	config              Config
 }
 
 // Instance contains information for a given GCP instance
@@ -54,7 +55,7 @@ type initialised struct {
 	done bool
 }
 
-// Start is a no-op. Attaching to the GCLB will happen on the first Update,
+// Start instances a no-op. Attaching to the GCLB will happen on the first Update,
 // after the nginx configuration has been set.
 func (g *gclb) Start() error {
 	return nil
@@ -79,18 +80,18 @@ func (g *gclb) Stop() error {
 	var failed = false
 	for _, frontend := range g.instanceGroups {
 		log.Infof("De-registering Instance %s from gclb Instance group %s", g.instance.Name, frontend.Name)
-		attached, err := g.isAlreadyAttached(g.instance, frontend.Name)
+		attached, err := g.glbClient.IsInstanceInGroup(g.instance, frontend.Name)
 		if err != nil {
 			return err
 		}
 		if attached {
-			err := g.InstanceGroupService.RemoveInstance(g.instance, frontend.Name)
+			err := g.glbClient.RemoveInstance(g.instance, frontend.Name)
 			if err != nil {
 				log.Warnf("unable to deregister Instance %s from gclb Instance group %s: %v", g.instance.Name, frontend.Name, err)
 				failed = true
 			}
 		} else {
-			log.Infof("Instance %q is not in the group")
+			log.Infof("Instance %q instances not in the group")
 		}
 	}
 	if failed {
@@ -101,17 +102,16 @@ func (g *gclb) Stop() error {
 	time.Sleep(g.config.DrainDelay)
 
 	return nil
-	return errors.New("not implemented")
 }
 
 func (g *gclb) attachToFrontEnds() error {
-	instance, err := g.GetSelfMetadata()
+	instance, err := g.glbClient.GetSelfMetadata()
 	if err != nil {
 		return err
 	}
 	log.Infof("Attaching to GCLBs from Instance %s", instance.ID)
 	g.instance = instance
-	clusterFrontEnds, err := g.FindFrontEndInstanceGroups(instance.Project, instance.Zone, g.config.InstanceGroupPrefix)
+	clusterFrontEnds, err := g.glbClient.FindFrontEndInstanceGroups(instance.Project, instance.Zone, g.config.InstanceGroupPrefix)
 	if err != nil {
 		return err
 	}
@@ -120,15 +120,15 @@ func (g *gclb) attachToFrontEnds() error {
 
 	for _, frontend := range clusterFrontEnds {
 		log.Infof("Registering Instance %s with gclb Instance group %s", instance.Name, frontend.Name)
-		attached, err := g.isAlreadyAttached(instance, frontend.Name)
+		attached, err := g.glbClient.IsInstanceInGroup(instance, frontend.Name)
 		if err != nil {
 			return err
 		}
 		if attached {
 			// We get an error if we try to attach again
-			log.Infof("Instance %q is already attached")
+			log.Infof("Instance %q instances already attached")
 		} else {
-			err := g.InstanceGroupService.AddInstance(instance, frontend.Name)
+			err := g.glbClient.AddInstance(instance, frontend.Name)
 			if err != nil {
 				return fmt.Errorf("unable to register Instance %s with gclb %s: %v", instance.Name, frontend.Name, err)
 			}
