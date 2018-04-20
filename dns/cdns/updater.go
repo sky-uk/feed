@@ -214,7 +214,7 @@ func (u *dnsUpdater) indexByHost(entries []controller.IngressEntry) (hostToIngre
 	for _, entry := range entries {
 		log.Debugf("Processing entry %v", entry)
 		// Ingress entries in k8s aren't allowed to have the . on the end.
-		// AWS adds it regardless of whether you specify it.
+		// GCP adds it regardless of whether you specify it.
 		hostNameWithPeriod := entry.Host + "."
 
 		log.Debugf("Checking if ingress entry hostname %s is in domain %s", hostNameWithPeriod, u.managedZone.DnsName)
@@ -283,12 +283,6 @@ func (u *dnsUpdater) String() string {
 	return "cdns updater"
 }
 
-type lbDetails struct {
-	Name string
-	IP   string
-	Type string
-}
-
 func (u *dnsUpdater) getExternalLoadBalancer(project string, prefix string) (*lbDetails, error) {
 	lbName := fmt.Sprintf("%s-%s", prefix, internetFacingScheme)
 	page := ""
@@ -298,17 +292,31 @@ func (u *dnsUpdater) getExternalLoadBalancer(project string, prefix string) (*lb
 			return nil, fmt.Errorf("unable to retrieve the list of global addresses for project %q: %v", project, err)
 		}
 		for _, address := range addressList.Items {
-			if address.AddressType == "EXTERNAL" && address.Name == lbName {
-				return &lbDetails{
+			if address.Name == lbName {
+				lb := &lbDetails{
 					Name: lbName,
 					Type: internetFacingScheme,
 					IP:   address.Address,
-				}, nil
+				}
+				log.Infof("Found external load balancer: %s", lb)
+				return lb, nil
 			}
 		}
 		if page = addressList.NextPageToken; page == "" {
 			break
 		}
 	}
+	log.Infof("No external load balancer found.")
 	return nil, nil
 }
+
+type lbDetails struct {
+	Name string
+	IP   string
+	Type string
+}
+
+func (l *lbDetails) String() string {
+	return fmt.Sprintf("lb: {Name: %s, Type:%s, IP:%s}", l.Name, l.Type, l.IP)
+}
+
