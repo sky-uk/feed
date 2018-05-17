@@ -32,6 +32,7 @@ var (
 	ingressHTTPSPort               int
 	ingressHealthPort              int
 	healthPort                     int
+	updateIngressStatus            bool
 	region                         string
 	elbLabelValue                  string
 	elbExpectedNumber              int
@@ -123,6 +124,7 @@ const (
 	defaultMerlinHealthPeriod                = 10 * time.Second
 	defaultMerlinHealthTimeout               = time.Second
 	defaultMerlinVIPInterface                = "lo"
+	defaultUpdateIngressStatus               = false
 )
 
 func init() {
@@ -151,6 +153,8 @@ func init() {
 			"Can be overridden with the sky.uk/strip-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
+	flag.BoolVar(&updateIngressStatus, "update-ingress-status", defaultUpdateIngressStatus,
+		"Update the ingress status with the external loadbalancers.")
 
 	// nginx flags
 	flag.StringVar(&nginxConfig.BinaryLocation, "nginx-binary", defaultNginxBinary,

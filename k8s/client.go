@@ -41,6 +41,9 @@ type Client interface {
 
 	// WatchServices watches for updates to services and notifies the Watcher.
 	WatchServices() Watcher
+
+	// UpdateIngressStatus updates the ingress status with the loadbalancer hostname or ip address.
+	UpdateIngressStatus(*v1beta1.Ingress) error
 }
 
 type client struct {
@@ -141,6 +144,21 @@ func (c *client) createServiceSource() {
 	c.serviceStore = store
 	c.serviceController = controller
 	go controller.Run(make(chan struct{}))
+}
+
+func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
+	ingressClient := c.clientset.ExtensionsV1beta1().Ingresses(ingress.Namespace)
+
+	currentIng, err := ingressClient.Get(ingress.Name)
+	if err != nil {
+		return err
+	}
+
+	currentIng.Status.LoadBalancer.Ingress = ingress.Status.LoadBalancer.Ingress
+
+	_, err = ingressClient.UpdateStatus(currentIng)
+
+	return err
 }
 
 // Implement cache.ResourceEventHandler

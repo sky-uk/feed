@@ -176,6 +176,7 @@ func (c *controller) updateIngresses() error {
 						BackendTimeoutSeconds: c.defaultBackendTimeout,
 						BackendMaxConnections: c.defaultBackendMaxConnections,
 						CreationTimestamp:     ingress.CreationTimestamp.Time,
+						Ingress:               ingress,
 					}
 
 					log.Debugf("Found ingress to update: %s", ingress.Name)

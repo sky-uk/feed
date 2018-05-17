@@ -489,6 +489,10 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 
 	for _, test := range tests {
 		fmt.Printf("test: %s\n", test.description)
+		// add ingress pointers to entries
+		test.entries = addIngresses(test.ingresses, test.entries)
+
+		// setup clients
 		client := new(fake.FakeClient)
 		updater := new(fakeUpdater)
 		controller := newController(updater, client)
@@ -517,6 +521,18 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		time.Sleep(smallWaitTime)
 		updater.AssertExpectations(t)
 	}
+}
+
+func addIngresses(ingresses []*v1beta1.Ingress, entries IngressEntries) IngressEntries {
+	if len(ingresses) != len(entries) {
+		return entries
+	}
+	appendedEntries := IngressEntries{}
+	for i, entry := range entries {
+		entry.Ingress = ingresses[i]
+		appendedEntries = append(appendedEntries, entry)
+	}
+	return appendedEntries
 }
 
 func createLbEntriesFixture() IngressEntries {

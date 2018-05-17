@@ -36,6 +36,12 @@ func (c *FakeClient) WatchServices() k8s.Watcher {
 	return r.Get(0).(k8s.Watcher)
 }
 
+// UpdateIngressStatus mocks out calls to UpdateIngressStatus
+func (c *FakeClient) UpdateIngressStatus(*v1beta1.Ingress) error {
+	r := c.Called()
+	return r.Error(0)
+}
+
 func (c *FakeClient) String() string {
 	return "FakeClient"
 }

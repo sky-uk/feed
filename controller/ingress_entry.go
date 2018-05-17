@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 // IngressEntries type
@@ -36,6 +38,8 @@ type IngressEntry struct {
 	BackendMaxConnections int
 	// Ingress creation time
 	CreationTimestamp time.Time
+	// Ingress resource
+	Ingress *v1beta1.Ingress
 }
 
 // validate returns error if entry has invalid fields.
