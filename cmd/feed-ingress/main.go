@@ -16,6 +16,7 @@ import (
 	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
+	elb_status "github.com/sky-uk/feed/elb/status"
 	"github.com/sky-uk/feed/gorb"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/merlin"
@@ -341,6 +342,18 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			return updaters, err
 		}
 		updaters = append(updaters, elbUpdater)
+		if updateIngressStatus {
+			statusConfig := elb_status.Config{
+				Region:           region,
+				LabelValue:       elbLabelValue,
+				KubernetesClient: controllerConfig.KubernetesClient,
+			}
+			elbStatusUpdater, err := elb_status.New(statusConfig)
+			if err != nil {
+				return updaters, err
+			}
+			updaters = append(updaters, elbStatusUpdater)
+		}
 
 	case "alb":
 		albUpdater, err := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
