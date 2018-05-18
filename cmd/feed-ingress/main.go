@@ -9,6 +9,7 @@ import (
 
 	"fmt"
 
+	"errors"
 	"strconv"
 	"strings"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/sky-uk/feed/gorb"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/merlin"
+	merlin_status "github.com/sky-uk/feed/merlin/status"
 	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
@@ -34,6 +36,8 @@ var (
 	ingressHealthPort              int
 	healthPort                     int
 	updateIngressStatus            bool
+	internalHostname               string
+	externalHostname               string
 	region                         string
 	elbLabelValue                  string
 	elbExpectedNumber              int
@@ -156,6 +160,10 @@ func init() {
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
 	flag.BoolVar(&updateIngressStatus, "update-ingress-status", defaultUpdateIngressStatus,
 		"Update the ingress status with the external loadbalancers.")
+	flag.StringVar(&internalHostname, "internal-hostname", "",
+		"Hostname of the internal facing load-balancer. If specified, external-hostname must also be given.")
+	flag.StringVar(&externalHostname, "external-hostname", "",
+		"Hostname of the internet facing load-balancer. If specified, internal-hostname must also be given.")
 
 	// nginx flags
 	flag.StringVar(&nginxConfig.BinaryLocation, "nginx-binary", defaultNginxBinary,
@@ -417,6 +425,23 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			return updaters, err
 		}
 		updaters = append(updaters, merlinUpdater)
+		if updateIngressStatus {
+			if internalHostname == "" || externalHostname == "" {
+				return updaters, errors.New("Unable to update ingress status for Merlin frontends." +
+					"Missing flags 'internal-hostname' and 'external-hostname'.")
+			}
+
+			statusConfig := merlin_status.Config{
+				InternalHostname: internalHostname,
+				ExternalHostname: externalHostname,
+				KubernetesClient: controllerConfig.KubernetesClient,
+			}
+			merlinStatusUpdater, err := merlin_status.New(statusConfig)
+			if err != nil {
+				return updaters, err
+			}
+			updaters = append(updaters, merlinStatusUpdater)
+		}
 
 	default:
 		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
