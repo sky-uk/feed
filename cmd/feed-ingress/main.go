@@ -89,6 +89,7 @@ const (
 	defaultIngressHealthPort                 = 8081
 	defaultIngressStripPath                  = true
 	defaultHealthPort                        = 12082
+	defaultUpdateIngressStatus               = false
 	defaultNginxBinary                       = "/usr/sbin/nginx"
 	defaultNginxWorkingDir                   = "/nginx"
 	defaultNginxWorkers                      = 1
@@ -129,7 +130,6 @@ const (
 	defaultMerlinHealthPeriod                = 10 * time.Second
 	defaultMerlinHealthTimeout               = time.Second
 	defaultMerlinVIPInterface                = "lo"
-	defaultUpdateIngressStatus               = false
 )
 
 func init() {
