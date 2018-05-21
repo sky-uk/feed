@@ -35,7 +35,6 @@ var (
 	ingressHTTPSPort               int
 	ingressHealthPort              int
 	healthPort                     int
-	updateIngressStatus            bool
 	internalHostname               string
 	externalHostname               string
 	region                         string
@@ -89,7 +88,6 @@ const (
 	defaultIngressHealthPort                 = 8081
 	defaultIngressStripPath                  = true
 	defaultHealthPort                        = 12082
-	defaultUpdateIngressStatus               = false
 	defaultNginxBinary                       = "/usr/sbin/nginx"
 	defaultNginxWorkingDir                   = "/nginx"
 	defaultNginxWorkers                      = 1
@@ -158,8 +156,6 @@ func init() {
 			"Can be overridden with the sky.uk/strip-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
-	flag.BoolVar(&updateIngressStatus, "update-ingress-status", defaultUpdateIngressStatus,
-		"Update the ingress status with the external loadbalancers.")
 	flag.StringVar(&internalHostname, "internal-hostname", "",
 		"Hostname of the internal facing load-balancer. If specified, external-hostname must also be given.")
 	flag.StringVar(&externalHostname, "external-hostname", "",
@@ -350,18 +346,17 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			return updaters, err
 		}
 		updaters = append(updaters, elbUpdater)
-		if updateIngressStatus {
-			statusConfig := elb_status.Config{
-				Region:           region,
-				LabelValue:       elbLabelValue,
-				KubernetesClient: controllerConfig.KubernetesClient,
-			}
-			elbStatusUpdater, err := elb_status.New(statusConfig)
-			if err != nil {
-				return updaters, err
-			}
-			updaters = append(updaters, elbStatusUpdater)
+
+		statusConfig := elb_status.Config{
+			Region:           region,
+			LabelValue:       elbLabelValue,
+			KubernetesClient: controllerConfig.KubernetesClient,
 		}
+		elbStatusUpdater, err := elb_status.New(statusConfig)
+		if err != nil {
+			return updaters, err
+		}
+		updaters = append(updaters, elbStatusUpdater)
 
 	case "alb":
 		albUpdater, err := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
@@ -400,6 +395,11 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		updaters = append(updaters, gorbUpdater)
 
 	case "merlin":
+		if internalHostname == "" || externalHostname == "" {
+			return updaters, errors.New("Unable to update ingress for Merlin frontends. Missing flags " +
+				"'internal-hostname' and 'external-hostname'.")
+		}
+
 		config := merlin.Config{
 			Endpoint:          merlinEndpoint,
 			Timeout:           merlinRequestTimeout,
@@ -425,23 +425,17 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			return updaters, err
 		}
 		updaters = append(updaters, merlinUpdater)
-		if updateIngressStatus {
-			if internalHostname == "" || externalHostname == "" {
-				return updaters, errors.New("Unable to update ingress status for Merlin frontends." +
-					"Missing flags 'internal-hostname' and 'external-hostname'.")
-			}
 
-			statusConfig := merlin_status.Config{
-				InternalHostname: internalHostname,
-				ExternalHostname: externalHostname,
-				KubernetesClient: controllerConfig.KubernetesClient,
-			}
-			merlinStatusUpdater, err := merlin_status.New(statusConfig)
-			if err != nil {
-				return updaters, err
-			}
-			updaters = append(updaters, merlinStatusUpdater)
+		statusConfig := merlin_status.Config{
+			InternalHostname: internalHostname,
+			ExternalHostname: externalHostname,
+			KubernetesClient: controllerConfig.KubernetesClient,
 		}
+		merlinStatusUpdater, err := merlin_status.New(statusConfig)
+		if err != nil {
+			return updaters, err
+		}
+		updaters = append(updaters, merlinStatusUpdater)
 
 	default:
 		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
