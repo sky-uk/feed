@@ -396,8 +396,8 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 
 	case "merlin":
 		if internalHostname == "" || externalHostname == "" {
-			return updaters, errors.New("Unable to update ingress for Merlin frontends. Missing flags " +
-				"'internal-hostname' and 'external-hostname'.")
+			return updaters, errors.New("Unable to update ingress for Merlin frontends. Requires both " +
+				"'internal-hostname' and 'external-hostname' flags.")
 		}
 
 		config := merlin.Config{
@@ -438,7 +438,8 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		updaters = append(updaters, merlinStatusUpdater)
 
 	default:
-		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
+		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb, merlin but"+
+			"was %s", registrationFrontendType)
 	}
 
 	return updaters, nil

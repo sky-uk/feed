@@ -4,8 +4,8 @@ Package status provides an updater for an ELB frontend to update ingress statuse
 package status
 
 import (
+	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -15,9 +15,10 @@ import (
 	"github.com/sky-uk/feed/util"
 
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+	log "github.com/sirupsen/logrus"
 )
 
-// Config for creating a new ingress controller.
+// Config for creating a new ELB status updater.
 type Config struct {
 	Region           string
 	LabelValue       string
@@ -42,14 +43,19 @@ type status struct {
 	awsElb           elb.ELB
 	labelValue       string
 	kubernetesClient k8s.Client
-	initialised      sync.Mutex
+	clusterFrontEnds map[string]elb.LoadBalancerDetails
 }
 
+// Start discovers the elbs
 func (s *status) Start() error {
+	clusterFrontEnds, err := elb.FindFrontEndElbs(s.awsElb, s.labelValue)
+	if err != nil {
+		return err
+	}
+	s.clusterFrontEnds = clusterFrontEnds
 	return nil
 }
 
-// Stop removes this instance from all the front end ELBs
 func (s *status) Stop() error {
 	return nil
 }
@@ -59,16 +65,9 @@ func (s *status) Health() error {
 }
 
 func (s *status) Update(ingresses controller.IngressEntries) error {
-	s.initialised.Lock()
-	defer s.initialised.Unlock()
-
-	clusterFrontEnds, err := elb.FindFrontEndElbs(s.awsElb, s.labelValue)
-	if err != nil {
-		return err
-	}
-
+	var updateFailed bool
 	for _, ingress := range ingresses {
-		if lb, ok := clusterFrontEnds[ingress.ELbScheme]; ok {
+		if lb, ok := s.clusterFrontEnds[ingress.ELbScheme]; ok {
 			newStatus := util.SliceToStatus([]string{lb.DNSName})
 
 			if util.StatusUnchanged(ingress.Ingress.Status.LoadBalancer.Ingress, newStatus) {
@@ -78,10 +77,14 @@ func (s *status) Update(ingresses controller.IngressEntries) error {
 			ingress.Ingress.Status.LoadBalancer.Ingress = newStatus
 
 			if err := s.kubernetesClient.UpdateIngressStatus(ingress.Ingress); err != nil {
-				return err
+				log.Warn("Failed to update ingress status for %s: %e", ingress.Name, err)
+				updateFailed = true
 			}
 		}
 	}
 
+	if updateFailed {
+		return errors.New("failed to update all ingress statuses")
+	}
 	return nil
 }

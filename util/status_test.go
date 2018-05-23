@@ -86,17 +86,66 @@ func TestSliceToStatus(t *testing.T) {
 			description: "mixture of a hostname and ip address",
 			endpoints:   []string{defaultHostname, defaultIPAddress},
 			expected: []v1.LoadBalancerIngress{
-				{
-					Hostname: defaultHostname,
-				},
-				{
-					IP: defaultIPAddress,
-				},
+				{Hostname: defaultHostname},
+				{IP: defaultIPAddress},
 			},
 		},
 	}
 	for _, test := range tests {
 		fmt.Printf("test: %s\n", test.description)
 		assert.Equal(test.expected, SliceToStatus(test.endpoints))
+	}
+}
+
+func TestSortLoadBalancerIngress(t *testing.T) {
+	assert := assert.New(t)
+
+	var tests = []struct {
+		description string
+		lbi         []v1.LoadBalancerIngress
+		expected    []v1.LoadBalancerIngress
+	}{
+		{
+			description: "reorder hostname",
+			lbi: []v1.LoadBalancerIngress{
+				{Hostname: "b-" + defaultHostname},
+				{Hostname: "a-" + defaultHostname},
+			},
+			expected: []v1.LoadBalancerIngress{
+				{Hostname: "a-" + defaultHostname},
+				{Hostname: "b-" + defaultHostname},
+			},
+		},
+		{
+			description: "reorder ip addresses",
+			lbi: []v1.LoadBalancerIngress{
+				{IP: "127.0.0.2"},
+				{IP: defaultIPAddress},
+			},
+			expected: []v1.LoadBalancerIngress{
+				{IP: defaultIPAddress},
+				{IP: "127.0.0.2"},
+			},
+		},
+		{
+			description: "reorder hostnames and ip addresses",
+			lbi: []v1.LoadBalancerIngress{
+				{IP: "127.0.0.2"},
+				{Hostname: "b-" + defaultHostname},
+				{IP: defaultIPAddress},
+				{Hostname: "a-" + defaultHostname},
+			},
+			expected: []v1.LoadBalancerIngress{
+				{Hostname: "a-" + defaultHostname},
+				{Hostname: "b-" + defaultHostname},
+				{IP: defaultIPAddress},
+				{IP: "127.0.0.2"},
+			},
+		},
+	}
+	for _, test := range tests {
+		fmt.Printf("test: %s\n", test.description)
+		sortLoadBalancerIngress(test.lbi)
+		assert.Equal(test.expected, test.lbi)
 	}
 }

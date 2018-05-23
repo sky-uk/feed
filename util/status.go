@@ -12,11 +12,15 @@ func StatusUnchanged(existing, new []v1.LoadBalancerIngress) bool {
 	if len(existing) != len(new) {
 		return false
 	}
+
+	sortLoadBalancerIngress(existing)
+
 	for i, loadbalancer := range existing {
 		if loadbalancer != new[i] {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -25,20 +29,26 @@ func StatusUnchanged(existing, new []v1.LoadBalancerIngress) bool {
 func SliceToStatus(endpoints []string) []v1.LoadBalancerIngress {
 	lbi := []v1.LoadBalancerIngress{}
 	for _, ep := range endpoints {
-		if net.ParseIP(ep) == nil {
-			lbi = append(lbi, v1.LoadBalancerIngress{Hostname: ep})
-		} else {
+		if net.ParseIP(ep) != nil {
 			lbi = append(lbi, v1.LoadBalancerIngress{IP: ep})
+		} else {
+			lbi = append(lbi, v1.LoadBalancerIngress{Hostname: ep})
 		}
 	}
 
-	sort.SliceStable(lbi, func(a, b int) bool {
-		return lbi[a].Hostname < lbi[b].Hostname
-	})
-
-	sort.SliceStable(lbi, func(a, b int) bool {
-		return lbi[a].IP < lbi[b].IP
-	})
+	sortLoadBalancerIngress(lbi)
 
 	return lbi
+}
+
+func sortLoadBalancerIngress(lbi []v1.LoadBalancerIngress) {
+	sort.SliceStable(lbi, func(i, j int) bool {
+		if lbi[i].IP < lbi[j].IP {
+			return true
+		}
+		if lbi[i].IP > lbi[j].IP {
+			return false
+		}
+		return lbi[i].Hostname < lbi[j].Hostname
+	})
 }
