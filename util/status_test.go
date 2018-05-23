@@ -93,7 +93,7 @@ func TestSliceToStatus(t *testing.T) {
 	}
 	for _, test := range tests {
 		fmt.Printf("test: %s\n", test.description)
-		assert.Equal(test.expected, SliceToStatus(test.endpoints))
+		assert.Equal(test.expected, GenerateLoadBalancerStatus(test.endpoints))
 	}
 }
 
@@ -145,7 +145,7 @@ func TestSortLoadBalancerIngress(t *testing.T) {
 	}
 	for _, test := range tests {
 		fmt.Printf("test: %s\n", test.description)
-		sortLoadBalancerIngress(test.lbi)
+		sortLoadBalancerStatus(test.lbi)
 		assert.Equal(test.expected, test.lbi)
 	}
 }

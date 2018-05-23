@@ -28,17 +28,18 @@ type Config struct {
 
 // New creates a new Merlin frontend status updater.
 func New(conf Config) (controller.Updater, error) {
-	lbs := make(map[string][]v1.LoadBalancerIngress)
-	lbs[internalLabelValue] = util.SliceToStatus([]string{conf.InternalHostname})
-	lbs[externalLabelValue] = util.SliceToStatus([]string{conf.ExternalHostname})
+	loadbalancers := make(map[string][]v1.LoadBalancerIngress)
+	loadbalancers[internalLabelValue] = util.GenerateLoadBalancerStatus([]string{conf.InternalHostname})
+	loadbalancers[externalLabelValue] = util.GenerateLoadBalancerStatus([]string{conf.ExternalHostname})
+
 	return &status{
-		lbs:              lbs,
+		loadbalancers:    loadbalancers,
 		kubernetesClient: conf.KubernetesClient,
 	}, nil
 }
 
 type status struct {
-	lbs              map[string][]v1.LoadBalancerIngress
+	loadbalancers    map[string][]v1.LoadBalancerIngress
 	kubernetesClient k8s.Client
 }
 
@@ -57,7 +58,7 @@ func (s *status) Health() error {
 func (s *status) Update(ingresses controller.IngressEntries) error {
 	var updateFailed bool
 	for _, ingress := range ingresses {
-		if lb, ok := s.lbs[ingress.ELbScheme]; ok {
+		if lb, ok := s.loadbalancers[ingress.ELbScheme]; ok {
 			if util.StatusUnchanged(ingress.Ingress.Status.LoadBalancer.Ingress, lb) {
 				continue
 			}

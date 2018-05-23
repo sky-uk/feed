@@ -13,8 +13,8 @@ func StatusUnchanged(existing, new []v1.LoadBalancerIngress) bool {
 		return false
 	}
 
-	sortLoadBalancerIngress(existing)
-
+	sortLoadBalancerStatus(existing)
+	sortLoadBalancerStatus(new)
 	for i, loadbalancer := range existing {
 		if loadbalancer != new[i] {
 			return false
@@ -24,9 +24,9 @@ func StatusUnchanged(existing, new []v1.LoadBalancerIngress) bool {
 	return true
 }
 
-// SliceToStatus to convert a slice of strings to ingress loadbalancer objects.
+// GenerateLoadBalancerStatus to convert a slice of strings to ingress loadbalancer objects.
 // Allows hostnames or ip addresses and sets the appropriate field.
-func SliceToStatus(endpoints []string) []v1.LoadBalancerIngress {
+func GenerateLoadBalancerStatus(endpoints []string) []v1.LoadBalancerIngress {
 	lbi := []v1.LoadBalancerIngress{}
 	for _, ep := range endpoints {
 		if net.ParseIP(ep) != nil {
@@ -36,12 +36,10 @@ func SliceToStatus(endpoints []string) []v1.LoadBalancerIngress {
 		}
 	}
 
-	sortLoadBalancerIngress(lbi)
-
 	return lbi
 }
 
-func sortLoadBalancerIngress(lbi []v1.LoadBalancerIngress) {
+func sortLoadBalancerStatus(lbi []v1.LoadBalancerIngress) {
 	sort.SliceStable(lbi, func(i, j int) bool {
 		if lbi[i].IP < lbi[j].IP {
 			return true
