@@ -43,7 +43,7 @@ type status struct {
 	awsElb           elb.ELB
 	labelValue       string
 	kubernetesClient k8s.Client
-	loadbalancers    map[string]elb.LoadBalancerDetails
+	loadBalancers    map[string]elb.LoadBalancerDetails
 }
 
 // Start discovers the elbs
@@ -52,7 +52,7 @@ func (s *status) Start() error {
 	if err != nil {
 		return err
 	}
-	s.loadbalancers = clusterFrontEnds
+	s.loadBalancers = clusterFrontEnds
 	return nil
 }
 
@@ -67,7 +67,7 @@ func (s *status) Health() error {
 func (s *status) Update(ingresses controller.IngressEntries) error {
 	var updateFailed bool
 	for _, ingress := range ingresses {
-		if lb, ok := s.loadbalancers[ingress.ELbScheme]; ok {
+		if lb, ok := s.loadBalancers[ingress.ELbScheme]; ok {
 			newStatus := util.GenerateLoadBalancerStatus([]string{lb.DNSName})
 
 			if util.StatusUnchanged(ingress.Ingress.Status.LoadBalancer.Ingress, newStatus) {
