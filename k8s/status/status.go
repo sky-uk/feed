@@ -30,7 +30,7 @@ func GenerateLoadBalancerStatus(endpoints []string) v1.LoadBalancerStatus {
 func Update(ingresses controller.IngressEntries, lbs map[string]v1.LoadBalancerStatus, k8sClient k8s.Client) error {
 	var failedIngresses []string
 	for _, ingress := range ingresses {
-		if lb, ok := lbs[ingress.ELbScheme]; ok {
+		if lb, ok := lbs[ingress.LbScheme]; ok {
 			if statusUnchanged(ingress.Ingress.Status.LoadBalancer.Ingress, lb.Ingress) {
 				return nil
 			}

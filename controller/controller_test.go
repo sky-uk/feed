@@ -376,7 +376,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Path:           ingressPath,
 				ServiceAddress: serviceIP,
 				ServicePort:    ingressSvcPort,
-				ELbScheme:      "internal",
+				LbScheme:       "internal",
 				Allow:          []string{},
 				BackendTimeoutSeconds: backendTimeout,
 			}},
@@ -392,7 +392,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Path:                  ingressPath,
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
-				ELbScheme:             "internal",
+				LbScheme:              "internal",
 				Allow:                 []string{},
 				StripPaths:            true,
 				BackendTimeoutSeconds: backendTimeout,
@@ -409,7 +409,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Path:                  ingressPath,
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
-				ELbScheme:             "internal",
+				LbScheme:              "internal",
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: backendTimeout,
@@ -426,7 +426,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Path:                  ingressPath,
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
-				ELbScheme:             "internal",
+				LbScheme:              "internal",
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: 20,
@@ -443,7 +443,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Path:                  ingressPath,
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
-				ELbScheme:             "internal",
+				LbScheme:              "internal",
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: backendTimeout,
@@ -460,7 +460,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Path:                  ingressPath,
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
-				ELbScheme:             "internal",
+				LbScheme:              "internal",
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: 20,
@@ -478,7 +478,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				Path:                  ingressPath,
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
-				ELbScheme:             "internal",
+				LbScheme:              "internal",
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: 20,
@@ -544,7 +544,7 @@ func createLbEntriesFixture() IngressEntries {
 		ServiceAddress:        serviceIP,
 		ServicePort:           ingressSvcPort,
 		Allow:                 strings.Split(ingressAllow, ","),
-		ELbScheme:             elbScheme,
+		LbScheme:              lbScheme,
 		BackendTimeoutSeconds: backendTimeout,
 	}}
 }
@@ -559,7 +559,7 @@ const (
 	ingressAllow          = "10.82.0.0/16,10.44.0.0/16"
 	ingressDefaultAllow   = "10.50.0.0/16,10.1.0.0/16"
 	serviceIP             = "10.254.0.82"
-	elbScheme             = "internal"
+	lbScheme              = "internal"
 	stripPath             = "MISSING"
 	backendTimeout        = 10
 	defaultMaxConnections = 0
@@ -587,7 +587,7 @@ func createIngressesFixture(host string, serviceName string, servicePort int, al
 	annotations := make(map[string]string)
 	if allow != "MISSING" {
 		annotations[ingressAllowAnnotation] = allow
-		annotations[schemeAnnotationKey] = elbScheme
+		annotations[schemeAnnotationKey] = lbScheme
 	}
 	if stripPath != "MISSING" {
 		annotations[stripPathAnnotation] = stripPath
