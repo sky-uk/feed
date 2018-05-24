@@ -9,7 +9,6 @@ import (
 
 	"fmt"
 
-	"errors"
 	"strconv"
 	"strings"
 
@@ -35,8 +34,6 @@ var (
 	ingressHTTPSPort               int
 	ingressHealthPort              int
 	healthPort                     int
-	internalHostname               string
-	externalHostname               string
 	region                         string
 	elbLabelValue                  string
 	elbExpectedNumber              int
@@ -77,6 +74,7 @@ var (
 	merlinHealthTimeout            time.Duration
 	merlinVIP                      string
 	merlinVIPInterface             string
+	merlinInternetFacingVIP        string
 )
 
 const (
@@ -156,10 +154,6 @@ func init() {
 			"Can be overridden with the sky.uk/strip-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
-	flag.StringVar(&internalHostname, "internal-hostname", "",
-		"Hostname of the internal facing load-balancer. If specified, external-hostname must also be given.")
-	flag.StringVar(&externalHostname, "external-hostname", "",
-		"Hostname of the internet facing load-balancer. If specified, internal-hostname must also be given.")
 
 	// nginx flags
 	flag.StringVar(&nginxConfig.BinaryLocation, "nginx-binary", defaultNginxBinary,
@@ -285,6 +279,7 @@ func init() {
 	flag.StringVar(&merlinVIP, "merlin-vip", "", "VIP to assign to loopback to support direct route and tunnel.")
 	flag.StringVar(&merlinVIPInterface, "merlin-vip-interface", defaultMerlinVIPInterface,
 		"VIP interface to assign the VIP.")
+	flag.StringVar(&merlinInternetFacingVIP, "merlin-internet-facing-vip", "", "VIP to assign internet facing DNS.")
 }
 
 func main() {
@@ -299,7 +294,7 @@ func main() {
 	}
 	controllerConfig.KubernetesClient = client
 
-	controllerConfig.Updaters, err = createIngressUpdaters()
+	controllerConfig.Updaters, err = createIngressUpdaters(client)
 	if err != nil {
 		log.Fatal("Unable to create ingress updaters: ", err)
 	}
@@ -323,7 +318,7 @@ func main() {
 	select {}
 }
 
-func createIngressUpdaters() ([]controller.Updater, error) {
+func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, error) {
 	nginxConfig.Ports = []nginx.Port{{Name: "http", Port: ingressPort}}
 	if ingressHTTPSPort != unset {
 		nginxConfig.Ports = append(nginxConfig.Ports, nginx.Port{Name: "https", Port: ingressHTTPSPort})
@@ -350,7 +345,7 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		statusConfig := elb_status.Config{
 			Region:           region,
 			LabelValue:       elbLabelValue,
-			KubernetesClient: controllerConfig.KubernetesClient,
+			KubernetesClient: kubernetesClient,
 		}
 		elbStatusUpdater, err := elb_status.New(statusConfig)
 		if err != nil {
@@ -395,11 +390,6 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		updaters = append(updaters, gorbUpdater)
 
 	case "merlin":
-		if internalHostname == "" || externalHostname == "" {
-			return updaters, errors.New("Unable to update ingress for Merlin frontends. Requires both " +
-				"'internal-hostname' and 'external-hostname' flags.")
-		}
-
 		config := merlin.Config{
 			Endpoint:          merlinEndpoint,
 			Timeout:           merlinRequestTimeout,
@@ -427,9 +417,9 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		updaters = append(updaters, merlinUpdater)
 
 		statusConfig := merlin_status.Config{
-			InternalHostname: internalHostname,
-			ExternalHostname: externalHostname,
-			KubernetesClient: controllerConfig.KubernetesClient,
+			InternalVIP:       merlinVIP,
+			InternetFacingVIP: merlinInternetFacingVIP,
+			KubernetesClient:  kubernetesClient,
 		}
 		merlinStatusUpdater, err := merlin_status.New(statusConfig)
 		if err != nil {
