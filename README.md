@@ -89,6 +89,26 @@ securityContext:
 
 See the [example ingress for gorb](examples/feed-ingress-deployment-gorb.yml)
 
+### Ingress status
+
+When using either the [elb](#elb) or [Merlin](#merlin) updater, the ingress status will be updated with relevant
+loadbalancer information. This can then be used with other controllers such a `external-dns` which can set DNS for any
+given ingress using the ingress status.
+
+#### elb
+
+feed will automatically discover all of your elb's and then use the `sky.uk/frontend-scheme` annotation to match an elb
+label to an ingress. The updater will then set the ingress status to the elb's DNS name. 
+
+#### Merlin
+
+The Merlin updater is currently unable to auto-discover all hosted vips (virtual ip addresses) on a Merlin server;
+instead the status updater supports two different loadbalancer types: `internal` and `internet-facing`. These two vips
+are set using the `merlin-vip` and `merlin-internet-facing-vip` flags respectively.
+
+An ingress can select which loadbalancer it wants to be associated with by setting the `sky.uk/frontend-scheme`
+annotation to either `internal` or `internet-facing`.
+
 ### Running feed-ingress on privileged ports
 
 feed-ingress can be run on privileged ports by defining  the `NET_BIND_SERVICE` Linux capability.
