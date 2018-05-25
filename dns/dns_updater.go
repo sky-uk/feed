@@ -164,8 +164,8 @@ func (u *updater) indexByHost(entries []controller.IngressEntry) (hostToIngress,
 		}
 
 		if previous, exists := mapping[hostNameWithPeriod]; exists {
-			if previous.ELbScheme != entry.ELbScheme {
-				skipped = append(skipped, entry.NamespaceName()+":conflicting-scheme:"+entry.ELbScheme)
+			if previous.LbScheme != entry.LbScheme {
+				skipped = append(skipped, entry.NamespaceName()+":conflicting-scheme:"+entry.LbScheme)
 				skippedCount.Inc()
 			}
 		} else {
@@ -188,9 +188,9 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 
 	var skipped []string
 	for host, entry := range hostToIngress {
-		dnsDetails, exists := u.schemeToFrontendMap[entry.ELbScheme]
+		dnsDetails, exists := u.schemeToFrontendMap[entry.LbScheme]
 		if !exists {
-			skipped = append(skipped, entry.NamespaceName()+":scheme:"+entry.ELbScheme)
+			skipped = append(skipped, entry.NamespaceName()+":scheme:"+entry.LbScheme)
 			skippedCount.Inc()
 			continue
 		}

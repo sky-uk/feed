@@ -117,6 +117,9 @@ spec:
         # Interface to bind virtual IP to.
         - -merlin-vip-interface=lo
 
+        # Internet facing Virtual IP.
+        - -merlin-internet-facing-vip=1.0.0.0
+
         # Each worker uses a full cpu, so scale up vertically on a box by increasing this value.
         - -nginx-workers=1
 

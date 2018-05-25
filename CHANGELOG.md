@@ -1,3 +1,7 @@
+# v1.10.0
+* Added `k8s/status` library for setting ingress status
+* ELB and Merlin updaters set relevant ingress status
+
 # v1.9.3
 * Attach to https in addition to http for merlin.
 * Fix merlin deregistration, which was failing due to long lived connections getting killed.

@@ -16,9 +16,11 @@ import (
 	"github.com/sky-uk/feed/alb"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
+	elb_status "github.com/sky-uk/feed/elb/status"
 	"github.com/sky-uk/feed/gorb"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/merlin"
+	merlin_status "github.com/sky-uk/feed/merlin/status"
 	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
@@ -72,6 +74,7 @@ var (
 	merlinHealthTimeout            time.Duration
 	merlinVIP                      string
 	merlinVIPInterface             string
+	merlinInternetFacingVIP        string
 )
 
 const (
@@ -276,6 +279,7 @@ func init() {
 	flag.StringVar(&merlinVIP, "merlin-vip", "", "VIP to assign to loopback to support direct route and tunnel.")
 	flag.StringVar(&merlinVIPInterface, "merlin-vip-interface", defaultMerlinVIPInterface,
 		"VIP interface to assign the VIP.")
+	flag.StringVar(&merlinInternetFacingVIP, "merlin-internet-facing-vip", "", "VIP to assign internet facing DNS.")
 }
 
 func main() {
@@ -290,7 +294,7 @@ func main() {
 	}
 	controllerConfig.KubernetesClient = client
 
-	controllerConfig.Updaters, err = createIngressUpdaters()
+	controllerConfig.Updaters, err = createIngressUpdaters(client)
 	if err != nil {
 		log.Fatal("Unable to create ingress updaters: ", err)
 	}
@@ -314,7 +318,7 @@ func main() {
 	select {}
 }
 
-func createIngressUpdaters() ([]controller.Updater, error) {
+func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, error) {
 	nginxConfig.Ports = []nginx.Port{{Name: "http", Port: ingressPort}}
 	if ingressHTTPSPort != unset {
 		nginxConfig.Ports = append(nginxConfig.Ports, nginx.Port{Name: "https", Port: ingressHTTPSPort})
@@ -337,6 +341,17 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 			return updaters, err
 		}
 		updaters = append(updaters, elbUpdater)
+
+		statusConfig := elb_status.Config{
+			Region:           region,
+			LabelValue:       elbLabelValue,
+			KubernetesClient: kubernetesClient,
+		}
+		elbStatusUpdater, err := elb_status.New(statusConfig)
+		if err != nil {
+			return updaters, err
+		}
+		updaters = append(updaters, elbStatusUpdater)
 
 	case "alb":
 		albUpdater, err := alb.New(region, targetGroupNames, targetGroupDeregistrationDelay)
@@ -401,8 +416,20 @@ func createIngressUpdaters() ([]controller.Updater, error) {
 		}
 		updaters = append(updaters, merlinUpdater)
 
+		statusConfig := merlin_status.Config{
+			InternalVIP:       merlinVIP,
+			InternetFacingVIP: merlinInternetFacingVIP,
+			KubernetesClient:  kubernetesClient,
+		}
+		merlinStatusUpdater, err := merlin_status.New(statusConfig)
+		if err != nil {
+			return updaters, err
+		}
+		updaters = append(updaters, merlinStatusUpdater)
+
 	default:
-		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb but was %s", registrationFrontendType)
+		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb, merlin but"+
+			"was %s", registrationFrontendType)
 	}
 
 	return updaters, nil

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 // IngressEntries type
@@ -26,8 +28,8 @@ type IngressEntry struct {
 	ServicePort int32
 	// Allow are the ips or cidrs that are allowed to access the service.
 	Allow []string
-	// ElbScheme internet-facing or internal will dictate which kind of ELB to attach to
-	ELbScheme string
+	// LbScheme internet-facing or internal will dictate which kind of load balancer to attach to.
+	LbScheme string
 	// StripPaths before forwarding to the backend
 	StripPaths bool
 	// BackendTimeoutSeconds backend timeout
@@ -36,6 +38,8 @@ type IngressEntry struct {
 	BackendMaxConnections int
 	// Ingress creation time
 	CreationTimestamp time.Time
+	// Ingress resource
+	Ingress *v1beta1.Ingress
 }
 
 // validate returns error if entry has invalid fields.

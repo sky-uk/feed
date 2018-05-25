@@ -176,14 +176,15 @@ func (c *controller) updateIngresses() error {
 						BackendTimeoutSeconds: c.defaultBackendTimeout,
 						BackendMaxConnections: c.defaultBackendMaxConnections,
 						CreationTimestamp:     ingress.CreationTimestamp.Time,
+						Ingress:               ingress,
 					}
 
 					log.Debugf("Found ingress to update: %s", ingress.Name)
 
-					if elbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
-						entry.ELbScheme = elbScheme
+					if lbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
+						entry.LbScheme = lbScheme
 					} else {
-						entry.ELbScheme = ingress.Annotations[frontendElbSchemeAnnotation]
+						entry.LbScheme = ingress.Annotations[frontendElbSchemeAnnotation]
 					}
 
 					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
