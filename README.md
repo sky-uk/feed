@@ -102,9 +102,9 @@ label to an ingress. The updater will then set the ingress status to the elb's D
 
 #### Merlin
 
-The Merlin updater is currently unable to auto-discover all hosted vips (virtual ip addresses) on a Merlin server;
-instead the status updater supports two different loadbalancer types: `internal` and `internet-facing`. These two vips
-are set using the `merlin-vip` and `merlin-internet-facing-vip` flags respectively.
+The Merlin updater is currently unable to auto-discover all hosted loadbalancers on a Merlin server; instead the status
+updater supports two different types: `internal` and `internet-facing`. These two loadbalancers are set using the
+`merlin-internal-hostname` and `merlin-internet-facing-hostname` flags respectively.
 
 An ingress can select which loadbalancer it wants to be associated with by setting the `sky.uk/frontend-scheme`
 annotation to either `internal` or `internet-facing`.
