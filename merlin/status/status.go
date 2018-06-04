@@ -18,17 +18,17 @@ const (
 
 // Config for creating a new Merlin status updater.
 type Config struct {
-	InternalVIP       string
-	InternetFacingVIP string
-	KubernetesClient  k8s.Client
+	InternalHostname       string
+	InternetFacingHostname string
+	KubernetesClient       k8s.Client
 }
 
 // New creates a new Merlin frontend status updater.
 func New(conf Config) (controller.Updater, error) {
 	return &status{
-		vips: map[string]string{
-			internalLabelValue:       conf.InternalVIP,
-			internetFacingLabelValue: conf.InternetFacingVIP,
+		cnames: map[string]string{
+			internalLabelValue:       conf.InternalHostname,
+			internetFacingLabelValue: conf.InternetFacingHostname,
 		},
 		loadBalancers:    make(map[string]v1.LoadBalancerStatus),
 		kubernetesClient: conf.KubernetesClient,
@@ -36,16 +36,16 @@ func New(conf Config) (controller.Updater, error) {
 }
 
 type status struct {
-	vips             map[string]string
+	cnames           map[string]string
 	loadBalancers    map[string]v1.LoadBalancerStatus
 	kubernetesClient k8s.Client
 }
 
 // Start generates loadBalancer statuses from valid vips.
 func (s *status) Start() error {
-	for lbLabel, vip := range s.vips {
-		if vip != "" {
-			s.loadBalancers[lbLabel] = k8s_status.GenerateLoadBalancerStatus([]string{vip})
+	for lbLabel, cname := range s.cnames {
+		if cname != "" {
+			s.loadBalancers[lbLabel] = k8s_status.GenerateLoadBalancerStatus([]string{cname})
 		}
 	}
 	return nil
