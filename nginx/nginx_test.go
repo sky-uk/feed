@@ -924,7 +924,6 @@ func TestServiceAddressAsNoneOrEmptyShouldNotHaveUpstreamEntries(t *testing.T) {
 	assert.NoError(err)
 	configContents := string(config)
 
-
 	assertConfigEntries(t, t.Name(), "upstream", `(?sU)(    upstream.+\n    })`, nil, configContents)
 
 	if t.Failed() {

@@ -402,7 +402,7 @@ func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 	idToUpstream := make(map[string]*upstream)
 
 	for _, ingressEntry := range entries {
-		if validUpstreamEntry(ingressEntry)  {
+		if validUpstreamEntry(ingressEntry) {
 			upstream := &upstream{
 				ID:             upstreamID(ingressEntry),
 				Server:         fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
@@ -421,8 +421,8 @@ func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 	return sortedUpstreams
 }
 
-func validUpstreamEntry (e controller.IngressEntry) bool {
-	return 	e.ServiceAddress != "None" && e.ServiceAddress != ""
+func validUpstreamEntry(e controller.IngressEntry) bool {
+	return e.ServiceAddress != "None" && e.ServiceAddress != ""
 }
 
 func upstreamID(e controller.IngressEntry) string {
