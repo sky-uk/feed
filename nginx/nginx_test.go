@@ -889,6 +889,49 @@ func TestNginxIngressEntries(t *testing.T) {
 	}
 }
 
+func TestServiceAddressAsNoneOrEmptyShouldNotHaveUpstreamEntries(t *testing.T) {
+
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	defaultConf := newConf(tmpDir, fakeNginx)
+	lb := newNginxWithConf(defaultConf)
+
+	assert.NoError(lb.Start())
+	entries := []controller.IngressEntry{
+		{
+			Host:           "nonehost.com",
+			Namespace:      "core",
+			Name:           "02chris-ingress",
+			Path:           "/my-path",
+			ServiceAddress: "None",
+			ServicePort:    9090,
+		},
+		{
+			Host:           "emptyhost.com",
+			Namespace:      "core",
+			Name:           "02chris-ingress",
+			Path:           "/my-path",
+			ServiceAddress: "",
+			ServicePort:    9090,
+		},
+	}
+	err := lb.Update(entries)
+	assert.NoError(err)
+
+	config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+	assert.NoError(err)
+	configContents := string(config)
+
+
+	assertConfigEntries(t, t.Name(), "upstream", `(?sU)(    upstream.+\n    })`, nil, configContents)
+
+	if t.Failed() {
+		t.FailNow()
+	}
+}
+
 func assertConfigEntries(t *testing.T, testName, entryName, entryRegex string, expectedEntries []string, configContents string) {
 	r := regexp.MustCompile(entryRegex)
 

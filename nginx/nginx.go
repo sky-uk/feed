@@ -402,12 +402,14 @@ func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 	idToUpstream := make(map[string]*upstream)
 
 	for _, ingressEntry := range entries {
-		upstream := &upstream{
-			ID:             upstreamID(ingressEntry),
-			Server:         fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
-			MaxConnections: ingressEntry.BackendMaxConnections,
+		if validUpstreamEntry(ingressEntry)  {
+			upstream := &upstream{
+				ID:             upstreamID(ingressEntry),
+				Server:         fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
+				MaxConnections: ingressEntry.BackendMaxConnections,
+			}
+			idToUpstream[upstream.ID] = upstream
 		}
-		idToUpstream[upstream.ID] = upstream
 	}
 
 	var sortedUpstreams []*upstream
@@ -417,6 +419,10 @@ func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 
 	sort.Sort(upstreams(sortedUpstreams))
 	return sortedUpstreams
+}
+
+func validUpstreamEntry (e controller.IngressEntry) bool {
+	return 	e.ServiceAddress != "None" && e.ServiceAddress != ""
 }
 
 func upstreamID(e controller.IngressEntry) string {
