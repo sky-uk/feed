@@ -1,5 +1,7 @@
 .idea
 *.iml
 *.swp
+*.ipr
+*.iws
 build
 vendor

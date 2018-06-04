@@ -351,6 +351,12 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			nil,
 		},
 		{
+			"ingress with 'None' as service IP",
+			createDefaultIngresses(),
+			createServiceFixture(ingressSvcName, ingressNamespace, "None"),
+			nil,
+		},
+		{
 			"ingress with default allow",
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, "MISSING", stripPath, backendTimeout, frontendElbSchemeAnnotation, defaultMaxConnections),
 			createDefaultServices(),
