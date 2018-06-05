@@ -51,7 +51,7 @@ func (e IngressEntry) validate() error {
 		return errors.New("missing service address")
 	}
 	if e.ServiceAddress == "None" {
-		return errors.New("missing service address")
+		return errors.New("Service address is set to 'None' ignoring entry")
 	}
 	if e.ServicePort == 0 {
 		return errors.New("missing service port")
