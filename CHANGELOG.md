@@ -1,3 +1,8 @@
+# v1.10.1
+* Added `merlin-internal-hostname` and `merlin-internet-facing-hostname` flags for setting Merlin ingress status,
+replacing the `merlin-internet-facing-vip` flag
+* Included extra testing around ingress validation
+
 # v1.10.0
 * Added `k8s/status` library for setting ingress status
 * ELB and Merlin updaters set relevant ingress status

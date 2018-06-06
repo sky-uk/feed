@@ -224,7 +224,7 @@ func TestUpdateFails(t *testing.T) {
 	err := Update(ingresses, lbs, client)
 
 	assert.Error(err)
-	assert.EqualError(err, "Failed to update ingresses: [test]")
+	assert.EqualError(err, "failed to update ingresses: [test]")
 }
 
 func TestUpdateDoesNotRunWithNoChange(t *testing.T) {

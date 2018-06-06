@@ -74,7 +74,8 @@ var (
 	merlinHealthTimeout            time.Duration
 	merlinVIP                      string
 	merlinVIPInterface             string
-	merlinInternetFacingVIP        string
+	merlinInternalHostname         string
+	merlinInternetFacingHostname   string
 )
 
 const (
@@ -279,7 +280,10 @@ func init() {
 	flag.StringVar(&merlinVIP, "merlin-vip", "", "VIP to assign to loopback to support direct route and tunnel.")
 	flag.StringVar(&merlinVIPInterface, "merlin-vip-interface", defaultMerlinVIPInterface,
 		"VIP interface to assign the VIP.")
-	flag.StringVar(&merlinInternetFacingVIP, "merlin-internet-facing-vip", "", "VIP to assign internet facing DNS.")
+	flag.StringVar(&merlinInternalHostname, "merlin-internal-hostname", "",
+		"Hostname of the internal facing load-balancer.")
+	flag.StringVar(&merlinInternetFacingHostname, "merlin-internet-facing-hostname", "",
+		"Hostname of the internet facing load-balancer")
 }
 
 func main() {
@@ -416,16 +420,18 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 		}
 		updaters = append(updaters, merlinUpdater)
 
-		statusConfig := merlin_status.Config{
-			InternalVIP:       merlinVIP,
-			InternetFacingVIP: merlinInternetFacingVIP,
-			KubernetesClient:  kubernetesClient,
+		if merlinInternalHostname != "" || merlinInternetFacingHostname != "" {
+			statusConfig := merlin_status.Config{
+				InternalHostname:       merlinInternalHostname,
+				InternetFacingHostname: merlinInternetFacingHostname,
+				KubernetesClient:       kubernetesClient,
+			}
+			merlinStatusUpdater, err := merlin_status.New(statusConfig)
+			if err != nil {
+				return updaters, err
+			}
+			updaters = append(updaters, merlinStatusUpdater)
 		}
-		merlinStatusUpdater, err := merlin_status.New(statusConfig)
-		if err != nil {
-			return updaters, err
-		}
-		updaters = append(updaters, merlinStatusUpdater)
 
 	default:
 		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb, merlin but"+
