@@ -32,7 +32,7 @@ func Update(ingresses controller.IngressEntries, lbs map[string]v1.LoadBalancerS
 	for _, ingress := range ingresses {
 		if lb, ok := lbs[ingress.LbScheme]; ok {
 			if statusUnchanged(ingress.Ingress.Status.LoadBalancer.Ingress, lb.Ingress) {
-				return nil
+				continue
 			}
 
 			ingress.Ingress.Status.LoadBalancer.Ingress = lb.Ingress

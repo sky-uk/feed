@@ -1,3 +1,6 @@
+# v1.10.2
+* Bug fix for k8s/status updater where feed would exit the update loop if any ingress was 'unchanged'
+
 # v1.10.1
 * Added `merlin-internal-hostname` and `merlin-internet-facing-hostname` flags for setting Merlin ingress status,
 replacing the `merlin-internet-facing-vip` flag
