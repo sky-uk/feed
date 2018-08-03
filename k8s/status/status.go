@@ -6,6 +6,7 @@ import (
 
 	"fmt"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/k8s"
 	"k8s.io/client-go/pkg/api/v1"
@@ -28,23 +29,22 @@ func GenerateLoadBalancerStatus(endpoints []string) v1.LoadBalancerStatus {
 
 // Update ingresses with current status where unchanged statuses are ignored.
 func Update(ingresses controller.IngressEntries, lbs map[string]v1.LoadBalancerStatus, k8sClient k8s.Client) error {
-	var failedIngresses []string
+	var err error
 	for _, ingress := range ingresses {
 		if lb, ok := lbs[ingress.LbScheme]; ok {
 			if statusUnchanged(ingress.Ingress.Status.LoadBalancer.Ingress, lb.Ingress) {
 				continue
 			}
-
 			ingress.Ingress.Status.LoadBalancer.Ingress = lb.Ingress
 
-			if err := k8sClient.UpdateIngressStatus(ingress.Ingress); err != nil {
-				failedIngresses = append(failedIngresses, ingress.Name)
+			if ingressErr := k8sClient.UpdateIngressStatus(ingress.Ingress); ingressErr != nil {
+				err = multierror.Append(err, ingressErr)
 			}
 		}
 	}
 
-	if len(failedIngresses) > 0 {
-		return fmt.Errorf("failed to update ingresses: %s", failedIngresses)
+	if err != nil {
+		return fmt.Errorf("failed to update ingresses: %v", err)
 	}
 	return nil
 }
