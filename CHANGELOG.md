@@ -1,3 +1,6 @@
+# v1.10.3
+* Expose status updater error logs rather than printing a list of failed ingresses
+
 # v1.10.2
 * Bug fix for k8s/status updater where feed would exit the update loop if any ingress was 'unchanged'
 

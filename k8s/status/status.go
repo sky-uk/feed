@@ -28,23 +28,22 @@ func GenerateLoadBalancerStatus(endpoints []string) v1.LoadBalancerStatus {
 
 // Update ingresses with current status where unchanged statuses are ignored.
 func Update(ingresses controller.IngressEntries, lbs map[string]v1.LoadBalancerStatus, k8sClient k8s.Client) error {
-	var failedIngresses []string
+	var updateErrors []error
 	for _, ingress := range ingresses {
 		if lb, ok := lbs[ingress.LbScheme]; ok {
 			if statusUnchanged(ingress.Ingress.Status.LoadBalancer.Ingress, lb.Ingress) {
 				continue
 			}
-
 			ingress.Ingress.Status.LoadBalancer.Ingress = lb.Ingress
 
 			if err := k8sClient.UpdateIngressStatus(ingress.Ingress); err != nil {
-				failedIngresses = append(failedIngresses, ingress.Name)
+				updateErrors = append(updateErrors, err)
 			}
 		}
 	}
 
-	if len(failedIngresses) > 0 {
-		return fmt.Errorf("failed to update ingresses: %s", failedIngresses)
+	if totalErrors := len(updateErrors); totalErrors > 0 {
+		return fmt.Errorf("failed to update %d ingresses: %v", totalErrors, updateErrors)
 	}
 	return nil
 }
