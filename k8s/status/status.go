@@ -43,7 +43,7 @@ func Update(ingresses controller.IngressEntries, lbs map[string]v1.LoadBalancerS
 	}
 
 	if totalErrors := len(updateErrors); totalErrors > 0 {
-		return fmt.Errorf("failed to update %v ingresses: %v", totalErrors, updateErrors)
+		return fmt.Errorf("failed to update %d ingresses: %v", totalErrors, updateErrors)
 	}
 	return nil
 }
