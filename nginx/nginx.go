@@ -59,6 +59,8 @@ type Conf struct {
 	UpdatePeriod                 time.Duration
 	SSLPath                      string
 	VhostStatsSharedMemory       int
+	OpenTracingPlugin            string
+	OpenTracingConfig            string
 }
 
 type nginx struct {

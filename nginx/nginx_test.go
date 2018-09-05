@@ -46,6 +46,8 @@ func newConf(tmpDir string, binary string) Conf {
 		ServerNamesHashBucketSize:    -1,
 		UpdatePeriod:                 time.Second,
 		VhostStatsSharedMemory:       1,
+		OpenTracingPlugin:            "",
+		OpenTracingConfig:            "",
 	}
 }
 
@@ -213,6 +215,10 @@ func TestNginxConfig(t *testing.T) {
 	logHeadersConf := defaultConf
 	logHeadersConf.LogHeaders = []string{"Content-Type", "Authorization"}
 
+	opentracingConf := defaultConf
+	opentracingConf.OpenTracingPlugin = "/my/plugin.so"
+	opentracingConf.OpenTracingConfig = "/etc/my/config.json"
+
 	var tests = []struct {
 		name             string
 		conf             Conf
@@ -327,6 +333,20 @@ func TestNginxConfig(t *testing.T) {
 				"vhost_traffic_status_zone shared:vhost_traffic_status:1m",
 			},
 		},
+		{
+			"OpenTracing is enabled",
+			opentracingConf,
+			[]string{
+				"opentracing on;",
+			},
+		},
+		{
+			"OpenTracing loads the vendor tracer",
+			opentracingConf,
+			[]string{
+				"opentracing_load_tracer /my/plugin.so /etc/my/config.json;",
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -362,6 +382,10 @@ func TestNginxIngressEntries(t *testing.T) {
 
 	sslEndpointConf := defaultConf
 	sslEndpointConf.Ports = []Port{{Name: "https", Port: 443}}
+
+	opentracingConf := defaultConf
+	opentracingConf.OpenTracingPlugin = "/my/plugin.so"
+	opentracingConf.OpenTracingConfig = "/etc/my/config.json"
 
 	var tests = []struct {
 		name            string
@@ -857,6 +881,60 @@ func TestNginxIngressEntries(t *testing.T) {
 			nil,
 			[]string{
 				"ssl_protocols TLSv1.2;",
+			},
+		},
+		{
+			"OpenTracing propagated the context",
+			opentracingConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Namespace:      "core",
+					Name:           "chris-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+			},
+			nil,
+			[]string{
+				"opentracing_propagate_context;",
+			},
+		},
+		{
+			"OpenTracing sets the operation name with path",
+			opentracingConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Namespace:      "core",
+					Name:           "chris-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+			},
+			nil,
+			[]string{
+				"opentracing_operation_name '$server_name /path/';",
+			},
+		},
+		{
+			"OpenTracing sets the operation name without path",
+			opentracingConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris.com",
+					Namespace:      "core",
+					Name:           "chris-ingress",
+					Path:           "",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+				},
+			},
+			nil,
+			[]string{
+				"opentracing_operation_name '$server_name /';",
 			},
 		},
 	}

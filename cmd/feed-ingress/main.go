@@ -49,6 +49,8 @@ var (
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
 	nginxSSLPath                   string
 	nginxVhostStatsSharedMemory    int
+	nginxOpenTracingPlugin         string
+	nginxOpenTracingConfig         string
 	legacyBackendKeepaliveSeconds  int
 	registrationFrontendType       string
 	gorbIngressInstanceIP          string
@@ -103,6 +105,8 @@ const (
 	defaultNginxUpdatePeriod                 = time.Second * 30
 	defaultNginxSSLPath                      = "/etc/ssl/default-ssl/default-ssl"
 	defaultNginxVhostStatsSharedMemory       = 1
+	defaultNginxOpenTracingPlugin            = ""
+	defaultNginxOpenTracingConfig            = ""
 	defaultElbLabelValue                     = ""
 	defaultDrainDelay                        = time.Second * 60
 	defaultTargetGroupDeregistrationDelay    = time.Second * 300
@@ -207,6 +211,10 @@ func init() {
 		"Set default ssl path + name file without extension.  Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key).")
 	flag.IntVar(&nginxVhostStatsSharedMemory, "nginx-vhost-stats-shared-memory", defaultNginxVhostStatsSharedMemory,
 		"Memory (in MiB) which should be allocated for use by the vhost statistics module")
+	flag.StringVar(&nginxOpenTracingPlugin, "nginx-opentracing-plugin", defaultNginxOpenTracingPlugin,
+		"Path to OpenTracing plugin on disk (eg. /usr/local/lib/libjaegertracing_plugin.so)")
+	flag.StringVar(&nginxOpenTracingConfig, "nginx-opentracing-config", defaultNginxOpenTracingConfig,
+		"Path to OpenTracing config on disk (eg. /etc/jaeger-nginx-config.json)")
 
 	// elb/alb flags
 	flag.StringVar(&region, "region", defaultRegion,
@@ -333,6 +341,8 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
 	nginxConfig.VhostStatsSharedMemory = nginxVhostStatsSharedMemory
+	nginxConfig.OpenTracingPlugin = nginxOpenTracingPlugin
+	nginxConfig.OpenTracingConfig = nginxOpenTracingConfig
 	nginxUpdater := nginx.New(nginxConfig)
 
 	updaters := []controller.Updater{nginxUpdater}

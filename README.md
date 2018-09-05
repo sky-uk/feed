@@ -89,6 +89,21 @@ securityContext:
 
 See the [example ingress for gorb](examples/feed-ingress-deployment-gorb.yml)
 
+### OpenTracing
+
+The build now includes support for OpenTracing, and the default Docker image includes the Jaeger tracing vendor
+implementation.
+
+To enable OpenTracing, you will need to provide the following options:
+```
+ # Define the path to the OpenTracing vendor plugin
+ -nginx-opentracing-plugin=/usr/local/lib/libjaegertracing_plugin.linux_amd64.so
+ # Define the path to the config for the vendor plugin
+ -nginx-opentracing-config=/etc/jaeger-nginx-config.json
+```
+
+Note that the status and metrics endpoints will *not* have OpenTracing applied.
+
 ### Ingress status
 
 When using either the [elb](#elb) or [Merlin](#merlin) updater, the ingress status will be updated with relevant

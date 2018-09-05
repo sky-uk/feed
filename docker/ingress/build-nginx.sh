@@ -16,20 +16,24 @@ mkdir /tmp/nginx
 cd /tmp/nginx
 curl -O http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
 curl -JLO https://github.com/vozlt/nginx-module-vts/archive/v${VTS_VERSION}.tar.gz
+curl -JLO https://github.com/opentracing-contrib/nginx-opentracing/releases/download/v${OPENTRACING_VERSION}/linux-amd64-nginx-${NGINX_VERSION}-ngx_http_module.so.tgz
 
 nginx_tarball="nginx-${NGINX_VERSION}.tar.gz"
 vts_tarball="nginx-module-vts-${VTS_VERSION}.tar.gz"
+opentracing_tarball="linux-amd64-nginx-${NGINX_VERSION}-ngx_http_module.so.tgz"
 
 touch hashes
 echo "${NGINX_SHA256} ${nginx_tarball}" >> hashes
 echo "${VTS_SHA256} ${vts_tarball}" >> hashes
+echo "${OPENTRACING_SHA256} ${opentracing_tarball}" >> hashes
 if ! sha256sum -c hashes; then
     echo "sha256 hashes do not match downloaded files"
     exit 1
 fi
 
-tar xzf nginx-${NGINX_VERSION}.tar.gz
-tar xzf nginx-module-vts-${VTS_VERSION}.tar.gz
+tar xzf ${nginx_tarball}
+tar xzf ${vts_tarball}
+tar xzf ${opentracing_tarball}
 cd nginx-${NGINX_VERSION}
 
 echo "--- Configuring nginx"
@@ -61,6 +65,12 @@ echo "--- Configuring nginx"
 echo "--- Building nginx"
 make
 make install
+
+echo "--- Installing Jaeger"
+mkdir -p /nginx/modules/
+cp /tmp/nginx/ngx_http_opentracing_module.so /nginx/modules/ngx_http_opentracing_module.so
+cd /usr/local/lib
+curl -JLO https://github.com/jaegertracing/jaeger-client-cpp/releases/download/v${JAEGER_VERSION}/libjaegertracing_plugin.linux_amd64.so
 
 echo "--- Cleaning up"
 apt-get purge -y build-essential ca-certificates libc6-dev libpcre3-dev zlib1g-dev libaio-dev gcc-5
