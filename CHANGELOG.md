@@ -1,3 +1,6 @@
+# v1.11.0
+* Add OpenTracing support
+
 # v1.10.3
 * Expose status updater error logs rather than printing a list of failed ingresses
 
