@@ -71,6 +71,12 @@ mkdir -p /nginx/modules/
 cp /tmp/nginx/ngx_http_opentracing_module.so /nginx/modules/ngx_http_opentracing_module.so
 cd /usr/local/lib
 curl -JLO https://github.com/jaegertracing/jaeger-client-cpp/releases/download/v${JAEGER_VERSION}/libjaegertracing_plugin.linux_amd64.so
+echo "${JAEGER_SHA256}  libjaegertracing_plugin.linux_amd64.so" > hashes
+if ! sha256sum -c hashes; then
+    echo "sha256 hashes do not match downloaded files"
+    exit 1
+fi
+rm hashes
 
 echo "--- Cleaning up"
 apt-get purge -y build-essential ca-certificates libc6-dev libpcre3-dev zlib1g-dev libaio-dev gcc-5

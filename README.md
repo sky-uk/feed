@@ -97,9 +97,9 @@ implementation.
 To enable OpenTracing, you will need to provide the following options:
 ```
  # Define the path to the OpenTracing vendor plugin
- -nginx-opentracing-plugin=/usr/local/lib/libjaegertracing_plugin.linux_amd64.so
+ -nginx-opentracing-plugin-path=/usr/local/lib/libjaegertracing_plugin.linux_amd64.so
  # Define the path to the config for the vendor plugin
- -nginx-opentracing-config=/etc/jaeger-nginx-config.json
+ -nginx-opentracing-config-path=/etc/jaeger-nginx-config.json
 ```
 
 Note that the status and metrics endpoints will *not* have OpenTracing applied.
