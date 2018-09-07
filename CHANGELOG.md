@@ -1,3 +1,6 @@
+# v1.11.1
+* Manually compile OpenTracing modules to avoid binary incompatibilities
+
 # v1.11.0
 * Add OpenTracing support
 
