@@ -84,6 +84,7 @@ echo "--- Configuring nginx"
     --with-http_v2_module \
     --with-ipv6 \
     --with-debug \
+    --add-module=/tmp/nginx/nginx-module-vts-${VTS_VERSION}\
     --with-http_ssl_module
 
 echo "--- Building nginx"
@@ -92,11 +93,17 @@ make install
 
 echo "--- Building dynamic modules"
 ./configure \
-    --with-compat \
+    --with-http_realip_module \
+    --with-http_stub_status_module \
+    --with-threads \
+    --with-file-aio \
+    --with-http_v2_module \
+    --with-ipv6 \
+    --with-debug \
+    --with-http_ssl_module \
     --add-dynamic-module=/tmp/nginx/nginx-opentracing-${OPENTRACING_NGINX_VERSION}/opentracing \
     --with-cc-opt="-I$HUNTER_INSTALL_DIR/include" \
-    --with-ld-opt="-L$HUNTER_INSTALL_DIR/lib" \
-    --with-debug
+    --with-ld-opt="-L$HUNTER_INSTALL_DIR/lib"
 make modules
 
 mkdir -p /nginx/modules
