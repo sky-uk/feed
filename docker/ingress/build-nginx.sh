@@ -17,7 +17,7 @@ mkdir /tmp/nginx
 cd /tmp/nginx
 curl -O http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
 curl -JLO https://github.com/vozlt/nginx-module-vts/archive/v${VTS_VERSION}.tar.gz
-curl -JLO https://github.com/opentracing-contrib/nginx-opentracing/archive/v${OPENTRACING_NGINX_VERSION}.tar.gz
+curl -JLO https://github.com/opentracing-contrib/nginx-opentracing/archive/${OPENTRACING_NGINX_VERSION}.tar.gz
 curl -JLO https://github.com/opentracing/opentracing-cpp/archive/v${OPENTRACING_CPP_VERSION}.tar.gz
 curl -JLO https://github.com/jaegertracing/jaeger-client-cpp/archive/v${JAEGER_VERSION}.tar.gz
 
