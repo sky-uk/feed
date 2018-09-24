@@ -39,14 +39,6 @@ http {
     # Disable nginx version leakage to external clients.
     server_tokens off;
 
-{{ if .OpenTracingPlugin }}
-    # Load a vendor tracer
-    opentracing_load_tracer {{ .OpenTracingPlugin }} {{ .OpenTracingConfig }};
-
-    # Enable tracing for all requests
-    opentracing on;
-{{ end }}
-
     # Obtain client IP from frontend
 {{ range .TrustedFrontends }}    set_real_ip_from {{ . }};
 {{ end }}
@@ -100,10 +92,17 @@ http {
     # Don't mess with redirects.
     proxy_redirect off;
 
+{{ if .OpenTracingPlugin }}
+    # Load a vendor tracer
+    opentracing_load_tracer {{ .OpenTracingPlugin }} {{ .OpenTracingConfig }};
+    opentracing on;
+    opentracing_propagate_context;
+    opentracing_trace_locations off;
+{{ end }}
+
     # Start ingresses
     {{- $keepalive := .BackendKeepalives }}
     {{- $proxyprotocol := .ProxyProtocol }}
-    {{- $opentracingPlugin := .OpenTracingPlugin }}
 
 {{- range $upstream := .Upstreams }}
     upstream {{ $upstream.ID }} {
@@ -150,12 +149,7 @@ http {
             # Keep original path when proxying.
             proxy_pass http://{{ $location.UpstreamID }};
 {{- end }}
-{{ if $opentracingPlugin }}
-            # Set operation name to the name of the backend service
-            opentracing_operation_name '$server_name{{ if $location.Path }} {{ $location.Path }}{{ end }}';
 
-            opentracing_propagate_context;
-{{ end }}
             # Set display name for vhost stats.
             vhost_traffic_status_filter_by_set_key {{ $location.Path }}::$proxy_host $server_name;
 
@@ -186,9 +180,6 @@ http {
 {{- end }}
 
        location / {
-{{ if $opentracingPlugin }}
-            opentracing_trace_locations off;
-{{ end }}
             return 404;
         }
     }
@@ -196,10 +187,7 @@ http {
 
     # Status port. This should be firewalled to only allow internal access.
     server {
-{{ if ne .OpenTracingPlugin "" }}
-        opentracing_trace_locations off;
-{{ end }}
-
+        opentracing off;
         listen {{ .HealthPort }} default_server reuseport;
         vhost_traffic_status off;
 
