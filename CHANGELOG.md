@@ -1,3 +1,6 @@
+# v1.11.2
+* Update nginx-opentracing version for bug fix to proxy headers
+
 # v1.11.1
 * Manually compile OpenTracing modules to avoid binary incompatibilities
 
