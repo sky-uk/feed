@@ -187,7 +187,9 @@ http {
 
     # Status port. This should be firewalled to only allow internal access.
     server {
+{{ if .OpenTracingPlugin }}
         opentracing off;
+{{ end }}
         listen {{ .HealthPort }} default_server reuseport;
         vhost_traffic_status off;
 
