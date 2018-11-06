@@ -1,10 +1,9 @@
 package status
 
 import (
+	"fmt"
 	"net"
 	"sort"
-
-	"fmt"
 
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/k8s"

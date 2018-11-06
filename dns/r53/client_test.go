@@ -1,9 +1,8 @@
 package r53
 
 import (
-	"testing"
-
 	"errors"
+	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"

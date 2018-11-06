@@ -6,9 +6,7 @@ package alb
 import (
 	"errors"
 	"fmt"
-
 	"sync"
-
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -38,8 +36,8 @@ func New(region string, targetGroupNames []string, targetGroupDeregistrationDela
 		awsALB:                         aws_alb.New(session),
 		targetGroupNames:               targetGroupNames,
 		targetGroupDeregistrationDelay: targetGroupDeregistrationDelay,
-		region:      region,
-		initialised: initialised{},
+		region:                         region,
+		initialised:                    initialised{},
 	}, nil
 }
 

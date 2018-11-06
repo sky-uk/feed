@@ -1,13 +1,10 @@
 package merlin
 
 import (
-	"testing"
-
-	"time"
-
 	"errors"
-
 	"fmt"
+	"testing"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"

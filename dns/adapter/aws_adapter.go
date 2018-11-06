@@ -2,15 +2,13 @@ package adapter
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	aws_elb "github.com/aws/aws-sdk-go/service/elb"
 	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
-
-	"strings"
-
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/sky-uk/feed/elb"
 )
 

@@ -2,15 +2,11 @@ package main
 
 import (
 	"flag"
-
-	_ "net/http/pprof"
-
-	"time"
-
 	"fmt"
-
+	_ "net/http/pprof"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/alb"

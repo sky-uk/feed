@@ -44,7 +44,6 @@ type IngressEntry struct {
 	ProxyBufferSize int
 	//
 	ProxyBufferBlocks int
-
 }
 
 // validate returns error if entry has invalid fields.

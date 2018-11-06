@@ -1,14 +1,11 @@
 package controller
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
-
 	"time"
-
-	"fmt"
-
-	"errors"
 
 	"github.com/sky-uk/feed/k8s"
 	fake "github.com/sky-uk/feed/util/test"

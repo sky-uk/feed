@@ -2,9 +2,7 @@ package main
 
 import (
 	"flag"
-
 	"os"
-
 	"time"
 
 	log "github.com/sirupsen/logrus"

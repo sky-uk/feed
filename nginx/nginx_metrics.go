@@ -1,15 +1,12 @@
 package nginx
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-
-	"sync"
-
-	"encoding/json"
-
 	"strings"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"

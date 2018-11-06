@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"

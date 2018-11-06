@@ -1,15 +1,13 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
-
-	"fmt"
-
 	"time"
 
 	"github.com/onrik/logrus/filename"

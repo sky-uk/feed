@@ -5,15 +5,11 @@ It delegates update logic to an Updater interface.
 package controller
 
 import (
-	"sync"
-
-	"fmt"
-
-	"strings"
-
-	"strconv"
-
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"

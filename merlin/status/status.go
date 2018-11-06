@@ -6,9 +6,8 @@ package status
 import (
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/k8s"
-	"k8s.io/client-go/pkg/api/v1"
-
 	k8s_status "github.com/sky-uk/feed/k8s/status"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 const (

@@ -2,7 +2,6 @@ package merlin
 
 import (
 	"fmt"
-
 	"strings"
 
 	"github.com/vishvananda/netlink"

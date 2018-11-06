@@ -1,24 +1,18 @@
 package nginx
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
-
-	"bytes"
-	"fmt"
-	"text/template"
-
+	"sort"
 	"strings"
-
-	"time"
-
 	"sync"
 	"syscall"
-
-	"errors"
-
-	"sort"
+	"text/template"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"

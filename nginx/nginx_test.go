@@ -1,20 +1,17 @@
 package nginx
 
 import (
-	"testing"
-
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"regexp"
-	"strings"
-
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"regexp"
 	"strconv"
-
+	"strings"
+	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"

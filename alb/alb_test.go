@@ -3,10 +3,8 @@ package alb
 import (
 	//"errors"
 	//"fmt"
-	"testing"
-
 	"errors"
-
+	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"

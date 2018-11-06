@@ -4,23 +4,18 @@ Package gorb provide the ability to register and deregister the backend
 package gorb
 
 import (
-	"errors"
-
-	"time"
-
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os/exec"
-	"strings"
-
-	"io"
-
 	"path"
-
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/sethgrid/pester"

@@ -7,10 +7,9 @@ The types are copied from the stable api of the Kubernetes 1.3 release.
 package k8s
 
 import (
+	"errors"
 	"sync"
 	"time"
-
-	"errors"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
