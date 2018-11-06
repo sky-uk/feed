@@ -180,6 +180,6 @@ func (w *handlerWatcher) OnUpdate(old interface{}, new interface{}) {
 }
 
 func (w *handlerWatcher) OnDelete(obj interface{}) {
-	log.Debug("OnDelete called for %v - updating watcher", obj)
+	log.Debugf("OnDelete called for %v - updating watcher", obj)
 	go w.notify()
 }

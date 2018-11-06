@@ -84,7 +84,7 @@ func (a *alb) Update(controller.IngressEntries) error {
 	defer func() { a.readyForHealthCheck.Set(true) }()
 
 	if !a.initialised.done {
-		log.Info("Attaching to ALB target groups: %v", a.targetGroupNames)
+		log.Infof("Attaching to ALB target groups: %v", a.targetGroupNames)
 		if err := a.attachToFrontEnds(); err != nil {
 			return err
 		}

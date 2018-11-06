@@ -235,7 +235,7 @@ func (c *controller) updateIngresses() error {
 						tmp, _ := strconv.Atoi(proxyBufferSizeString)
 						entry.ProxyBufferSize = tmp
 						if tmp > maxAllowedProxyBufferSize {
-							log.Warnf("ProxyBufferSize %d has a value which exceeds the max permissible value. Resetting to: %s.", tmp, maxAllowedProxyBufferSize)
+							log.Warnf("ProxyBufferSize %d has a value which exceeds the max permissible value. Resetting to: %d.", tmp, maxAllowedProxyBufferSize)
 							entry.ProxyBufferSize = maxAllowedProxyBufferSize
 						}
 					}
@@ -244,7 +244,7 @@ func (c *controller) updateIngresses() error {
 						tmp, _ := strconv.Atoi(proxyBufferBlocksString)
 						entry.ProxyBufferBlocks = tmp
 						if tmp > maxAllowedProxyBufferBlocks {
-							log.Warnf("ProxyBufferBlocks %d has a value which exceeds the max permissible value. Resetting to: %s.", tmp, maxAllowedProxyBufferBlocks)
+							log.Warnf("ProxyBufferBlocks %d has a value which exceeds the max permissible value. Resetting to: %d.", tmp, maxAllowedProxyBufferBlocks)
 							entry.ProxyBufferBlocks = maxAllowedProxyBufferBlocks
 						}
 					}
