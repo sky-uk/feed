@@ -21,19 +21,26 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 )
 
-const ingressAllowAnnotation = "sky.uk/allow"
-const frontendSchemeAnnotation = "sky.uk/frontend-scheme"
+const (
+	ingressAllowAnnotation   = "sky.uk/allow"
+	frontendSchemeAnnotation = "sky.uk/frontend-scheme"
 
-// Deprecated: retained to maintain backwards compatibility.
-const frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
-const stripPathAnnotation = "sky.uk/strip-path"
+	// Deprecated: retained to maintain backwards compatibility.
+	frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
+	stripPathAnnotation         = "sky.uk/strip-path"
 
-// Old annotation - still supported to maintain backwards compatibility.
-const legacyBackendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
-const backendTimeoutSeconds = "sky.uk/backend-timeout-seconds"
+	// Old annotation - still supported to maintain backwards compatibility.
+	legacyBackendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
+	backendTimeoutSeconds         = "sky.uk/backend-timeout-seconds"
+	proxyBufferSizeAnnotation     = "sky.uk/proxy-buffer-size"
+	proxyBufferBlocksAnnotation   = "sky.uk/proxy-buffer-blocks"
 
-// sets Nginx (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
-const backendMaxConnections = "sky.uk/backend-max-connections"
+	maxAllowedProxyBufferSize   = 32
+	maxAllowedProxyBufferBlocks = 8
+
+	// sets Nginx (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
+	backendMaxConnections = "sky.uk/backend-max-connections"
+)
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
 type Controller interface {
@@ -52,6 +59,8 @@ type controller struct {
 	defaultStripPath             bool
 	defaultBackendTimeout        int
 	defaultBackendMaxConnections int
+	defaultProxyBufferSize       int
+	defaultProxyBufferBlocks     int
 	watcher                      k8s.Watcher
 	doneCh                       chan struct{}
 	watcherDone                  sync.WaitGroup
@@ -68,6 +77,8 @@ type Config struct {
 	DefaultStripPath             bool
 	DefaultBackendTimeoutSeconds int
 	DefaultBackendMaxConnections int
+	DefaultProxyBufferSize       int
+	DefaultProxyBufferBlocks     int
 }
 
 // New creates an ingress controller.
@@ -79,7 +90,9 @@ func New(conf Config) Controller {
 		defaultStripPath:             conf.DefaultStripPath,
 		defaultBackendTimeout:        conf.DefaultBackendTimeoutSeconds,
 		defaultBackendMaxConnections: conf.DefaultBackendMaxConnections,
-		doneCh: make(chan struct{}),
+		defaultProxyBufferSize:       conf.DefaultProxyBufferSize,
+		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
+		doneCh:                       make(chan struct{}),
 	}
 }
 
@@ -175,6 +188,8 @@ func (c *controller) updateIngresses() error {
 						StripPaths:            c.defaultStripPath,
 						BackendTimeoutSeconds: c.defaultBackendTimeout,
 						BackendMaxConnections: c.defaultBackendMaxConnections,
+						ProxyBufferSize:       c.defaultProxyBufferSize,
+						ProxyBufferBlocks:     c.defaultProxyBufferBlocks,
 						CreationTimestamp:     ingress.CreationTimestamp.Time,
 						Ingress:               ingress,
 					}
@@ -218,6 +233,24 @@ func (c *controller) updateIngresses() error {
 					if maxConnections, ok := ingress.Annotations[backendMaxConnections]; ok {
 						tmp, _ := strconv.Atoi(maxConnections)
 						entry.BackendMaxConnections = tmp
+					}
+
+					if proxyBufferSizeString, ok := ingress.Annotations[proxyBufferSizeAnnotation]; ok {
+						tmp, _ := strconv.Atoi(proxyBufferSizeString)
+						entry.ProxyBufferSize = tmp
+						if tmp > maxAllowedProxyBufferSize {
+							log.Warnf("ProxyBufferSize %d has a value which exceeds the max permissible value. Resetting to: %s.", tmp, maxAllowedProxyBufferSize)
+							entry.ProxyBufferSize = maxAllowedProxyBufferSize
+						}
+					}
+
+					if proxyBufferBlocksString, ok := ingress.Annotations[proxyBufferBlocksAnnotation]; ok {
+						tmp, _ := strconv.Atoi(proxyBufferBlocksString)
+						entry.ProxyBufferBlocks = tmp
+						if tmp > maxAllowedProxyBufferBlocks {
+							log.Warnf("ProxyBufferBlocks %d has a value which exceeds the max permissible value. Resetting to: %s.", tmp, maxAllowedProxyBufferBlocks)
+							entry.ProxyBufferBlocks = maxAllowedProxyBufferBlocks
+						}
 					}
 
 					if err := entry.validate(); err == nil {

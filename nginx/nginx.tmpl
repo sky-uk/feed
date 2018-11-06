@@ -156,6 +156,8 @@ http {
             # Close proxy connections after backend keepalive time.
             proxy_read_timeout {{ $location.BackendTimeoutSeconds }}s;
             proxy_send_timeout {{ $location.BackendTimeoutSeconds }}s;
+            proxy_buffer_size {{ $location.ProxyBufferSize }}k;
+            proxy_buffers {{ $location.ProxyBufferBlocks }} {{ $location.ProxyBufferSize }}k;
 
             # Allow localhost for debugging
             allow 127.0.0.1;

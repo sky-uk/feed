@@ -40,6 +40,11 @@ type IngressEntry struct {
 	CreationTimestamp time.Time
 	// Ingress resource
 	Ingress *v1beta1.Ingress
+	//
+	ProxyBufferSize int
+	//
+	ProxyBufferBlocks int
+
 }
 
 // validate returns error if entry has invalid fields.

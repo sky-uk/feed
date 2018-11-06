@@ -137,6 +137,8 @@ type location struct {
 	Allow                 []string
 	StripPath             bool
 	BackendTimeoutSeconds int
+	ProxyBufferSize       int
+	ProxyBufferBlocks     int
 }
 
 func (c *Conf) nginxConfFile() string {
@@ -455,6 +457,8 @@ func createServerEntries(entries controller.IngressEntries) []*server {
 			Allow:                 ingressEntry.Allow,
 			StripPath:             ingressEntry.StripPaths,
 			BackendTimeoutSeconds: ingressEntry.BackendTimeoutSeconds,
+			ProxyBufferSize:       ingressEntry.ProxyBufferSize,
+			ProxyBufferBlocks:     ingressEntry.ProxyBufferBlocks,
 		}
 
 		serverEntry.Names = append(serverEntry.Names, ingressEntry.NamespaceName())
