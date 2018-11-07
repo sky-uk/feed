@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"sync"
-
 	"time"
 
 	log "github.com/sirupsen/logrus"

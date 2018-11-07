@@ -1,24 +1,18 @@
 package nginx
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
-
-	"bytes"
-	"fmt"
-	"text/template"
-
+	"sort"
 	"strings"
-
-	"time"
-
 	"sync"
 	"syscall"
-
-	"errors"
-
-	"sort"
+	"text/template"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
@@ -137,6 +131,8 @@ type location struct {
 	Allow                 []string
 	StripPath             bool
 	BackendTimeoutSeconds int
+	ProxyBufferSize       int
+	ProxyBufferBlocks     int
 }
 
 func (c *Conf) nginxConfFile() string {
@@ -455,6 +451,8 @@ func createServerEntries(entries controller.IngressEntries) []*server {
 			Allow:                 ingressEntry.Allow,
 			StripPath:             ingressEntry.StripPaths,
 			BackendTimeoutSeconds: ingressEntry.BackendTimeoutSeconds,
+			ProxyBufferSize:       ingressEntry.ProxyBufferSize,
+			ProxyBufferBlocks:     ingressEntry.ProxyBufferBlocks,
 		}
 
 		serverEntry.Names = append(serverEntry.Names, ingressEntry.NamespaceName())

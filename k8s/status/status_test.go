@@ -1,16 +1,14 @@
 package status
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/sky-uk/feed/controller"
+	fake "github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/pkg/api/v1"
-
-	"errors"
-
-	fake "github.com/sky-uk/feed/util/test"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 

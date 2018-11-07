@@ -2,15 +2,11 @@ package main
 
 import (
 	"flag"
-
-	_ "net/http/pprof"
-
-	"time"
-
 	"fmt"
-
+	_ "net/http/pprof"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/alb"
@@ -98,6 +94,8 @@ const (
 	defaultNginxBackendTimeoutSeconds        = 60
 	defaultNginxBackendConnectTimeoutSeconds = 1
 	defaultNginxBackendMaxConnections        = 1024
+	defaultNginxProxyBufferSize              = 16
+	defaultNginxProxyBufferBlocks            = 4
 	defaultNginxLogLevel                     = "warn"
 	defaultNginxServerNamesHashBucketSize    = unset
 	defaultNginxServerNamesHashMaxSize       = unset
@@ -186,6 +184,12 @@ func init() {
 	flag.IntVar(&controllerConfig.DefaultBackendMaxConnections, "nginx-default-backend-max-connections",
 		defaultNginxBackendMaxConnections,
 		"Maximum number of connections to a single backend. Can be overridden per ingress with the sky.uk/backend-max-connections annotation.")
+	flag.IntVar(&controllerConfig.DefaultProxyBufferSize, "nginx-default-proxy-buffer-size",
+		defaultNginxProxyBufferSize,
+		"Proxy buffer size for response. Can be overridden per ingress with the sky.uk/proxy-buffer-size-in-kb annotation.")
+	flag.IntVar(&controllerConfig.DefaultProxyBufferBlocks, "nginx-default-proxy-buffer-blocks",
+		defaultNginxProxyBufferBlocks,
+		"Proxy buffer blocks for response. Can be overridden per ingress with the sky.uk/proxy-buffer-blocks annotation.")
 	flag.StringVar(&nginxConfig.LogLevel, "nginx-loglevel", defaultNginxLogLevel,
 		"Log level for nginx. See http://nginx.org/en/docs/ngx_core_module.html#error_log for levels.")
 	flag.IntVar(&nginxConfig.ServerNamesHashBucketSize, "nginx-server-names-hash-bucket-size", defaultNginxServerNamesHashBucketSize,

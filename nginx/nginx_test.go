@@ -1,20 +1,17 @@
 package nginx
 
 import (
-	"testing"
-
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"regexp"
-	"strings"
-
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"regexp"
 	"strconv"
-
+	"strings"
+	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -453,6 +450,8 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            # Close proxy connections after backend keepalive time.\n" +
 					"            proxy_read_timeout 10s;\n" +
 					"            proxy_send_timeout 10s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
 					"\n" +
 					"            # Allow localhost for debugging\n" +
 					"            allow 127.0.0.1;\n" +
@@ -474,6 +473,8 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            # Close proxy connections after backend keepalive time.\n" +
 					"            proxy_read_timeout 1s;\n" +
 					"            proxy_send_timeout 1s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
 					"\n" +
 					"            # Allow localhost for debugging\n" +
 					"            allow 127.0.0.1;\n" +
@@ -820,6 +821,8 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            # Close proxy connections after backend keepalive time.\n" +
 					"            proxy_read_timeout 28s;\n" +
 					"            proxy_send_timeout 28s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
 					"\n" +
 					"            # Allow localhost for debugging\n" +
 					"            allow 127.0.0.1;\n" +
@@ -839,6 +842,8 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            # Close proxy connections after backend keepalive time.\n" +
 					"            proxy_read_timeout 28s;\n" +
 					"            proxy_send_timeout 28s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
 					"\n" +
 					"            # Allow localhost for debugging\n" +
 					"            allow 127.0.0.1;\n" +
@@ -858,6 +863,8 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            # Close proxy connections after backend keepalive time.\n" +
 					"            proxy_read_timeout 28s;\n" +
 					"            proxy_send_timeout 28s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
 					"\n" +
 					"            # Allow localhost for debugging\n" +
 					"            allow 127.0.0.1;\n" +
@@ -884,6 +891,45 @@ func TestNginxIngressEntries(t *testing.T) {
 			nil,
 			[]string{
 				"ssl_protocols TLSv1.2;",
+			},
+		},
+		{
+			"Proxy and buffer size is configurable",
+			sslEndpointConf,
+			[]controller.IngressEntry{
+				{
+					Host:              "default-proxy-buffer.com",
+					Namespace:         "core",
+					Name:              "some-ingress",
+					Path:              "/some-path",
+					ServiceAddress:    "service",
+					ServicePort:       9090,
+					ProxyBufferSize:   8,
+					ProxyBufferBlocks: 8,
+				},
+			},
+			nil,
+			[]string{
+				"        location /some-path/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.9090;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /some-path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 8k;\n" +
+					"            proxy_buffers 8 8k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n",
 			},
 		},
 	}

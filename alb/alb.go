@@ -6,9 +6,7 @@ package alb
 import (
 	"errors"
 	"fmt"
-
 	"sync"
-
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -38,8 +36,8 @@ func New(region string, targetGroupNames []string, targetGroupDeregistrationDela
 		awsALB:                         aws_alb.New(session),
 		targetGroupNames:               targetGroupNames,
 		targetGroupDeregistrationDelay: targetGroupDeregistrationDelay,
-		region:      region,
-		initialised: initialised{},
+		region:                         region,
+		initialised:                    initialised{},
 	}, nil
 }
 
@@ -86,7 +84,7 @@ func (a *alb) Update(controller.IngressEntries) error {
 	defer func() { a.readyForHealthCheck.Set(true) }()
 
 	if !a.initialised.done {
-		log.Info("Attaching to ALB target groups: %v", a.targetGroupNames)
+		log.Infof("Attaching to ALB target groups: %v", a.targetGroupNames)
 		if err := a.attachToFrontEnds(); err != nil {
 			return err
 		}

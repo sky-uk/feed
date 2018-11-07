@@ -1,9 +1,8 @@
 package merlin
 
 import (
-	"fmt"
-
 	"context"
+	"fmt"
 	"strings"
 	"time"
 

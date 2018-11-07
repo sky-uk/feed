@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"testing"
-
 	"time"
 
 	"github.com/sky-uk/feed/util"

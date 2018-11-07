@@ -7,10 +7,9 @@ The types are copied from the stable api of the Kubernetes 1.3 release.
 package k8s
 
 import (
+	"errors"
 	"sync"
 	"time"
-
-	"errors"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -181,6 +180,6 @@ func (w *handlerWatcher) OnUpdate(old interface{}, new interface{}) {
 }
 
 func (w *handlerWatcher) OnDelete(obj interface{}) {
-	log.Debug("OnDelete called for %v - updating watcher", obj)
+	log.Debugf("OnDelete called for %v - updating watcher", obj)
 	go w.notify()
 }

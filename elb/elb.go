@@ -4,12 +4,9 @@ Package elb provides an updater for an ELB frontend to attach nginx to.
 package elb
 
 import (
-	"fmt"
-
 	"errors"
-
+	"fmt"
 	"sync"
-
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
