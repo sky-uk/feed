@@ -186,7 +186,7 @@ func init() {
 		"Maximum number of connections to a single backend. Can be overridden per ingress with the sky.uk/backend-max-connections annotation.")
 	flag.IntVar(&controllerConfig.DefaultProxyBufferSize, "nginx-default-proxy-buffer-size",
 		defaultNginxProxyBufferSize,
-		"Proxy buffer size for response. Can be overridden per ingress with the sky.uk/proxy-buffer-size annotation.")
+		"Proxy buffer size for response. Can be overridden per ingress with the sky.uk/proxy-buffer-size-in-kb annotation.")
 	flag.IntVar(&controllerConfig.DefaultProxyBufferBlocks, "nginx-default-proxy-buffer-blocks",
 		defaultNginxProxyBufferBlocks,
 		"Proxy buffer blocks for response. Can be overridden per ingress with the sky.uk/proxy-buffer-blocks annotation.")

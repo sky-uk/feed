@@ -40,9 +40,9 @@ type IngressEntry struct {
 	CreationTimestamp time.Time
 	// Ingress resource
 	Ingress *v1beta1.Ingress
-	//
+	// Size of the buffer used for reading the first part of the response received from the proxied server.
 	ProxyBufferSize int
-	//
+	// Number of buffers used for reading a response from the proxied server, for a single connection.
 	ProxyBufferBlocks int
 }
 

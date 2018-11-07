@@ -28,7 +28,7 @@ const (
 	// Old annotation - still supported to maintain backwards compatibility.
 	legacyBackendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
 	backendTimeoutSeconds         = "sky.uk/backend-timeout-seconds"
-	proxyBufferSizeAnnotation     = "sky.uk/proxy-buffer-size"
+	proxyBufferSizeAnnotation     = "sky.uk/proxy-buffer-size-in-kb"
 	proxyBufferBlocksAnnotation   = "sky.uk/proxy-buffer-blocks"
 
 	maxAllowedProxyBufferSize   = 32
@@ -235,7 +235,7 @@ func (c *controller) updateIngresses() error {
 						tmp, _ := strconv.Atoi(proxyBufferSizeString)
 						entry.ProxyBufferSize = tmp
 						if tmp > maxAllowedProxyBufferSize {
-							log.Warnf("ProxyBufferSize %d has a value which exceeds the max permissible value. Resetting to: %d.", tmp, maxAllowedProxyBufferSize)
+							log.Warnf("ProxyBufferSize value %dk exceeds the max permissible value %dk. Hence, %dk will be used instead", tmp, maxAllowedProxyBufferSize, maxAllowedProxyBufferSize)
 							entry.ProxyBufferSize = maxAllowedProxyBufferSize
 						}
 					}
@@ -244,7 +244,7 @@ func (c *controller) updateIngresses() error {
 						tmp, _ := strconv.Atoi(proxyBufferBlocksString)
 						entry.ProxyBufferBlocks = tmp
 						if tmp > maxAllowedProxyBufferBlocks {
-							log.Warnf("ProxyBufferBlocks %d has a value which exceeds the max permissible value. Resetting to: %d.", tmp, maxAllowedProxyBufferBlocks)
+							log.Warnf("ProxyBufferBlocks value %d exceeds the max permissible value %d. Hence, %d will be used instead", tmp, maxAllowedProxyBufferBlocks, maxAllowedProxyBufferBlocks)
 							entry.ProxyBufferBlocks = maxAllowedProxyBufferBlocks
 						}
 					}
