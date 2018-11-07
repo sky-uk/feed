@@ -336,21 +336,36 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with missing host name",
-			createIngressesFixture("", ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: ingressAllow, backendTimeoutSeconds: "10", frontendElbSchemeAnnotation: "internal"}),
+			createIngressesFixture("", ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      ingressAllow,
+					backendTimeoutSeconds:       "10",
+					frontendElbSchemeAnnotation: "internal",
+				}),
 			createDefaultServices(),
 			nil,
 			defaultConfig(),
 		},
 		{
 			"ingress with missing service name",
-			createIngressesFixture(ingressHost, "", ingressSvcPort, map[string]string{ingressAllowAnnotation: ingressAllow, backendTimeoutSeconds: "10", frontendElbSchemeAnnotation: "internal"}),
+			createIngressesFixture(ingressHost, "", ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      ingressAllow,
+					backendTimeoutSeconds:       "10",
+					frontendElbSchemeAnnotation: "internal",
+				}),
 			createDefaultServices(),
 			nil,
 			defaultConfig(),
 		},
 		{
 			"ingress with missing service port",
-			createIngressesFixture(ingressHost, ingressSvcName, 0, map[string]string{ingressAllowAnnotation: ingressAllow, backendTimeoutSeconds: "10", frontendElbSchemeAnnotation: "internal"}),
+			createIngressesFixture(ingressHost, ingressSvcName, 0,
+				map[string]string{
+					ingressAllowAnnotation:      ingressAllow,
+					backendTimeoutSeconds:       "10",
+					frontendElbSchemeAnnotation: "internal",
+				}),
 			createDefaultServices(),
 			nil,
 			defaultConfig(),
@@ -371,7 +386,10 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{backendTimeoutSeconds: "10"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					backendTimeoutSeconds: "10",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -387,7 +405,12 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with empty allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: "", backendTimeoutSeconds: "10", frontendElbSchemeAnnotation: "internal"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					backendTimeoutSeconds:       "10",
+					frontendElbSchemeAnnotation: "internal",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -404,7 +427,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with strip paths set to true",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: "", stripPathAnnotation: "true", backendTimeoutSeconds: "10", frontendElbSchemeAnnotation: "internal"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					stripPathAnnotation:         "true",
+					backendTimeoutSeconds:       "10",
+					frontendElbSchemeAnnotation: "internal",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -422,7 +451,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with strip paths set to false",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: "", stripPathAnnotation: "false", backendTimeoutSeconds: "10", frontendElbSchemeAnnotation: "internal"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					stripPathAnnotation:         "false",
+					backendTimeoutSeconds:       "10",
+					frontendElbSchemeAnnotation: "internal",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -440,7 +475,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with overridden backend timeout",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: "", stripPathAnnotation: "false", backendTimeoutSeconds: "20", frontendElbSchemeAnnotation: "internal"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					stripPathAnnotation:         "false",
+					backendTimeoutSeconds:       "20",
+					frontendElbSchemeAnnotation: "internal",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -458,7 +499,12 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default backend timeout",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: "", stripPathAnnotation: "false", frontendElbSchemeAnnotation: "internal"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					stripPathAnnotation:         "false",
+					frontendElbSchemeAnnotation: "internal",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -476,7 +522,14 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with overridden backend max connections",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: "", stripPathAnnotation: "false", backendTimeoutSeconds: "20", frontendElbSchemeAnnotation: "internal", backendMaxConnections: "512"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					stripPathAnnotation:         "false",
+					backendTimeoutSeconds:       "20",
+					frontendElbSchemeAnnotation: "internal",
+					backendMaxConnections:       "512",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -495,7 +548,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default backend max connections",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: "", stripPathAnnotation: "false", backendTimeoutSeconds: "20", frontendElbSchemeAnnotation: "internal"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					stripPathAnnotation:         "false",
+					backendTimeoutSeconds:       "20",
+					frontendElbSchemeAnnotation: "internal",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -514,7 +573,10 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress with default proxy buffer values when not overridden by the ingress definition",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: ""}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation: "",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -539,7 +601,12 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress definition overrides default proxy buffer values",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: "", proxyBufferSizeAnnotation: "6", proxyBufferBlocksAnnotation: "4"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					proxyBufferSizeAnnotation:   "6",
+					proxyBufferBlocksAnnotation: "4",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -564,7 +631,12 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		},
 		{
 			"ingress definition resets to max when proxy buffer values exceed max allowed values",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: "", proxyBufferSizeAnnotation: "64", proxyBufferBlocksAnnotation: "12"}),
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					proxyBufferSizeAnnotation:   "64",
+					proxyBufferBlocksAnnotation: "12",
+				}),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -673,11 +745,21 @@ const (
 )
 
 func createDefaultIngresses() []*v1beta1.Ingress {
-	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: ingressAllow, backendTimeoutSeconds: "10", frontendElbSchemeAnnotation: "internal"})
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+		map[string]string{
+			ingressAllowAnnotation:      ingressAllow,
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+		})
 }
 
 func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
-	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort, map[string]string{ingressAllowAnnotation: ingressAllow, backendTimeoutSeconds: "10", frontendSchemeAnnotation: "internal"})
+	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+		map[string]string{
+			ingressAllowAnnotation:   ingressAllow,
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+		})
 }
 
 func createIngressesFixture(host string, serviceName string, servicePort int, ingressAnnotations map[string]string) []*v1beta1.Ingress {
