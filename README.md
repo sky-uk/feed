@@ -104,6 +104,20 @@ To enable OpenTracing, you will need to provide the following options:
 
 Note that the status and metrics endpoints will *not* have OpenTracing applied.
 
+### Handling large client requests
+
+`feed-ingress` now supports handling of large client requests (header and body). It can be enabled by passing the
+following arguments during startup.
+
+```
+    -nginx-client-header-buffer-size-in-kb=16
+    -nginx-client-body-buffer-size-in-kb=16
+    
+    # Set the maximum number and size of buffers used for reading large client request header. If this value is set, 
+    # -nginx-client-header-buffer-size-in-kb should be passed in as well. Otherwise, this value will be ignored.
+    -nginx-large-client-header-buffer-blocks=4
+```
+
 ### Ingress status
 
 When using either the [elb](#elb) or [Merlin](#merlin) updater, the ingress status will be updated with relevant

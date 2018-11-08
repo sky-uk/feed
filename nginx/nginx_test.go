@@ -216,6 +216,14 @@ func TestNginxConfig(t *testing.T) {
 	opentracingConf.OpenTracingPlugin = "/my/plugin.so"
 	opentracingConf.OpenTracingConfig = "/etc/my/config.json"
 
+	httpConf := defaultConf
+	httpConf.ClientHeaderBufferSize = 16
+	httpConf.ClientBodyBufferSize = 16
+	httpConf.LargeClientHeaderBufferBlocks = 4
+
+	incorrectLargeClientHeaderBufferConf := defaultConf
+	incorrectLargeClientHeaderBufferConf.LargeClientHeaderBufferBlocks = 4
+
 	var tests = []struct {
 		name             string
 		conf             Conf
@@ -351,6 +359,55 @@ func TestNginxConfig(t *testing.T) {
 				"opentracing_propagate_context;",
 			},
 		},
+		{
+			"Adds client headers buffer size attribute",
+			httpConf,
+			[]string{
+				"client_header_buffer_size 16k;",
+			},
+		},
+		{
+			"Adds client body buffer size attribute",
+			httpConf,
+			[]string{
+				"client_body_buffer_size 16k;",
+			},
+		},
+		{
+			"Adds large client header buffer attribute",
+			httpConf,
+			[]string{
+				"large_client_header_buffers 4 16k;",
+			},
+		},
+		{
+			"client headers buffer size attribute not present if not passed in",
+			defaultConf,
+			[]string{
+				"!client_header_buffer_size",
+			},
+		},
+		{
+			"client body buffer size attribute not present if not passed in",
+			defaultConf,
+			[]string{
+				"!client_body_buffer_size",
+			},
+		},
+		{
+			"large client header buffer attribute not present if not passed in",
+			defaultConf,
+			[]string{
+				"!large_client_header_buffers",
+			},
+		},
+		{
+			"Adds large client header buffer attribute only if the client buffer size is also set",
+			incorrectLargeClientHeaderBufferConf,
+			[]string{
+				"!large_client_header_buffers",
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -367,7 +424,7 @@ func TestNginxConfig(t *testing.T) {
 
 		for _, expected := range test.expectedSettings {
 			if strings.HasPrefix(expected, "!") {
-				assert.NotContains(configContents, expected, "%s\nshould not contain setting", test.name)
+				assert.NotContains(configContents, expected[1:], "%s\nshould not contain setting", test.name)
 			} else {
 				assert.Contains(configContents, expected, "%sshould contain setting", test.name)
 			}

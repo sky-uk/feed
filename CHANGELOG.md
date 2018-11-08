@@ -1,3 +1,9 @@
+# v1.12.0
+* Enable overriding proxy buffer values. Defaults to `proxy_buffer_size 16k` and `proxy_buffers 4 16k`
+Can be overridden with relevant annotations
+* The values overridden by the annotations are capped at a permissible max `proxy_buffer_size 32k` and `proxy_buffers 8 32k`
+* Supports handling of large client requests (header and body). It can be enabled by passing relevant command line args.
+
 # v1.11.3
 * Enable overriding proxy buffer values. Defaults to `proxy_buffer_size 16k` and `proxy_buffers 4 16k`
 Can be overridden with relevant annotations

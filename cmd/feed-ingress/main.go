@@ -219,6 +219,9 @@ func init() {
 		"Path to OpenTracing plugin on disk (eg. /usr/local/lib/libjaegertracing_plugin.so)")
 	flag.StringVar(&nginxOpenTracingConfigPath, "nginx-opentracing-config-path", defaultNginxOpenTracingConfigPath,
 		"Path to OpenTracing config on disk (eg. /etc/jaeger-nginx-config.json)")
+	flag.IntVar(&nginxConfig.ClientHeaderBufferSize, "nginx-client-header-buffer-size-in-kb", 0, "Sets buffer size for reading client request header")
+	flag.IntVar(&nginxConfig.ClientBodyBufferSize, "nginx-client-body-buffer-size-in-kb", 0, "Sets buffer size for reading client request body")
+	flag.IntVar(&nginxConfig.LargeClientHeaderBufferBlocks, "nginx-large-client-header-buffer-blocks", 0, "Sets the maximum number of buffers used for reading large client request header")
 
 	// elb/alb flags
 	flag.StringVar(&region, "region", defaultRegion,
