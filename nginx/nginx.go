@@ -55,6 +55,14 @@ type Conf struct {
 	VhostStatsSharedMemory       int
 	OpenTracingPlugin            string
 	OpenTracingConfig            string
+	HTTPConf
+}
+
+// HTTPConf configuration for http core module of nginx
+type HTTPConf struct {
+	ClientHeaderBufferSize        int
+	ClientBodyBufferSize          int
+	LargeClientHeaderBufferBlocks int
 }
 
 type nginx struct {
