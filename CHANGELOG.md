@@ -2,7 +2,7 @@
 * Enable overriding proxy buffer values. Defaults to `proxy_buffer_size 16k` and `proxy_buffers 4 16k`
 Can be overridden with relevant annotations
 * The values overridden by the annotations are capped at a permissible max `proxy_buffer_size 32k` and `proxy_buffers 8 32k`
-* Supports handling of large client requests (header and body). It can be enabled by passing relevant command line args.
+* Supports handling of large client requests (header and body). Refer https://github.com/sky-uk/feed#handling-large-client-requests
 
 # v1.11.4
 * DO NOT USE THIS VERSION

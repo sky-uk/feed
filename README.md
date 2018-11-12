@@ -106,8 +106,15 @@ Note that the status and metrics endpoints will *not* have OpenTracing applied.
 
 ### Handling large client requests
 
-`feed-ingress` now supports handling of large client requests (header and body). It can be enabled by passing the
-following arguments during startup.
+`feed-ingress` now supports handling of large client requests (header and body). The following are the default values for the same. 
+
+```
+client_header_buffer_size 16k; 
+client_body_buffer_size 16k; 
+large_client_header_buffers 4 16k
+``` 
+
+They can be overridden by passing the following arguments during startup.
 
 ```
     -nginx-client-header-buffer-size-in-kb=16
