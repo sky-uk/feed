@@ -18,9 +18,10 @@ import (
 
 // Config for creating a new ELB status updater.
 type Config struct {
-	Region           string
-	LabelValue       string
-	KubernetesClient k8s.Client
+	Region              string
+	FrontendTagValue    string
+	IngressNameTagValue string
+	KubernetesClient    k8s.Client
 }
 
 // New creates a new ELB frontend status updater.
@@ -31,23 +32,25 @@ func New(conf Config) (controller.Updater, error) {
 	}
 
 	return &status{
-		awsElb:           aws_elb.New(session),
-		labelValue:       conf.LabelValue,
-		loadBalancers:    make(map[string]v1.LoadBalancerStatus),
-		kubernetesClient: conf.KubernetesClient,
+		awsElb:              aws_elb.New(session),
+		frontendTagValue:    conf.FrontendTagValue,
+		ingressNameTagValue: conf.IngressNameTagValue,
+		loadBalancers:       make(map[string]v1.LoadBalancerStatus),
+		kubernetesClient:    conf.KubernetesClient,
 	}, nil
 }
 
 type status struct {
-	awsElb           elb.ELB
-	labelValue       string
-	loadBalancers    map[string]v1.LoadBalancerStatus
-	kubernetesClient k8s.Client
+	awsElb              elb.ELB
+	frontendTagValue    string
+	ingressNameTagValue string
+	loadBalancers       map[string]v1.LoadBalancerStatus
+	kubernetesClient    k8s.Client
 }
 
 // Start discovers the elbs and generates loadBalancer statuses.
 func (s *status) Start() error {
-	clusterFrontEnds, err := elb.FindFrontEndElbs(s.awsElb, s.labelValue)
+	clusterFrontEnds, err := elb.FindFrontEndElbsWithIngressName(s.awsElb, s.frontendTagValue, s.ingressNameTagValue)
 	if err != nil {
 		return err
 	}

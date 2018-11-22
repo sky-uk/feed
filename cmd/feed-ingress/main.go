@@ -31,7 +31,7 @@ var (
 	ingressHealthPort              int
 	healthPort                     int
 	region                         string
-	elbLabelValue                  string
+	elbFrontendTagValue            string
 	elbExpectedNumber              int
 	drainDelay                     time.Duration
 	targetGroupNames               cmd.CommaSeparatedValues
@@ -40,6 +40,8 @@ var (
 	pushgatewayIntervalSeconds     int
 	pushgatewayLabels              cmd.KeyValues
 	controllerConfig               controller.Config
+	mainIngress                    bool
+	ingressName                    string
 	nginxConfig                    nginx.Conf
 	nginxLogHeaders                cmd.CommaSeparatedValues
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
@@ -107,7 +109,8 @@ const (
 	defaultNginxVhostStatsSharedMemory       = 1
 	defaultNginxOpenTracingPluginPath        = ""
 	defaultNginxOpenTracingConfigPath        = ""
-	defaultElbLabelValue                     = ""
+	defaultElbFrontendTagValue               = ""
+	defaultElbIngressNameTagValue            = ""
 	defaultDrainDelay                        = time.Second * 60
 	defaultTargetGroupDeregistrationDelay    = time.Second * 300
 	defaultRegion                            = "eu-west-1"
@@ -134,6 +137,8 @@ const (
 	defaultClientHeaderBufferSize            = 16
 	defaultClientBodyBufferSize              = 16
 	defaultLargeClientHeaderBufferBlocks     = 4
+	defaultMainIngress                       = false
+	defaultIngressName                       = ""
 )
 
 func init() {
@@ -167,6 +172,11 @@ func init() {
 			" '/myhost/myapp/health/'. Can be overridden with the sky.uk/exact-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
+	flag.BoolVar(&mainIngress, "main-ingress", defaultMainIngress,
+		"Whether this is the main ingress for the environment.")
+	flag.StringVar(&ingressName, "ingress-name", defaultIngressName,
+		"Which ingress this instance is for.  This is used to filter ingresses so that only those with this"+
+			"ingress name will be updated.")
 
 	// nginx flags
 	flag.StringVar(&nginxConfig.BinaryLocation, "nginx-binary", defaultNginxBinary,
@@ -238,8 +248,9 @@ func init() {
 	// elb/alb flags
 	flag.StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
-	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
-		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
+	flag.StringVar(&elbFrontendTagValue, "elb-frontend-tag-value", defaultElbFrontendTagValue,
+		"Alias to ELBs tagged with "+elb.ElbTag+"=value. Route53 entries will be created to these,"+
+			"depending on the scheme and ingress name.")
 	flag.StringVar(&registrationFrontendType, "registration-frontend-type", defaultRegistrationFrontendType,
 		"Define the registration frontend type. Must be merlin, gorb, elb or alb.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
@@ -335,6 +346,12 @@ func main() {
 		controllerConfig.DefaultBackendTimeoutSeconds = legacyBackendKeepaliveSeconds
 	}
 
+	if ingressName == defaultIngressName {
+		log.Fatal("The argument ingress-name is required")
+	}
+	controllerConfig.MainIngress = mainIngress
+	controllerConfig.IngressName = ingressName
+
 	feedController := controller.New(controllerConfig)
 
 	cmd.AddHealthMetrics(feedController, metrics.PrometheusIngressSubsystem)
@@ -369,16 +386,17 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 	switch registrationFrontendType {
 
 	case "elb":
-		elbUpdater, err := elb.New(region, elbLabelValue, elbExpectedNumber, drainDelay)
+		elbUpdater, err := elb.New(region, elbFrontendTagValue, ingressName, elbExpectedNumber, drainDelay)
 		if err != nil {
 			return updaters, err
 		}
 		updaters = append(updaters, elbUpdater)
 
 		statusConfig := elb_status.Config{
-			Region:           region,
-			LabelValue:       elbLabelValue,
-			KubernetesClient: kubernetesClient,
+			Region:              region,
+			FrontendTagValue:    elbFrontendTagValue,
+			IngressNameTagValue: ingressName,
+			KubernetesClient:    kubernetesClient,
 		}
 		elbStatusUpdater, err := elb_status.New(statusConfig)
 		if err != nil {

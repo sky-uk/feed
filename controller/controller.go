@@ -16,6 +16,7 @@ import (
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util"
 	v1 "k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 const (
@@ -38,6 +39,8 @@ const (
 
 	// sets Nginx (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
 	backendMaxConnections = "sky.uk/backend-max-connections"
+
+	ingressNameAnnotation = "sky.uk/ingress-name"
 )
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
@@ -66,6 +69,8 @@ type controller struct {
 	started                      bool
 	updatesHealth                util.SafeError
 	sync.Mutex
+	mainIngress bool
+	ingressName string
 }
 
 // Config for creating a new ingress controller.
@@ -79,6 +84,8 @@ type Config struct {
 	DefaultBackendMaxConnections int
 	DefaultProxyBufferSize       int
 	DefaultProxyBufferBlocks     int
+	MainIngress                  bool
+	IngressName                  string
 }
 
 // New creates an ingress controller.
@@ -93,7 +100,9 @@ func New(conf Config) Controller {
 		defaultBackendMaxConnections: conf.DefaultBackendMaxConnections,
 		defaultProxyBufferSize:       conf.DefaultProxyBufferSize,
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
-		doneCh:                       make(chan struct{}),
+		doneCh:      make(chan struct{}),
+		mainIngress: conf.MainIngress,
+		ingressName: conf.IngressName,
 	}
 }
 
@@ -184,23 +193,28 @@ func (c *controller) updateIngresses() (err error) {
 
 					serviceName := serviceName{namespace: ingress.Namespace, name: path.Backend.ServiceName}
 
-					if address := serviceMap[serviceName]; address != "" {
+					if address := serviceMap[serviceName]; address == "" {
+						skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
+					} else if !c.validIngressName(ingress) {
+						skipped = append(skipped, fmt.Sprintf("%s/%s (ingress name [%s] is not valid. Config: [%s])",
+							ingress.Namespace, ingress.Name, ingress.Annotations[ingressNameAnnotation], c.ingressName))
+					} else {
 						entry := IngressEntry{
-							Namespace:             ingress.Namespace,
-							Name:                  ingress.Name,
-							Host:                  rule.Host,
-							Path:                  path.Path,
-							ServiceAddress:        address,
-							ServicePort:           int32(path.Backend.ServicePort.IntValue()),
-							Allow:                 c.defaultAllow,
-							StripPaths:            c.defaultStripPath,
-							ExactPath:             c.defaultExactPath,
-							BackendTimeoutSeconds: c.defaultBackendTimeout,
+							Namespace:      ingress.Namespace,
+							Name:           ingress.Name,
+							Host:           rule.Host,
+							Path:           path.Path,
+							ServiceAddress: address,
+							ServicePort:    int32(path.Backend.ServicePort.IntValue()),
+							Allow:          c.defaultAllow,
+							StripPaths:     c.defaultStripPath,
+							ExactPath:      c.defaultExactPath, BackendTimeoutSeconds: c.defaultBackendTimeout,
 							BackendMaxConnections: c.defaultBackendMaxConnections,
 							ProxyBufferSize:       c.defaultProxyBufferSize,
 							ProxyBufferBlocks:     c.defaultProxyBufferBlocks,
 							CreationTimestamp:     ingress.CreationTimestamp.Time,
 							Ingress:               ingress,
+							IngressName:           ingress.Annotations[ingressNameAnnotation],
 						}
 
 						log.Debugf("Found ingress to update: %s", ingress.Name)
@@ -277,8 +291,6 @@ func (c *controller) updateIngresses() (err error) {
 						} else {
 							skipped = append(skipped, fmt.Sprintf("%s (%v)", entry.NamespaceName(), err))
 						}
-					} else {
-						skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
 					}
 				}
 
@@ -300,6 +312,19 @@ func (c *controller) updateIngresses() (err error) {
 	}
 
 	return nil
+}
+
+func (c *controller) validIngressName(ingress *v1beta1.Ingress) bool {
+
+	isValid := false
+
+	if ingressName, ok := ingress.Annotations[ingressNameAnnotation]; ok {
+		isValid = ingressName == c.ingressName
+	} else if c.mainIngress {
+		isValid = true
+	}
+
+	return isValid
 }
 
 type serviceName struct {

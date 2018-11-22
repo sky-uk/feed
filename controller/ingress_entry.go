@@ -13,6 +13,8 @@ type IngressEntries []IngressEntry
 
 // IngressEntry describes the ingress for a single host, path, and service.
 type IngressEntry struct {
+	// Name of the ingress to use
+	IngressName string
 	// Namespace of the ingress.
 	Namespace string
 	// Name of the ingress.
