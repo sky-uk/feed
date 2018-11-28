@@ -290,7 +290,7 @@ func (n *nginxUpdater) Stop() error {
 	return nil
 }
 
-// This is called by a single go routine from the controller
+// Update is called by a single go routine from the controller
 func (n *nginxUpdater) Update(entries controller.IngressEntries) error {
 	n.initialUpdateAttempted.Set(true)
 	updated, err := n.updateNginxConf(entries)

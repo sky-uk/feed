@@ -42,7 +42,7 @@ func New(hostedZone string, retries int) Route53Client {
 	}
 }
 
-// GetHostedZone gets the domain for the hosted zone
+// GetHostedZoneDomain gets the domain for the hosted zone
 func (dns *client) GetHostedZoneDomain() (string, error) {
 	input := &route53.GetHostedZoneInput{Id: aws.String(dns.hostedZone)}
 	hostedZone, err := dns.r53.GetHostedZone(input)
