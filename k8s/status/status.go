@@ -7,7 +7,7 @@ import (
 
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/k8s"
-	"k8s.io/client-go/pkg/api/v1"
+	v1 "k8s.io/client-go/pkg/api/v1"
 )
 
 // GenerateLoadBalancerStatus to convert a slice of strings to ingress loadbalancer objects.
