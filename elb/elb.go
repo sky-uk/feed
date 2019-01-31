@@ -190,7 +190,7 @@ func FindFrontEndElbsWithIngressName(awsElb ELB, frontendTagValue string, ingres
 		}
 	}
 
-	log.Debugf("Found %d loadbalancers.", len(lbNames), ElbTag, frontendTagValue)
+	log.Debugf("Found %d loadbalancers.", len(lbNames))
 
 	requiredTags := map[string]string{ElbTag: frontendTagValue}
 
