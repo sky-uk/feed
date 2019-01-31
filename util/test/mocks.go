@@ -3,7 +3,7 @@ package test
 import (
 	"github.com/sky-uk/feed/k8s"
 	"github.com/stretchr/testify/mock"
-	"k8s.io/client-go/pkg/api/v1"
+	v1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 

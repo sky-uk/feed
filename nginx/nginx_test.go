@@ -664,6 +664,64 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]string{"# ingress: core/0-first-ingress"},
 		},
 		{
+			"Duplicate host/path entries are ignored, even if path is not specified, the first one is kept order by Namepace,Name,Host,Path",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Namespace:         "core",
+					Name:              "1-last-ingress",
+					Host:              "foo-0.com",
+					Path:              "/",
+					ServiceAddress:    "foo",
+					ServicePort:       8080,
+					Allow:             []string{"10.82.0.0/16"},
+					CreationTimestamp: time.Now(),
+				},
+				{
+					Namespace:         "core",
+					Name:              "0-first-ingress",
+					Host:              "foo-0.com",
+					Path:              "",
+					ServiceAddress:    "foo",
+					ServicePort:       8080,
+					Allow:             []string{"10.82.0.0/16"},
+					CreationTimestamp: time.Now().Add(-1 * time.Minute),
+				},
+			},
+			nil,
+			[]string{"# ingress: core/0-first-ingress\n" +
+				"    server {\n" +
+				"        listen 9090;\n" +
+				"        server_name foo-0.com;\n" +
+				"\n" +
+				"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+				"        client_max_body_size 0;\n" +
+				"\n" +
+				"        location / {\n" +
+				"            # Keep original path when proxying.\n" +
+				"            proxy_pass http://core.foo.8080;\n" +
+				"\n" +
+				"            # Set display name for vhost stats.\n" +
+				"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
+				"\n" +
+				"            # Close proxy connections after backend keepalive time.\n" +
+				"            proxy_read_timeout 0s;\n" +
+				"            proxy_send_timeout 0s;\n" +
+				"            proxy_buffer_size 0k;\n" +
+				"            proxy_buffers 0 0k;\n" +
+				"\n" +
+				"            # Allow localhost for debugging\n" +
+				"            allow 127.0.0.1;\n" +
+				"\n" +
+				"            # Restrict clients\n" +
+				"            allow 10.82.0.0/16;\n" +
+				"            \n" +
+				"            deny all;\n" +
+				"        }\n" +
+				"    }",
+			},
+		},
+		{
 			"Check path slashes are added correctly",
 			defaultConf,
 			[]controller.IngressEntry{

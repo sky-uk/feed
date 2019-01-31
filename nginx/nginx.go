@@ -454,7 +454,7 @@ func createServerEntries(entries controller.IngressEntries) []*server {
 		}
 
 		location := location{
-			Path:                  createNginxPath(ingressEntry.Path),
+			Path:                  ingressEntry.Path,
 			UpstreamID:            upstreamID(ingressEntry),
 			Allow:                 ingressEntry.Allow,
 			StripPath:             ingressEntry.StripPaths,
@@ -494,6 +494,7 @@ func uniqueIngressEntries(entries controller.IngressEntries) []controller.Ingres
 
 	uniqueIngress := make(map[ingressKey]controller.IngressEntry)
 	for _, ingressEntry := range entries {
+		ingressEntry.Path = createNginxPath(ingressEntry.Path)
 		key := ingressKey{ingressEntry.Host, ingressEntry.Path}
 		existingIngressEntry, exists := uniqueIngress[key]
 		if !exists {
