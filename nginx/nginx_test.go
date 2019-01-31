@@ -151,11 +151,11 @@ func TestUnhealthyUntilInitialUpdate(t *testing.T) {
 	conf.HealthPort = getPort(ts)
 	lb := newNginxWithConf(conf)
 
-	assert.EqualError(lb.Health(), "waiting for initial update")
+	assert.EqualError(lb.Health(), "nginx is not running")
 	assert.NoError(lb.Start())
 
 	time.Sleep(smallWaitTime)
-	assert.EqualError(lb.Health(), "waiting for initial update")
+	assert.EqualError(lb.Health(), "nginx is not running")
 	assert.NoError(lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
 	}}))
