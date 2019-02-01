@@ -292,7 +292,6 @@ func (n *nginxUpdater) Stop() error {
 
 // Update is called by a single go routine from the controller
 func (n *nginxUpdater) Update(entries controller.IngressEntries) error {
-	n.initialUpdateAttempted.Set(true)
 	updated, err := n.updateNginxConf(entries)
 	if err != nil {
 		return fmt.Errorf("unable to update nginx: %v", err)
@@ -302,8 +301,11 @@ func (n *nginxUpdater) Update(entries controller.IngressEntries) error {
 		if nginxStartErr := n.ensureNginxRunning(); nginxStartErr != nil {
 			return nginxStartErr
 		}
-		n.signalRequired()
+		if n.initialUpdateAttempted.Get() {
+			n.signalRequired()
+		}
 	}
+	n.initialUpdateAttempted.Set(true)
 
 	return nil
 }
@@ -523,11 +525,11 @@ func createNginxPath(rawPath string) string {
 }
 
 func (n *nginxUpdater) Health() error {
-	if !n.initialUpdateAttempted.Get() {
-		return errors.New("waiting for initial update")
-	}
 	if !n.running.Get() {
 		return errors.New("nginx is not running")
+	}
+	if !n.initialUpdateAttempted.Get() {
+		return errors.New("waiting for initial update")
 	}
 	if n.metricsUnhealthy.Get() {
 		return errors.New("nginx metrics are failing to update")

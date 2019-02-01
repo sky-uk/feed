@@ -1,3 +1,15 @@
+# v1.12.2
+* Formatting changes
+  https://github.com/sky-uk/feed/pull/190
+* Fix duplicate path when path is not specified
+  https://github.com/sky-uk/feed/pull/193
+* Remove unnecessary config reload after start up
+  https://github.com/sky-uk/feed/pull/194
+
+# v1.12.1
+* Fix bug in v1.12.0 with the nginx.conf template
+  https://github.com/sky-uk/feed/pull/188
+
 # v1.12.0
 * Enable overriding proxy buffer values. Defaults to `proxy_buffer_size 16k` and `proxy_buffers 4 16k`
 Can be overridden with relevant annotations
