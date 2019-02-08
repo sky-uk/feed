@@ -1,3 +1,8 @@
+# v2.0.0
+* Added support for multiple ingresses per cluster to feed-ingress
+
+This is a breaking change.  Follow the instructions to [upgrade from v1 to v2](https://github.com/sky-uk/feed#upgrade-from-v1-to-v2)
+
 # v1.14.2
 * Skip ingress when http and/or path are not defined
 

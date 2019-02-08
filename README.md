@@ -17,7 +17,10 @@ can be applied to a cluster.
 
 ## Requirements
 
-* An internal and internet-facing ELB has been created and can reach your kubernetes cluster. The ELBs should be tagged with `sky.uk/KubernetesClusterFrontend=<name>` which is used by feed to discover them.
+* An internal and internet-facing ELB has been created and can reach your kubernetes cluster.
+The ELBs should be tagged with `sky.uk/KubernetesClusterFrontend=<name>` which is used by feed to discover them.
+If you are using v2 of `feed-ingress` the ELBs should also be tagged with `sky.uk/KubernetesClusterIngressName=<name>`.
+See [upgrade from v1 to v2](#upgrade-from-v1-to-v2) for more information.
 * A Route53 hosted zone has been created to match your ingress resources.
 
 ## Known Limitations
@@ -29,6 +32,26 @@ can be applied to a cluster.
       compared to pod changes.
 * feed-dns only supports a single hosted zone at this time, but this should be straightforward to add support for.
   PRs are welcome.
+
+
+# Upgrading
+
+## Upgrade from v1 to v2
+
+This is a breaking change to support [multiple ingresses per cluster](#multiple-ingresses-per-cluster).
+
+To upgrade, follow these steps:
+1. Tag the ELBs with `sky.uk/KubernetesClusterIngressName=<name>`
+2. Provide the following new arguments to feed-ingress: `ingress-name`, `main-ingress`
+
+For example:
+
+```
+  args:
+  - -ingress-name=main
+  - -main-ingress=true
+```
+
 
 # Overview
 
@@ -155,6 +178,23 @@ securityContext:
     - NET_BIND_SERVICE
 
 ```
+
+### Multiple ingresses per cluster
+
+Multiple ingresses can be created per cluster.  Feed will use the `sky.uk/KubernetesClusterIngressName=<name>` tag to
+attach to the right ELB.
+
+It will handle ingress resources in two ways:
+1. If the argument `main-ingress` is set to `true`, ingress resources will be created where the `sky.uk/ingress-name` 
+annotation matches the `ingress-name` argument or where no annotation is provided.  This is for backwards compatibility.
+2. If the argument `main-ingress` is set to `false`, ingress resources will be created where the `sky.uk/ingress-name`
+annotation matches the `ingress-name` argument.
+
+
+#### Support
+
+This feature is supported by `feed-ingress` and the `elb` loadbalancer.  It is currently not supported by `feed-dns` 
+or any other loadbalancer type.  PRs are welcome.
 
 ## feed-dns
 
