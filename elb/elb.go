@@ -34,7 +34,7 @@ func New(region string, frontendTagValue string, ingressNameTagValue string, exp
 	}
 
 	initMetrics()
-	log.Infof("ELB Front end region: %s cluster: %s expected frontends: %d", region, frontendTagValue, expectedNumber)
+	log.Infof("ELB Front end region: %s, cluster: %s, expected frontends: %d, ingress name: %s", region, frontendTagValue, expectedNumber, ingressNameTagValue)
 
 	session, err := session.NewSession(&aws.Config{Region: &region})
 	if err != nil {
@@ -212,7 +212,6 @@ func FindFrontEndElbsWithIngressName(awsElb ELB, frontendTagValue string, ingres
 
 		// todo cb error out if we already have an internal or public facing elb
 		for _, elbDescription := range output.TagDescriptions {
-
 			if tagsDoMatch(elbDescription.Tags, requiredTags) {
 				log.Infof("Found frontend elb %s", *elbDescription.LoadBalancerName)
 				lb := allLbs[*elbDescription.LoadBalancerName]
@@ -224,9 +223,7 @@ func FindFrontEndElbsWithIngressName(awsElb ELB, frontendTagValue string, ingres
 }
 
 func tagsDoMatch(elbTags []*aws_elb.Tag, tagsToMatch map[string]string) bool {
-
 	matches := 0
-
 	for name, value := range tagsToMatch {
 		log.Debugf("Checking for %s tag set to %s", name, value)
 		for _, elb := range elbTags {
