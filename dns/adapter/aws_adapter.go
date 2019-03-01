@@ -14,7 +14,7 @@ import (
 )
 
 // FindELBsFunc defines a function which find ELBs based on a label
-type FindELBsFunc func(*aws_alb.ELBV2, string) (map[string]elb.LoadBalancerDetails, error)
+type FindELBsFunc func(awsElb elb.ELB, labelValue string) (map[string]elb.LoadBalancerDetails, error)
 
 // ALB represents the subset of AWS operations needed for dns_updater.go
 type ALB interface {

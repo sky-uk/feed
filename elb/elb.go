@@ -48,13 +48,14 @@ func New(region string, labelValue string, expectedNumber int, drainDelay time.D
 // LoadBalancerDetails stores all the elb information we use.
 type LoadBalancerDetails struct {
 	Name         string
+	ARN          string
 	DNSName      string
 	HostedZoneID string
 	Scheme       string
 }
 
 type elb struct {
-	awsElb              *aws_elb.ELBV2
+	awsElb              ELB
 	metadata            EC2Metadata
 	labelValue          string
 	region              string
@@ -78,7 +79,7 @@ type ELB interface {
 	DescribeLoadBalancers(input *aws_elb.DescribeLoadBalancersInput) (*aws_elb.DescribeLoadBalancersOutput, error)
 	DescribeTags(input *aws_elb.DescribeTagsInput) (*aws_elb.DescribeTagsOutput, error)
 	RegisterTargets(input *aws_elb.RegisterTargetsInput) (*aws_elb.RegisterTargetsOutput, error)
-	DeregisterInstancesFromLoadBalancer(input *aws_elb.DeregisterTargetsInput) (*aws_elb.DeregisterTargetsOutput, error)
+	DeregisterTargets(input *aws_elb.DeregisterTargetsInput) (*aws_elb.DeregisterTargetsOutput, error)
 }
 
 // EC2Metadata interface to allow mocking of the real calls to AWS
@@ -121,7 +122,7 @@ func (e *elb) attachToFrontEnds() error {
 				{
 					Id: aws.String(instance),
 				}},
-			TargetGroupArn: aws.String(frontend.Name),
+			TargetGroupArn: aws.String(frontend.ARN),
 		})
 
 		if err != nil {
@@ -142,7 +143,7 @@ func (e *elb) attachToFrontEnds() error {
 }
 
 // FindFrontEndElbs finds all elbs tagged with 'sky.uk/KubernetesClusterFrontend=<labelValue>'
-func FindFrontEndElbs(awsElb *aws_elb.ELBV2, labelValue string) (map[string]LoadBalancerDetails, error) {
+func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDetails, error) {
 	maxTagQuery := 20
 	// Find the load balancers that are tagged with this cluster name
 	request := &aws_elb.DescribeLoadBalancersInput{}
@@ -158,7 +159,8 @@ func FindFrontEndElbs(awsElb *aws_elb.ELBV2, labelValue string) (map[string]Load
 
 		for _, entry := range resp.LoadBalancers {
 			allLbs[*entry.LoadBalancerName] = LoadBalancerDetails{
-				Name:         aws.StringValue(entry.LoadBalancerArn),
+				ARN:          aws.StringValue(entry.LoadBalancerArn),
+				Name:         aws.StringValue(entry.LoadBalancerName),
 				DNSName:      aws.StringValue(entry.DNSName),
 				HostedZoneID: aws.StringValue(entry.CanonicalHostedZoneId),
 				Scheme:       aws.StringValue(entry.Scheme),
@@ -210,7 +212,7 @@ func (e *elb) Stop() error {
 		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb.Name)
 		_, err := e.awsElb.DeregisterTargets(&aws_elb.DeregisterTargetsInput{
 			Targets:        []*aws_elb.TargetDescription{{Id: aws.String(e.instanceID)}},
-			TargetGroupArn: aws.String(elb.Name),
+			TargetGroupArn: aws.String(elb.ARN),
 		})
 
 		if err != nil {
