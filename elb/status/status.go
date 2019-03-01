@@ -8,7 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+	aws_elb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/k8s"
@@ -39,7 +39,7 @@ func New(conf Config) (controller.Updater, error) {
 }
 
 type status struct {
-	awsElb           elb.ELB
+	awsElb           *aws_elb.ELBV2
 	labelValue       string
 	loadBalancers    map[string]v1.LoadBalancerStatus
 	kubernetesClient k8s.Client

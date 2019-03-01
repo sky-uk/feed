@@ -8,7 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+	aws_elb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util/metrics"
@@ -45,14 +45,14 @@ func (m *fakeElb) DescribeTags(input *aws_elb.DescribeTagsInput) (*aws_elb.Descr
 	return args.Get(0).(*aws_elb.DescribeTagsOutput), args.Error(1)
 }
 
-func (m *fakeElb) DeregisterInstancesFromLoadBalancer(input *aws_elb.DeregisterInstancesFromLoadBalancerInput) (*aws_elb.DeregisterInstancesFromLoadBalancerOutput, error) {
+func (m *fakeElb) DeregisterTargets(input *aws_elb.DeregisterTargetsInput) (*aws_elb.DeregisterTargetsOutput, error) {
 	args := m.Called(input)
-	return args.Get(0).(*aws_elb.DeregisterInstancesFromLoadBalancerOutput), args.Error(1)
+	return args.Get(0).(*aws_elb.DeregisterTargetsOutput), args.Error(1)
 }
 
-func (m *fakeElb) RegisterInstancesWithLoadBalancer(input *aws_elb.RegisterInstancesWithLoadBalancerInput) (*aws_elb.RegisterInstancesWithLoadBalancerOutput, error) {
+func (m *fakeElb) RegisterTargets(input *aws_elb.RegisterTargetsInput) (*aws_elb.RegisterTargetsOutput, error) {
 	args := m.Called(input)
-	return args.Get(0).(*aws_elb.RegisterInstancesWithLoadBalancerOutput), args.Error(1)
+	return args.Get(0).(*aws_elb.RegisterTargetsOutput), args.Error(1)
 }
 
 type fakeMetadata struct {
@@ -80,18 +80,18 @@ type lb struct {
 }
 
 func mockLoadBalancers(m *fakeElb, lbs ...lb) {
-	var descriptions []*aws_elb.LoadBalancerDescription
+	var descriptions []*aws_elb.LoadBalancer
 	for _, lb := range lbs {
-		descriptions = append(descriptions, &aws_elb.LoadBalancerDescription{
-			LoadBalancerName:          aws.String(lb.name),
-			CanonicalHostedZoneNameID: aws.String(canonicalHostedZoneNameID),
-			Scheme:                    aws.String(lb.scheme),
-			DNSName:                   aws.String(elbDNSName),
+		descriptions = append(descriptions, &aws_elb.LoadBalancer{
+			LoadBalancerName:      aws.String(lb.name),
+			CanonicalHostedZoneId: aws.String(canonicalHostedZoneNameID),
+			Scheme:                aws.String(lb.scheme),
+			DNSName:               aws.String(elbDNSName),
 		})
 
 	}
 	m.On("DescribeLoadBalancers", mock.AnythingOfType("*elb.DescribeLoadBalancersInput")).Return(&aws_elb.DescribeLoadBalancersOutput{
-		LoadBalancerDescriptions: descriptions,
+		LoadBalancers: descriptions,
 	}, nil)
 }
 
@@ -105,8 +105,8 @@ func mockClusterTags(m *fakeElb, lbs ...lbTags) {
 
 	for _, lb := range lbs {
 		tagDescriptions = append(tagDescriptions, &aws_elb.TagDescription{
-			LoadBalancerName: aws.String(lb.name),
-			Tags:             lb.tags,
+			ResourceArn: aws.String(lb.name),
+			Tags:        lb.tags,
 		})
 	}
 
@@ -115,13 +115,11 @@ func mockClusterTags(m *fakeElb, lbs ...lbTags) {
 	}, nil)
 }
 
-func mockRegisterInstances(mockElb *fakeElb, elbName, instanceID string) {
-	mockElb.On("RegisterInstancesWithLoadBalancer", &aws_elb.RegisterInstancesWithLoadBalancerInput{
-		LoadBalancerName: aws.String(elbName),
-		Instances:        []*aws_elb.Instance{{InstanceId: aws.String(instanceID)}},
-	}).Return(&aws_elb.RegisterInstancesWithLoadBalancerOutput{
-		Instances: []*aws_elb.Instance{{InstanceId: aws.String(instanceID)}},
-	}, nil)
+func mockRegisterTargets(mockElb *fakeElb, elbName, instanceID string) {
+	mockElb.On("RegisterTargets", &aws_elb.RegisterTargetsInput{
+		TargetGroupArn: aws.String(elbName),
+		Targets:        []*aws_elb.TargetDescription{{Id: aws.String(instanceID)}},
+	}).Return(&aws_elb.RegisterTargetsOutput{}, nil)
 }
 
 func mockInstanceMetadata(mockMd *fakeMetadata, instanceID string) {
@@ -162,7 +160,7 @@ func TestAttachWithSingleMatchingLoadBalancers(t *testing.T) {
 		lbTags{name: clusterFrontEndDifferentCluster, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String("different cluster")}}},
 		lbTags{name: "other elb", tags: []*aws_elb.Tag{{Key: aws.String("Bannana"), Value: aws.String("Tasty")}}},
 	)
-	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
+	mockRegisterTargets(mockElb, clusterFrontEnd, instanceID)
 	err := e.Start()
 
 	//when
@@ -192,7 +190,7 @@ func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 		lbTags{name: clusterFrontEndDifferentCluster, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String("different cluster")}}},
 		lbTags{name: "other elb", tags: []*aws_elb.Tag{{Key: aws.String("Bannana"), Value: aws.String("Tasty")}}},
 	)
-	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
+	mockRegisterTargets(mockElb, clusterFrontEnd, instanceID)
 
 	//when
 	e.Start()
@@ -236,8 +234,8 @@ func TestAttachWithInternalAndInternetFacing(t *testing.T) {
 		lbTags{name: privateFrontend, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 		lbTags{name: publicFrontend, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 	)
-	mockRegisterInstances(mockElb, privateFrontend, instanceID)
-	mockRegisterInstances(mockElb, publicFrontend, instanceID)
+	mockRegisterTargets(mockElb, privateFrontend, instanceID)
+	mockRegisterTargets(mockElb, publicFrontend, instanceID)
 
 	//when
 	err := e.Start()
@@ -316,7 +314,7 @@ func TestGetLoadBalancerPages(t *testing.T) {
 	}, nil)
 	mockInstanceMetadata(mockMetadata, instanceID)
 	mockClusterTags(mockElb, lbTags{name: loadBalancerName, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
-	mockRegisterInstances(mockElb, loadBalancerName, instanceID)
+	mockRegisterTargets(mockElb, loadBalancerName, instanceID)
 
 	// when
 	err := e.Update(controller.IngressEntries{})
@@ -340,8 +338,8 @@ func TestTagCallsPage(t *testing.T) {
 	mockClusterTags(mockElb,
 		lbTags{name: loadBalancerName1, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 		lbTags{name: loadBalancerName2, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
-	mockRegisterInstances(mockElb, loadBalancerName1, instanceID)
-	mockRegisterInstances(mockElb, loadBalancerName2, instanceID)
+	mockRegisterTargets(mockElb, loadBalancerName1, instanceID)
+	mockRegisterTargets(mockElb, loadBalancerName2, instanceID)
 
 	// when
 	err := e.Update(controller.IngressEntries{})
@@ -370,8 +368,8 @@ func TestDeregistersWithAttachedELBs(t *testing.T) {
 		lbTags{name: clusterFrontEnd2, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 		lbTags{name: "other elb", tags: []*aws_elb.Tag{{Key: aws.String("Bannana"), Value: aws.String("Tasty")}}},
 	)
-	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
-	mockRegisterInstances(mockElb, clusterFrontEnd2, instanceID)
+	mockRegisterTargets(mockElb, clusterFrontEnd, instanceID)
+	mockRegisterTargets(mockElb, clusterFrontEnd2, instanceID)
 
 	mockElb.On("DeregisterInstancesFromLoadBalancer", &aws_elb.DeregisterInstancesFromLoadBalancerInput{
 		Instances:        []*aws_elb.Instance{{InstanceId: aws.String(instanceID)}},
@@ -429,7 +427,7 @@ func TestDeRegisterInstanceError(t *testing.T) {
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}},
 	)
-	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
+	mockRegisterTargets(mockElb, clusterFrontEnd, instanceID)
 	mockElb.On("DeregisterInstancesFromLoadBalancer", mock.Anything).Return(&aws_elb.DeregisterInstancesFromLoadBalancerOutput{}, errors.New("no deregister for you"))
 
 	// when
@@ -491,7 +489,7 @@ func TestHealthReportsUnhealthyAfterUnsuccessfulFirstUpdate(t *testing.T) {
 		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: []*aws_elb.Tag{{Key: aws.String(frontendTag), Value: aws.String(clusterName)}}})
-	mockRegisterInstances(mockElb, clusterFrontEnd, instanceID)
+	mockRegisterTargets(mockElb, clusterFrontEnd, instanceID)
 
 	// when
 	err := e.Start()

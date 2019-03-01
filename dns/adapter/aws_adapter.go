@@ -6,14 +6,15 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+
+	//aws_elb "github.com/aws/aws-sdk-go/service/elb"
 	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/sky-uk/feed/elb"
 )
 
 // FindELBsFunc defines a function which find ELBs based on a label
-type FindELBsFunc func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error)
+type FindELBsFunc func(*aws_alb.ELBV2, string) (map[string]elb.LoadBalancerDetails, error)
 
 // ALB represents the subset of AWS operations needed for dns_updater.go
 type ALB interface {
@@ -27,7 +28,7 @@ type AWSAdapterConfig struct {
 	ELBLabelValue string
 	ALBNames      []string
 	ALBClient     ALB
-	ELBClient     elb.ELB
+	ELBClient     *aws_alb.ELBV2
 	ELBFinder     FindELBsFunc
 }
 
@@ -35,7 +36,7 @@ type awsAdapter struct {
 	hostedZoneID     *string
 	elbLabelValue    string
 	albNames         []string
-	elb              elb.ELB
+	elb              *aws_alb.ELBV2
 	alb              ALB
 	findFrontEndElbs FindELBsFunc
 }
@@ -49,7 +50,7 @@ func NewAWSAdapter(config *AWSAdapterConfig) (FrontendAdapter, error) {
 		}
 
 		config.ALBClient = aws_alb.New(session)
-		config.ELBClient = aws_elb.New(session)
+		config.ELBClient = aws_alb.New(session)
 	}
 
 	if config.ELBFinder == nil {

@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
-	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+	aws_elb "github.com/aws/aws-sdk-go/service/elbv2"
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
@@ -54,7 +54,7 @@ type LoadBalancerDetails struct {
 }
 
 type elb struct {
-	awsElb              ELB
+	awsElb              *aws_elb.ELBV2
 	metadata            EC2Metadata
 	labelValue          string
 	region              string
@@ -77,8 +77,8 @@ type initialised struct {
 type ELB interface {
 	DescribeLoadBalancers(input *aws_elb.DescribeLoadBalancersInput) (*aws_elb.DescribeLoadBalancersOutput, error)
 	DescribeTags(input *aws_elb.DescribeTagsInput) (*aws_elb.DescribeTagsOutput, error)
-	RegisterInstancesWithLoadBalancer(input *aws_elb.RegisterInstancesWithLoadBalancerInput) (*aws_elb.RegisterInstancesWithLoadBalancerOutput, error)
-	DeregisterInstancesFromLoadBalancer(input *aws_elb.DeregisterInstancesFromLoadBalancerInput) (*aws_elb.DeregisterInstancesFromLoadBalancerOutput, error)
+	RegisterTargets(input *aws_elb.RegisterTargetsInput) (*aws_elb.RegisterTargetsOutput, error)
+	DeregisterInstancesFromLoadBalancer(input *aws_elb.DeregisterTargetsInput) (*aws_elb.DeregisterTargetsOutput, error)
 }
 
 // EC2Metadata interface to allow mocking of the real calls to AWS
@@ -116,12 +116,12 @@ func (e *elb) attachToFrontEnds() error {
 
 	for _, frontend := range clusterFrontEnds {
 		log.Infof("Registering instance %s with elb %s", instance, frontend.Name)
-		_, err = e.awsElb.RegisterInstancesWithLoadBalancer(&aws_elb.RegisterInstancesWithLoadBalancerInput{
-			Instances: []*aws_elb.Instance{
+		_, err = e.awsElb.RegisterTargets(&aws_elb.RegisterTargetsInput{
+			Targets: []*aws_elb.TargetDescription{
 				{
-					InstanceId: aws.String(instance),
+					Id: aws.String(instance),
 				}},
-			LoadBalancerName: aws.String(frontend.Name),
+			TargetGroupArn: aws.String(frontend.Name),
 		})
 
 		if err != nil {
@@ -142,7 +142,7 @@ func (e *elb) attachToFrontEnds() error {
 }
 
 // FindFrontEndElbs finds all elbs tagged with 'sky.uk/KubernetesClusterFrontend=<labelValue>'
-func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDetails, error) {
+func FindFrontEndElbs(awsElb *aws_elb.ELBV2, labelValue string) (map[string]LoadBalancerDetails, error) {
 	maxTagQuery := 20
 	// Find the load balancers that are tagged with this cluster name
 	request := &aws_elb.DescribeLoadBalancersInput{}
@@ -156,14 +156,14 @@ func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDet
 			return nil, fmt.Errorf("unable to describe load balancers: %v", err)
 		}
 
-		for _, entry := range resp.LoadBalancerDescriptions {
+		for _, entry := range resp.LoadBalancers {
 			allLbs[*entry.LoadBalancerName] = LoadBalancerDetails{
-				Name:         aws.StringValue(entry.LoadBalancerName),
+				Name:         aws.StringValue(entry.LoadBalancerArn),
 				DNSName:      aws.StringValue(entry.DNSName),
-				HostedZoneID: aws.StringValue(entry.CanonicalHostedZoneNameID),
+				HostedZoneID: aws.StringValue(entry.CanonicalHostedZoneId),
 				Scheme:       aws.StringValue(entry.Scheme),
 			}
-			lbNames = append(lbNames, entry.LoadBalancerName)
+			lbNames = append(lbNames, entry.LoadBalancerArn)
 		}
 
 		if resp.NextMarker == nil {
@@ -182,7 +182,7 @@ func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDet
 	for _, partition := range partitions {
 		names := lbNames[partition.Low:partition.High]
 		output, err := awsElb.DescribeTags(&aws_elb.DescribeTagsInput{
-			LoadBalancerNames: names,
+			ResourceArns: names,
 		})
 
 		if err != nil {
@@ -193,8 +193,8 @@ func FindFrontEndElbs(awsElb ELB, labelValue string) (map[string]LoadBalancerDet
 		for _, description := range output.TagDescriptions {
 			for _, tag := range description.Tags {
 				if *tag.Key == ElbTag && *tag.Value == labelValue {
-					log.Infof("Found frontend elb %s", *description.LoadBalancerName)
-					lb := allLbs[*description.LoadBalancerName]
+					log.Infof("Found frontend elb %s", *description.ResourceArn)
+					lb := allLbs[*description.ResourceArn]
 					clusterFrontEnds[lb.Scheme] = lb
 				}
 			}
@@ -208,9 +208,9 @@ func (e *elb) Stop() error {
 	var failed = false
 	for _, elb := range e.elbs {
 		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb.Name)
-		_, err := e.awsElb.DeregisterInstancesFromLoadBalancer(&aws_elb.DeregisterInstancesFromLoadBalancerInput{
-			Instances:        []*aws_elb.Instance{{InstanceId: aws.String(e.instanceID)}},
-			LoadBalancerName: aws.String(elb.Name),
+		_, err := e.awsElb.DeregisterTargets(&aws_elb.DeregisterTargetsInput{
+			Targets:        []*aws_elb.TargetDescription{{Id: aws.String(e.instanceID)}},
+			TargetGroupArn: aws.String(elb.Name),
 		})
 
 		if err != nil {

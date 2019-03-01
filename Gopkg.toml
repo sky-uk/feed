@@ -32,3 +32,6 @@
 [[constraint]]
   branch = "master"
   name = "github.com/onrik/logrus"
+
+[[constraint]]
+  name = "github.com/aws/aws-sdk-go"
