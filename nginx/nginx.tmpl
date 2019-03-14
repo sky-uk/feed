@@ -8,6 +8,10 @@ pid {{ .WorkingDir }}/nginx.pid;
 load_module modules/ngx_http_opentracing_module.so;
 {{ end }}
 
+{{ if .WorkerShutdownTimeoutSeconds }}
+worker_shutdown_timeout {{ .WorkerShutdownTimeoutSeconds }};
+{{ end }}
+
 events {
     # Accept connections as fast as possible.
     multi_accept on;

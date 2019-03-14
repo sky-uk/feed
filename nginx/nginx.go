@@ -36,6 +36,7 @@ type Conf struct {
 	WorkingDir                   string
 	WorkerProcesses              int
 	WorkerConnections            int
+	WorkerShutdownTimeoutSeconds int
 	KeepaliveSeconds             int
 	BackendKeepalives            int
 	BackendConnectTimeoutSeconds int
