@@ -24,6 +24,7 @@ const (
 	// Deprecated: retained to maintain backwards compatibility.
 	frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
 	stripPathAnnotation         = "sky.uk/strip-path"
+	exactPathAnnotation = "sky.uk/exact-path"
 
 	// Old annotation - still supported to maintain backwards compatibility.
 	legacyBackendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
@@ -53,6 +54,7 @@ type controller struct {
 	updaters                     []Updater
 	defaultAllow                 []string
 	defaultStripPath             bool
+	defaultExactPath             bool
 	defaultBackendTimeout        int
 	defaultBackendMaxConnections int
 	defaultProxyBufferSize       int
@@ -71,6 +73,7 @@ type Config struct {
 	Updaters                     []Updater
 	DefaultAllow                 string
 	DefaultStripPath             bool
+	DefaultExactPath             bool
 	DefaultBackendTimeoutSeconds int
 	DefaultBackendMaxConnections int
 	DefaultProxyBufferSize       int
@@ -84,6 +87,7 @@ func New(conf Config) Controller {
 		updaters:                     conf.Updaters,
 		defaultAllow:                 strings.Split(conf.DefaultAllow, ","),
 		defaultStripPath:             conf.DefaultStripPath,
+		defaultExactPath:             conf.DefaultExactPath,
 		defaultBackendTimeout:        conf.DefaultBackendTimeoutSeconds,
 		defaultBackendMaxConnections: conf.DefaultBackendMaxConnections,
 		defaultProxyBufferSize:       conf.DefaultProxyBufferSize,
@@ -182,6 +186,7 @@ func (c *controller) updateIngresses() error {
 						ServicePort:           int32(path.Backend.ServicePort.IntValue()),
 						Allow:                 c.defaultAllow,
 						StripPaths:            c.defaultStripPath,
+						ExactPath:             c.defaultExactPath,
 						BackendTimeoutSeconds: c.defaultBackendTimeout,
 						BackendMaxConnections: c.defaultBackendMaxConnections,
 						ProxyBufferSize:       c.defaultProxyBufferSize,
@@ -213,6 +218,16 @@ func (c *controller) updateIngresses() error {
 							entry.StripPaths = false
 						} else {
 							log.Warnf("Ingress %s has an invalid strip path annotation: %s. Using default", ingress.Name, stripPath)
+						}
+					}
+
+					if exactPath, ok := ingress.Annotations[exactPathAnnotation]; ok {
+						if exactPath == "true" {
+							entry.ExactPath = true
+						} else if exactPath == "false" {
+							entry.ExactPath = false
+						} else {
+							log.Warnf("Ingress %s has an invalid exact path annotation: %s. Using default", ingress.Name, exactPath)
 						}
 					}
 

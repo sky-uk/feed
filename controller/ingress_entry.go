@@ -32,6 +32,8 @@ type IngressEntry struct {
 	LbScheme string
 	// StripPaths before forwarding to the backend
 	StripPaths bool
+	// ExactPath indicates that the Path should be treated as an exact match rather than a prefix
+	ExactPath bool
 	// BackendTimeoutSeconds backend timeout
 	BackendTimeoutSeconds int
 	// BackendMaxConnections maximum backend connections

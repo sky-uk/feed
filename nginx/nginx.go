@@ -139,6 +139,7 @@ type location struct {
 	UpstreamID            string
 	Allow                 []string
 	StripPath             bool
+	ExactPath             bool
 	BackendTimeoutSeconds int
 	ProxyBufferSize       int
 	ProxyBufferBlocks     int
@@ -461,6 +462,7 @@ func createServerEntries(entries controller.IngressEntries) []*server {
 			UpstreamID:            upstreamID(ingressEntry),
 			Allow:                 ingressEntry.Allow,
 			StripPath:             ingressEntry.StripPaths,
+			ExactPath:             ingressEntry.ExactPath,
 			BackendTimeoutSeconds: ingressEntry.BackendTimeoutSeconds,
 			ProxyBufferSize:       ingressEntry.ProxyBufferSize,
 			ProxyBufferBlocks:     ingressEntry.ProxyBufferBlocks,
@@ -497,7 +499,7 @@ func uniqueIngressEntries(entries controller.IngressEntries) []controller.Ingres
 
 	uniqueIngress := make(map[ingressKey]controller.IngressEntry)
 	for _, ingressEntry := range entries {
-		ingressEntry.Path = createNginxPath(ingressEntry.Path)
+		ingressEntry.Path = createNginxPath(ingressEntry.Path, ingressEntry.ExactPath)
 		key := ingressKey{ingressEntry.Host, ingressEntry.Path}
 		existingIngressEntry, exists := uniqueIngress[key]
 		if !exists {
@@ -515,7 +517,11 @@ func uniqueIngressEntries(entries controller.IngressEntries) []controller.Ingres
 	return uniqueIngressEntries
 }
 
-func createNginxPath(rawPath string) string {
+func createNginxPath(rawPath string, exactPath bool) string {
+	if exactPath {
+		return rawPath
+	}
+
 	nginxPath := strings.TrimSuffix(strings.TrimPrefix(rawPath, "/"), "/")
 	if len(nginxPath) == 0 {
 		nginxPath = "/"
