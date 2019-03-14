@@ -24,7 +24,7 @@ const (
 	// Deprecated: retained to maintain backwards compatibility.
 	frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
 	stripPathAnnotation         = "sky.uk/strip-path"
-	exactPathAnnotation = "sky.uk/exact-path"
+	exactPathAnnotation         = "sky.uk/exact-path"
 
 	// Old annotation - still supported to maintain backwards compatibility.
 	legacyBackendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
