@@ -37,6 +37,7 @@ func newConf(tmpDir string, binary string) Conf {
 		BinaryLocation:               binary,
 		Ports:                        []Port{{Name: "http", Port: port}},
 		WorkerProcesses:              1,
+		WorkerShutdownTimeoutSeconds: 0,
 		BackendKeepalives:            1024,
 		BackendConnectTimeoutSeconds: 1,
 		ServerNamesHashMaxSize:       -1,
@@ -224,6 +225,9 @@ func TestNginxConfig(t *testing.T) {
 	incorrectLargeClientHeaderBufferConf := defaultConf
 	incorrectLargeClientHeaderBufferConf.LargeClientHeaderBufferBlocks = 4
 
+	workerShutdowntimeoutConf := defaultConf
+	workerShutdowntimeoutConf.WorkerShutdownTimeoutSeconds = 10
+
 	var tests = []struct {
 		name             string
 		conf             Conf
@@ -406,6 +410,20 @@ func TestNginxConfig(t *testing.T) {
 			incorrectLargeClientHeaderBufferConf,
 			[]string{
 				"!large_client_header_buffers",
+			},
+		},
+		{
+			"Worker shutdown timeout setting not present if default",
+			defaultConf,
+			[]string{
+				"!worker_shutdown_timeout",
+			},
+		},
+		{
+			"Worker shutdown timeout is present if not set to default",
+			workerShutdowntimeoutConf,
+			[]string{
+				"worker_shutdown_timeout 10;",
 			},
 		},
 	}

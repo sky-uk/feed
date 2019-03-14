@@ -89,6 +89,7 @@ const (
 	defaultNginxWorkingDir                   = "/nginx"
 	defaultNginxWorkers                      = 1
 	defaultNginxWorkerConnections            = 1024
+	defaultNginxWorkerShutdownTimeoutSeconds = 0
 	defaultNginxKeepAliveSeconds             = 60
 	defaultNginxBackendKeepalives            = 512
 	defaultNginxBackendTimeoutSeconds        = 60
@@ -170,6 +171,8 @@ func init() {
 		"Number of nginx worker processes.")
 	flag.IntVar(&nginxConfig.WorkerConnections, "nginx-worker-connections", defaultNginxWorkerConnections,
 		"Max number of connections per nginx worker. Includes both client and proxy connections.")
+	flag.IntVar(&nginxConfig.WorkerShutdownTimeoutSeconds, "nginx-worker-shutdown-timeout-seconds", defaultNginxWorkerShutdownTimeoutSeconds,
+		"Timeout for a graceful shutdown of worker processes.")
 	flag.IntVar(&nginxConfig.KeepaliveSeconds, "nginx-keepalive-seconds", defaultNginxKeepAliveSeconds,
 		"Keep alive time for persistent client connections to nginx. Should generally be set larger than frontend "+
 			"keep alive times to prevent stale connections.")
