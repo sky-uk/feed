@@ -162,7 +162,7 @@ func init() {
 			"Can be overridden with the sky.uk/strip-path annotation per ingress")
 	flag.BoolVar(&controllerConfig.DefaultExactPath, "ingress-exact-path", defaultIngressExactPath,
 		"Whether to consider the ingress path to be an exact match rather than as a prefix. For example, "+
-			"if enabled 'myhost/myapp/health' would be match as 'myhost/myapp/health' but not 'myhost/myapp/health/x'."+
+			"if enabled 'myhost/myapp/health' would match 'myhost/myapp/health' but not 'myhost/myapp/health/x'."+
 			" If disabled, it would match both (and redirect requests from 'myhost/myapp/health' to "+
 			" '/myhost/myapp/health/'. Can be overridden with the sky.uk/exact-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
