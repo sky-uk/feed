@@ -1,4 +1,8 @@
 # v1.12.3
+* Add support for exact paths when specified as locations
+  https://github.com/sky-uk/feed/pull/197
+
+# v1.12.3
 * New flag to set the worker shutdown timeout
 
 # v1.12.2
