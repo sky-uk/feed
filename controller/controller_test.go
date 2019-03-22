@@ -474,6 +474,54 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			defaultConfig(),
 		},
 		{
+			"ingress with exact path set to true",
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					exactPathAnnotation:         "true",
+					backendTimeoutSeconds:       "10",
+					frontendElbSchemeAnnotation: "internal",
+				}),
+			createDefaultServices(),
+			[]IngressEntry{{
+				Namespace:             ingressNamespace,
+				Name:                  ingressName,
+				Host:                  ingressHost,
+				Path:                  ingressPath,
+				ServiceAddress:        serviceIP,
+				ServicePort:           ingressSvcPort,
+				LbScheme:              "internal",
+				Allow:                 []string{},
+				ExactPath:             true,
+				BackendTimeoutSeconds: backendTimeout,
+			}},
+			defaultConfig(),
+		},
+		{
+			"ingress with exact path set to false",
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{
+					ingressAllowAnnotation:      "",
+					exactPathAnnotation:         "false",
+					backendTimeoutSeconds:       "10",
+					frontendElbSchemeAnnotation: "internal",
+				}),
+			createDefaultServices(),
+			[]IngressEntry{{
+				Namespace:             ingressNamespace,
+				Name:                  ingressName,
+				Host:                  ingressHost,
+				Path:                  ingressPath,
+				ServiceAddress:        serviceIP,
+				ServicePort:           ingressSvcPort,
+				LbScheme:              "internal",
+				Allow:                 []string{},
+				ExactPath:             false,
+				BackendTimeoutSeconds: backendTimeout,
+			}},
+			defaultConfig(),
+		},
+		{
 			"ingress with overridden backend timeout",
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
 				map[string]string{
@@ -780,6 +828,8 @@ func createIngressesFixture(host string, serviceName string, servicePort int, in
 			annotations[ingressAllowAnnotation] = annotationVal
 		case stripPathAnnotation:
 			annotations[stripPathAnnotation] = annotationVal
+		case exactPathAnnotation:
+			annotations[exactPathAnnotation] = annotationVal
 		case frontendElbSchemeAnnotation:
 			annotations[frontendElbSchemeAnnotation] = annotationVal
 		case frontendSchemeAnnotation:

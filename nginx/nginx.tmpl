@@ -162,7 +162,7 @@ http {
 
         {{- range $location := $entry.Locations }}
 
-        location {{ if $location.Path }}{{ $location.Path }}{{ end }} {
+        location {{ if $location.Path }}{{ if $location.ExactPath }}= {{ end }}{{ $location.Path }}{{ end }} {
 {{- if $location.StripPath }}
             # Strip location path when proxying.
             # Beware this can cause issues with url encoded characters.

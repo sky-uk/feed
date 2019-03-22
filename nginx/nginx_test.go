@@ -482,6 +482,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					ServicePort:           8080,
 					Allow:                 []string{"10.82.0.0/16"},
 					StripPaths:            true,
+					ExactPath:             false,
 					BackendTimeoutSeconds: 1,
 				},
 				{
@@ -493,6 +494,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					ServicePort:           6060,
 					Allow:                 []string{"10.86.0.0/16"},
 					StripPaths:            false,
+					ExactPath:             false,
 					BackendTimeoutSeconds: 10,
 					BackendMaxConnections: 1024,
 				},
@@ -791,6 +793,25 @@ func TestNginxIngressEntries(t *testing.T) {
 				"        location /prefix-without-preslash/ {\n",
 				"        location /prefix-without-postslash/ {\n",
 				"        location /prefix-without-anyslash/ {\n",
+			},
+		},
+		{
+			"Check exact paths include equals",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Host:           "chris-0.com",
+					Namespace:      "core",
+					Name:           "chris-ingress",
+					Path:           "/a/test/path",
+					ServiceAddress: "service",
+					ServicePort:    9090,
+					ExactPath:      true,
+				},
+			},
+			nil,
+			[]string{
+				"        location = /a/test/path {\n",
 			},
 		},
 		{
