@@ -1,4 +1,4 @@
-# v1.12.4
+# v1.13.0
 * Add support for exact paths when specified as locations
   https://github.com/sky-uk/feed/pull/197
 
