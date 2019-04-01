@@ -1,3 +1,6 @@
+# v1.14.0
+* Upgrade Nginx from 1.12.2 to 1.15.7
+
 # v1.13.0
 * Add support for exact paths when specified as locations
   https://github.com/sky-uk/feed/pull/197
