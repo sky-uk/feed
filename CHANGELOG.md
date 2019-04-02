@@ -1,3 +1,6 @@
+# v1.14.1
+* Set max_conns default to 0
+
 # v1.14.0
 * Upgrade Nginx from 1.12.2 to 1.15.7
 
