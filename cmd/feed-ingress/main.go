@@ -95,7 +95,7 @@ const (
 	defaultNginxBackendKeepalives            = 512
 	defaultNginxBackendTimeoutSeconds        = 60
 	defaultNginxBackendConnectTimeoutSeconds = 1
-	defaultNginxBackendMaxConnections        = 1024
+	defaultNginxBackendMaxConnections        = 0
 	defaultNginxProxyBufferSize              = 16
 	defaultNginxProxyBufferBlocks            = 4
 	defaultNginxLogLevel                     = "warn"
