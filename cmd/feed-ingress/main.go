@@ -475,6 +475,7 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 			}
 			updaters = append(updaters, merlinStatusUpdater)
 		}
+
 	case "gclb":
 		if gclbInstanceGroupPrefix == "" {
 			return nil, errors.New("missing GCLB Instance Group prefix")

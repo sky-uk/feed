@@ -91,7 +91,7 @@ func (g *gclb) Stop() error {
 				failed = true
 			}
 		} else {
-			log.Infof("Instance %q instances not in the group")
+			log.Infof("Instance %q instances not in the group", g.instance.Name)
 		}
 	}
 	if failed {
@@ -126,7 +126,7 @@ func (g *gclb) attachToFrontEnds() error {
 		}
 		if attached {
 			// We get an error if we try to attach again
-			log.Infof("Instance %q instances already attached")
+			log.Infof("Instance %q instances already attached", g.instance.Name)
 		} else {
 			err := g.glbClient.AddInstance(instance, frontend.Name)
 			if err != nil {
