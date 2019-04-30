@@ -14,7 +14,9 @@ import (
 
 // Config for GCLB
 type Config struct {
+	//TODO revisit
 	InstanceGroupPrefix string
+	TargetPoolPrefix    string
 	ExpectedFrontends   int
 	DrainDelay          time.Duration
 }
@@ -38,6 +40,7 @@ type gclb struct {
 	readyForHealthCheck util.SafeBool
 	instance            *Instance
 	instanceGroups      []*compute.InstanceGroup
+	targetPools         []*compute.TargetPool
 	registeredFrontends util.SafeInt
 	config              Config
 }
@@ -48,6 +51,7 @@ type Instance struct {
 	Zone    string
 	Name    string
 	ID      string
+	Region  string
 }
 
 type initialised struct {
@@ -68,34 +72,61 @@ func (g *gclb) Update(controller.IngressEntries) error {
 
 	if !g.initialised.done {
 		log.Info("First update. Attaching to front ends.")
-		if err := g.attachToFrontEnds(); err != nil {
-			return err
+		if g.config.TargetPoolPrefix != "" {
+			if err := g.attachToTargetPools(); err != nil {
+				return err
+			}
 		}
+		if g.config.InstanceGroupPrefix != "" {
+			if err := g.attachToInstanceGroups(); err != nil {
+				return err
+			}
+		}
+
 		g.initialised.done = true
 	}
 	return nil
 }
 
 func (g *gclb) Stop() error {
-	var failed = false
-	for _, frontend := range g.instanceGroups {
-		log.Infof("De-registering Instance %s from gclb Instance group %s", g.instance.Name, frontend.Name)
-		attached, err := g.glbClient.IsInstanceInGroup(g.instance, frontend.Name)
+	var instanceGroupRemoveFailed = false
+	for _, instanceGroup := range g.instanceGroups {
+		log.Infof("De-registering Instance %s from gclb Instance group %s", g.instance.Name, instanceGroup.Name)
+		attached, err := g.glbClient.IsInstanceInInstanceGroup(g.instance, instanceGroup.Name)
 		if err != nil {
 			return err
 		}
 		if attached {
-			err := g.glbClient.RemoveInstance(g.instance, frontend.Name)
+			err := g.glbClient.RemoveInstanceFromInstanceGroup(g.instance, instanceGroup.Name)
 			if err != nil {
-				log.Warnf("unable to deregister Instance %s from gclb Instance group %s: %v", g.instance.Name, frontend.Name, err)
-				failed = true
+				log.Warnf("unable to deregister Instance %s from gclb Instance group %s: %v", g.instance.Name, instanceGroup.Name, err)
+				instanceGroupRemoveFailed = true
 			}
 		} else {
 			log.Infof("Instance %q instances not in the group", g.instance.Name)
 		}
 	}
-	if failed {
-		return errors.New("at least one gclb failed to detach")
+
+	var targetPoolRemoveFailed = false
+	for _, targetPool := range g.targetPools {
+		log.Infof("De-registering Instance %s from gclb target pool %s", g.instance.Name, targetPool.Name)
+		attached, err := g.glbClient.IsInstanceInTargetPool(g.instance, targetPool.Name)
+		if err != nil {
+			return err
+		}
+		if attached {
+			err := g.glbClient.RemoveInstanceFromTargetPool(g.instance, targetPool.Name)
+			if err != nil {
+				log.Warnf("unable to deregister instance %s from gclb target pool %s: %v", g.instance.Name, targetPool.Name, err)
+				targetPoolRemoveFailed = true
+			}
+		} else {
+			log.Infof("Instance %q instances not in the group", g.instance.Name)
+		}
+	}
+
+	if instanceGroupRemoveFailed || targetPoolRemoveFailed {
+		return errors.New("at least one instance could not be removed from a gclb")
 	}
 
 	log.Infof("Waiting %v to finish gclb deregistration", g.config.DrainDelay)
@@ -104,23 +135,23 @@ func (g *gclb) Stop() error {
 	return nil
 }
 
-func (g *gclb) attachToFrontEnds() error {
+func (g *gclb) attachToInstanceGroups() error {
 	instance, err := g.glbClient.GetSelfMetadata()
 	if err != nil {
 		return err
 	}
 	log.Infof("Attaching to GCLBs from Instance %s", instance.ID)
 	g.instance = instance
-	clusterFrontEnds, err := g.glbClient.FindFrontEndInstanceGroups(instance.Project, instance.Zone, g.config.InstanceGroupPrefix)
+	instanceGroups, err := g.glbClient.FindInstanceGroups(instance.Project, instance.Zone, g.config.InstanceGroupPrefix)
 	if err != nil {
 		return err
 	}
-	g.instanceGroups = clusterFrontEnds
+	g.instanceGroups = instanceGroups
 	registered := 0
 
-	for _, frontend := range clusterFrontEnds {
-		log.Infof("Registering Instance %s with gclb Instance group %s", instance.Name, frontend.Name)
-		attached, err := g.glbClient.IsInstanceInGroup(instance, frontend.Name)
+	for _, frontend := range instanceGroups {
+		log.Infof("Registering Instance %s with gclb instance group %s", instance.Name, frontend.Name)
+		attached, err := g.glbClient.IsInstanceInInstanceGroup(instance, frontend.Name)
 		if err != nil {
 			return err
 		}
@@ -128,9 +159,49 @@ func (g *gclb) attachToFrontEnds() error {
 			// We get an error if we try to attach again
 			log.Infof("Instance %q instances already attached", g.instance.Name)
 		} else {
-			err := g.glbClient.AddInstance(instance, frontend.Name)
+			err := g.glbClient.AddInstanceToInstanceGroup(instance, frontend.Name)
 			if err != nil {
-				return fmt.Errorf("unable to register Instance %s with gclb %s: %v", instance.Name, frontend.Name, err)
+				return fmt.Errorf("unable to register instance %s with instance group %s: %v", instance.Name, frontend.Name, err)
+			}
+		}
+		registered++
+	}
+
+	g.registeredFrontends.Set(registered)
+	if g.config.ExpectedFrontends > 0 && registered != g.config.ExpectedFrontends {
+		return fmt.Errorf("expected gclbs: %d actual: %d", g.config.ExpectedFrontends, registered)
+	}
+
+	return nil
+}
+
+func (g *gclb) attachToTargetPools() error {
+	instance, err := g.glbClient.GetSelfMetadata()
+	if err != nil {
+		return err
+	}
+	log.Infof("Attaching to GCLBs from Instance %s", instance.ID)
+	g.instance = instance
+	targetPools, err := g.glbClient.FindTargetPools(instance.Project, instance.Region, g.config.TargetPoolPrefix)
+	if err != nil {
+		return err
+	}
+	g.targetPools = targetPools
+	registered := 0
+
+	for _, frontend := range targetPools {
+		log.Infof("Registering Instance %s with gclb target pool %s", instance.Name, frontend.Name)
+		attached, err := g.glbClient.IsInstanceInTargetPool(instance, frontend.Name)
+		if err != nil {
+			return err
+		}
+		if attached {
+			// We get an error if we try to attach again
+			log.Infof("Instance %q instances already attached", g.instance.Name)
+		} else {
+			err := g.glbClient.AddInstanceToTargetPool(instance, frontend.Name)
+			if err != nil {
+				return fmt.Errorf("unable to register Instance %s to target pool %s: %v", instance.Name, frontend.Name, err)
 			}
 		}
 		registered++

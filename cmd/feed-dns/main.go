@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"os"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
+	flag "github.com/spf13/pflag"
 )
 
 var (
@@ -20,13 +20,13 @@ var (
 	kubeconfig                 string
 	resyncPeriod               time.Duration
 	healthPort                 int
-	albNames                   cmd.CommaSeparatedValues
+	albNames                   []string
 	elbLabelValue              string
 	elbRegion                  string
 	r53HostedZone              string
 	pushgatewayURL             string
 	pushgatewayIntervalSeconds int
-	pushgatewayLabels          cmd.KeyValues
+	pushgatewayLabels          []string
 	awsAPIRetries              int
 	internalHostname           string
 	externalHostname           string
@@ -53,7 +53,7 @@ func init() {
 		"Resync with the apiserver periodically to handle missed updates.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller.")
-	flag.Var(&albNames, "alb-names",
+	flag.StringSliceVar(&albNames, "alb-names", []string{},
 		"Comma delimited list of ALB names to use for Route53 updates. Should only include a single ALB name per LB scheme.")
 	flag.StringVar(&elbRegion, "elb-region", defaultElbRegion,
 		"AWS region for ELBs.")
@@ -66,7 +66,7 @@ func init() {
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
 	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
 		"Interval in seconds for pushing metrics.")
-	flag.Var(&pushgatewayLabels, "pushgateway-label",
+	flag.StringSliceVar(&pushgatewayLabels, "pushgateway-label", []string{},
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
 	flag.IntVar(&awsAPIRetries, "aws-api-retries", defaultAwsAPIRetries,
 		"Number of times a request to the AWS API is retried.")

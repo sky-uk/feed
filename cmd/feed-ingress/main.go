@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	_ "net/http/pprof"
 	"strconv"
@@ -23,6 +22,7 @@ import (
 	"github.com/sky-uk/feed/nginx"
 	"github.com/sky-uk/feed/util/cmd"
 	"github.com/sky-uk/feed/util/metrics"
+	flag "github.com/spf13/pflag"
 )
 
 var (
@@ -37,15 +37,15 @@ var (
 	elbLabelValue                  string
 	elbExpectedNumber              int
 	drainDelay                     time.Duration
-	targetGroupNames               cmd.CommaSeparatedValues
+	targetGroupNames               []string
 	targetGroupDeregistrationDelay time.Duration
 	pushgatewayURL                 string
 	pushgatewayIntervalSeconds     int
-	pushgatewayLabels              cmd.KeyValues
+	pushgatewayLabels              []string
 	controllerConfig               controller.Config
 	nginxConfig                    nginx.Conf
-	nginxLogHeaders                cmd.CommaSeparatedValues
-	nginxTrustedFrontends          cmd.CommaSeparatedValues
+	nginxLogHeaders                []string
+	nginxTrustedFrontends          []string
 	nginxSSLPath                   string
 	nginxVhostStatsSharedMemory    int
 	nginxOpenTracingPluginPath     string
@@ -77,6 +77,7 @@ var (
 	merlinVIPInterface             string
 	merlinInternalHostname         string
 	merlinInternetFacingHostname   string
+	gclbTargetPoolPrefix           string
 	gclbInstanceGroupPrefix        string
 	gclbExpectedNumber             int
 )
@@ -140,6 +141,7 @@ const (
 	defaultClientBodyBufferSize              = 16
 	defaultLargeClientHeaderBufferBlocks     = 4
 	defaultGclbInstanceGroupPrefix           = ""
+	defaultGclbTargetPoolPrefix              = ""
 	defaultGclbExpectedNumber                = 0
 )
 
@@ -225,8 +227,9 @@ func init() {
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	flag.StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")
 	flag.BoolVar(&nginxConfig.AccessLog, "access-log", false, "Enable access logs directive.")
-	flag.Var(&nginxLogHeaders, "nginx-log-headers", "Comma separated list of headers to be logged in access logs")
-	flag.Var(&nginxTrustedFrontends, "nginx-trusted-frontends",
+	flag.StringSliceVar(&nginxLogHeaders, "nginx-log-headers", []string{},
+		"Comma separated list of headers to be logged in access logs")
+	flag.StringSliceVar(&nginxTrustedFrontends, "nginx-trusted-frontends", []string{},
 		"Comma separated list of CIDRs to trust when determining the client's real IP from "+
 			"frontends. The client IP is used for allowing or denying ingress access. "+
 			"This will typically be the ELB subnet.")
@@ -254,7 +257,7 @@ func init() {
 			" otherwise it fails to start if it can't attach to this number.")
 	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
 		" for feed-ingress to drain from the registration component on shutdown. Should match the ELB's drain time.")
-	flag.Var(&targetGroupNames, "alb-target-group-names",
+	flag.StringSliceVar(&targetGroupNames, "alb-target-group-names", []string{},
 		"Names of ALB target groups to attach to, separated by commas.")
 	flag.DurationVar(&targetGroupDeregistrationDelay, "alb-target-group-deregistration-delay",
 		defaultTargetGroupDeregistrationDelay,
@@ -266,7 +269,7 @@ func init() {
 		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
 	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
 		"Interval in seconds for pushing metrics.")
-	flag.Var(&pushgatewayLabels, "pushgateway-label",
+	flag.StringSliceVar(&pushgatewayLabels, "pushgateway-label", []string{},
 		"A label=value pair to attach to metrics pushed to prometheus. Specify multiple times for multiple labels.")
 
 	// gorb flags
@@ -320,11 +323,13 @@ func init() {
 		"Hostname of the internet facing load-balancer")
 
 	// gclb flags
-	flag.StringVar(&gclbInstanceGroupPrefix, "gclb-instance-group-prefix", defaultGclbInstanceGroupPrefix,
-		"GCLB backend Instance Group prefix..")
 	flag.IntVar(&gclbExpectedNumber, "gclb-expected-number", defaultGclbExpectedNumber,
 		"Expected number of GCLBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
+	flag.StringVar(&gclbTargetPoolPrefix, "gclb-target-pool-prefix", defaultGclbTargetPoolPrefix,
+		"GLCB backend target pool prefix.")
+	flag.StringVar(&gclbInstanceGroupPrefix, "gclb-instance-group-prefix", defaultGclbInstanceGroupPrefix,
+		"GCLB backend Instance Group prefix.")
 }
 
 func main() {
@@ -348,7 +353,6 @@ func main() {
 	if legacyBackendKeepaliveSeconds != unset {
 		controllerConfig.DefaultBackendTimeoutSeconds = legacyBackendKeepaliveSeconds
 	}
-
 	feedController := controller.New(controllerConfig)
 
 	cmd.AddHealthMetrics(feedController, metrics.PrometheusIngressSubsystem)
@@ -477,14 +481,15 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 		}
 
 	case "gclb":
-		if gclbInstanceGroupPrefix == "" {
-			return nil, errors.New("missing GCLB Instance Group prefix")
+		if gclbInstanceGroupPrefix == "" && gclbTargetPoolPrefix == "" {
+			return nil, errors.New("registration-frontend-type was specified as 'gclb' but neither target pool prefix or instance group prefix are set")
 		}
 
 		config := gclb.Config{
-			InstanceGroupPrefix: gclbInstanceGroupPrefix,
 			ExpectedFrontends:   gclbExpectedNumber,
 			DrainDelay:          drainDelay,
+			InstanceGroupPrefix: gclbInstanceGroupPrefix,
+			TargetPoolPrefix:    gclbTargetPoolPrefix,
 		}
 
 		gclbStatusUpdater, err := gclb.NewUpdater(config)
