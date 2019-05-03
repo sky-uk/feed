@@ -14,11 +14,10 @@ import (
 
 // Config for GCLB
 type Config struct {
-	//TODO revisit
-	InstanceGroupPrefix string
-	TargetPoolPrefix    string
-	ExpectedFrontends   int
-	DrainDelay          time.Duration
+	InstanceGroupPrefix                 string
+	TargetPoolPrefix                    string
+	ExpectedFrontends                   int
+	TargetPoolConnectionDrainingTimeout time.Duration
 }
 
 // NewUpdater Google Cloud Load Balancer updater.
@@ -35,14 +34,15 @@ func NewUpdater(config Config) (controller.Updater, error) {
 }
 
 type gclb struct {
-	glbClient           GLBClient
-	initialised         initialised
-	readyForHealthCheck util.SafeBool
-	instance            *Instance
-	instanceGroups      []*compute.InstanceGroup
-	targetPools         []*compute.TargetPool
-	registeredFrontends util.SafeInt
-	config              Config
+	glbClient                           GLBClient
+	initialised                         initialised
+	readyForHealthCheck                 util.SafeBool
+	instance                            *Instance
+	instanceGroups                      []*compute.InstanceGroup
+	targetPools                         []*compute.TargetPool
+	registeredFrontends                 util.SafeInt
+	targetPoolConnectionDrainingTimeout time.Duration
+	config                              Config
 }
 
 // Instance contains information for a given GCP instance
@@ -107,6 +107,20 @@ func (g *gclb) Stop() error {
 		}
 	}
 
+	/*
+	   The sleep below ensures that the target pool does not close connections before nginx has. nignxUpdater has
+	   already been invoked which signals nginx to gracefully shutdown.
+
+	   Source: https://cloud.google.com/load-balancing/docs/target-pools#add_or_remove_a_backup_target_pool
+	   "If you remove an instance from a target pool without draining it first, you will break all TCP sessions to that
+	   instance. To remove an instance safely, first drain the instance by having it fail its health check. After TCP
+	   sessions close naturally, remove the instance from the pool."
+	*/
+	if len(g.targetPools) > 0 {
+		log.Infof("gclb: nginx has received sigquit, waiting %s for it to close connections before de-registering from target pool", g.config.TargetPoolConnectionDrainingTimeout.String())
+		time.Sleep(g.config.TargetPoolConnectionDrainingTimeout)
+	}
+
 	var targetPoolRemoveFailed = false
 	for _, targetPool := range g.targetPools {
 		log.Infof("De-registering Instance %s from gclb target pool %s", g.instance.Name, targetPool.Name)
@@ -128,9 +142,6 @@ func (g *gclb) Stop() error {
 	if instanceGroupRemoveFailed || targetPoolRemoveFailed {
 		return errors.New("at least one instance could not be removed from a gclb")
 	}
-
-	log.Infof("Waiting %v to finish gclb deregistration", g.config.DrainDelay)
-	time.Sleep(g.config.DrainDelay)
 
 	return nil
 }
@@ -220,7 +231,7 @@ func (g *gclb) Health() error {
 		return nil
 	}
 
-	return fmt.Errorf("expected gclbss: %d actual: %d", g.config.ExpectedFrontends, g.registeredFrontends.Get())
+	return fmt.Errorf("expected gclbs: %d actual: %d", g.config.ExpectedFrontends, g.registeredFrontends.Get())
 }
 
 func (g *gclb) String() string {

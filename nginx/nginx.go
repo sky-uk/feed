@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	nginxStartDelay       = time.Millisecond * 100
-	metricsUpdateInterval = time.Second * 10
+	nginxStartDelay         = time.Millisecond * 100
+	metricsUpdateInterval   = time.Second * 10
+	gclbHealthCheckFileName = "gclbhealth"
 )
 
 // Port configuration
@@ -56,6 +57,8 @@ type Conf struct {
 	VhostStatsSharedMemory       int
 	OpenTracingPlugin            string
 	OpenTracingConfig            string
+	GclbHealthCheckEnabled       bool
+	GclbTargetPoolDrainDuration  time.Duration
 	HTTPConf
 }
 
@@ -181,6 +184,12 @@ func (n *nginxUpdater) Start() error {
 		return fmt.Errorf("unable to initialise nginx config: %v", err)
 	}
 
+	if n.Conf.GclbHealthCheckEnabled {
+		if err := n.createHealthCheckFile(fmt.Sprintf("%s/%s", n.Conf.WorkingDir, gclbHealthCheckFileName)); err != nil {
+			log.Errorf("unable to create healthcheck file: %e", err)
+		}
+	}
+
 	return nil
 }
 
@@ -281,6 +290,13 @@ func (n *nginxUpdater) updateMetrics() {
 
 func (n *nginxUpdater) Stop() error {
 	if n.running.Get() {
+		if n.Conf.GclbHealthCheckEnabled {
+			if err := n.removeHealthCheckFile(fmt.Sprintf("%s/%s", n.Conf.WorkingDir, gclbHealthCheckFileName)); err != nil {
+				log.Errorf("failed to delete the healthcheck file: %e", err)
+			}
+			log.Infof("failing healthcheck for %s before shutting down nginx so that gcp target pools stop sending traffic", n.Conf.GclbTargetPoolDrainDuration.String())
+			time.Sleep(n.Conf.GclbTargetPoolDrainDuration)
+		}
 		log.Info("Shutting down nginx process")
 		if err := n.nginx.sigquit(); err != nil {
 			return fmt.Errorf("error shutting down nginx: %v", err)
@@ -546,6 +562,20 @@ func (n *nginxUpdater) Health() error {
 
 func (n *nginxUpdater) String() string {
 	return "nginx proxy"
+}
+
+func (n *nginxUpdater) createHealthCheckFile(file string) error {
+	if _, err := writeFile(file, []byte{}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (n *nginxUpdater) removeHealthCheckFile(file string) error {
+	if err := os.Remove(file); err != nil {
+		return err
+	}
+	return nil
 }
 
 func writeFile(location string, contents []byte) (bool, error) {

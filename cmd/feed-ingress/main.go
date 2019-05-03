@@ -26,123 +26,126 @@ import (
 )
 
 var (
-	debug                          bool
-	kubeconfig                     string
-	resyncPeriod                   time.Duration
-	ingressPort                    int
-	ingressHTTPSPort               int
-	ingressHealthPort              int
-	healthPort                     int
-	region                         string
-	elbLabelValue                  string
-	elbExpectedNumber              int
-	drainDelay                     time.Duration
-	targetGroupNames               []string
-	targetGroupDeregistrationDelay time.Duration
-	pushgatewayURL                 string
-	pushgatewayIntervalSeconds     int
-	pushgatewayLabels              []string
-	controllerConfig               controller.Config
-	nginxConfig                    nginx.Conf
-	nginxLogHeaders                []string
-	nginxTrustedFrontends          []string
-	nginxSSLPath                   string
-	nginxVhostStatsSharedMemory    int
-	nginxOpenTracingPluginPath     string
-	nginxOpenTracingConfigPath     string
-	legacyBackendKeepaliveSeconds  int
-	registrationFrontendType       string
-	gorbIngressInstanceIP          string
-	gorbEndpoint                   string
-	gorbServicesDefinition         string
-	gorbBackendMethod              string
-	gorbBackendWeight              int
-	gorbVipLoadbalancer            string
-	gorbManageLoopback             bool
-	gorbBackendHealthcheckInterval string
-	gorbBackendHealthcheckType     string
-	gorbInterfaceProcFsPath        string
-	merlinEndpoint                 string
-	merlinRequestTimeout           time.Duration
-	merlinServiceID                string
-	merlinHTTPSServiceID           string
-	merlinInstanceIP               string
-	merlinForwardMethod            string
-	merlinDrainDelay               time.Duration
-	merlinHealthUpThreshold        uint
-	merlinHealthDownThreshold      uint
-	merlinHealthPeriod             time.Duration
-	merlinHealthTimeout            time.Duration
-	merlinVIP                      string
-	merlinVIPInterface             string
-	merlinInternalHostname         string
-	merlinInternetFacingHostname   string
-	gclbTargetPoolPrefix           string
-	gclbInstanceGroupPrefix        string
-	gclbExpectedNumber             int
+	debug                                   bool
+	kubeconfig                              string
+	resyncPeriod                            time.Duration
+	ingressPort                             int
+	ingressHTTPSPort                        int
+	ingressHealthPort                       int
+	healthPort                              int
+	region                                  string
+	elbLabelValue                           string
+	elbExpectedNumber                       int
+	drainDelay                              time.Duration
+	targetGroupNames                        []string
+	targetGroupDeregistrationDelay          time.Duration
+	pushgatewayURL                          string
+	pushgatewayIntervalSeconds              int
+	pushgatewayLabels                       []string
+	controllerConfig                        controller.Config
+	nginxConfig                             nginx.Conf
+	nginxLogHeaders                         []string
+	nginxTrustedFrontends                   []string
+	nginxSSLPath                            string
+	nginxVhostStatsSharedMemory             int
+	nginxOpenTracingPluginPath              string
+	nginxOpenTracingConfigPath              string
+	legacyBackendKeepaliveSeconds           int
+	registrationFrontendType                string
+	gorbIngressInstanceIP                   string
+	gorbEndpoint                            string
+	gorbServicesDefinition                  string
+	gorbBackendMethod                       string
+	gorbBackendWeight                       int
+	gorbVipLoadbalancer                     string
+	gorbManageLoopback                      bool
+	gorbBackendHealthcheckInterval          string
+	gorbBackendHealthcheckType              string
+	gorbInterfaceProcFsPath                 string
+	merlinEndpoint                          string
+	merlinRequestTimeout                    time.Duration
+	merlinServiceID                         string
+	merlinHTTPSServiceID                    string
+	merlinInstanceIP                        string
+	merlinForwardMethod                     string
+	merlinDrainDelay                        time.Duration
+	merlinHealthUpThreshold                 uint
+	merlinHealthDownThreshold               uint
+	merlinHealthPeriod                      time.Duration
+	merlinHealthTimeout                     time.Duration
+	merlinVIP                               string
+	merlinVIPInterface                      string
+	merlinInternalHostname                  string
+	merlinInternetFacingHostname            string
+	gclbTargetPoolPrefix                    string
+	gclbTargetPoolConnectionDrainingTimeout time.Duration
+	gclbInstanceGroupPrefix                 string
+	gclbExpectedNumber                      int
+	gclbShutdownGracePeriod                 bool
 )
 
 const (
-	unset                                    = -1
-	defaultResyncPeriod                      = time.Minute * 15
-	defaultIngressPort                       = 8080
-	defaultIngressHTTPSPort                  = unset
-	defaultIngressAllow                      = "0.0.0.0/0"
-	defaultIngressHealthPort                 = 8081
-	defaultIngressStripPath                  = true
-	defaultIngressExactPath                  = false
-	defaultHealthPort                        = 12082
-	defaultNginxBinary                       = "/usr/sbin/nginx"
-	defaultNginxWorkingDir                   = "/nginx"
-	defaultNginxWorkers                      = 1
-	defaultNginxWorkerConnections            = 1024
-	defaultNginxWorkerShutdownTimeoutSeconds = 0
-	defaultNginxKeepAliveSeconds             = 60
-	defaultNginxBackendKeepalives            = 512
-	defaultNginxBackendTimeoutSeconds        = 60
-	defaultNginxBackendConnectTimeoutSeconds = 1
-	defaultNginxBackendMaxConnections        = 0
-	defaultNginxProxyBufferSize              = 16
-	defaultNginxProxyBufferBlocks            = 4
-	defaultNginxLogLevel                     = "warn"
-	defaultNginxServerNamesHashBucketSize    = unset
-	defaultNginxServerNamesHashMaxSize       = unset
-	defaultNginxProxyProtocol                = false
-	defaultNginxUpdatePeriod                 = time.Second * 30
-	defaultNginxSSLPath                      = "/etc/ssl/default-ssl/default-ssl"
-	defaultNginxVhostStatsSharedMemory       = 1
-	defaultNginxOpenTracingPluginPath        = ""
-	defaultNginxOpenTracingConfigPath        = ""
-	defaultElbLabelValue                     = ""
-	defaultDrainDelay                        = time.Second * 60
-	defaultTargetGroupDeregistrationDelay    = time.Second * 300
-	defaultRegion                            = "eu-west-1"
-	defaultElbExpectedNumber                 = 0
-	defaultPushgatewayIntervalSeconds        = 60
-	defaultAccessLogDir                      = "/var/log/nginx"
-	defaultRegistrationFrontendType          = "elb"
-	defaultGorbIngressInstanceIP             = "127.0.0.1"
-	defaultGorbEndpoint                      = "http://127.0.0.1:80"
-	defaultGorbBackendMethod                 = "dr"
-	defaultGorbBackendWeight                 = 1000
-	defaultGorbServicesDefinition            = "http-proxy:80,https-proxy:443"
-	defaultGorbVipLoadbalancer               = "127.0.0.1"
-	defaultGorbManageLoopback                = true
-	defaultGorbInterfaceProcFsPath           = "/host-ipv4-proc/"
-	defaultGorbBackendHealthcheckInterval    = "1s"
-	defaultGorbBackendHealthcheckType        = "http"
-	defaultMerlinForwardMethod               = "route"
-	defaultMerlinHealthUpThreshold           = 3
-	defaultMerlinHealthDownThreshold         = 2
-	defaultMerlinHealthPeriod                = 10 * time.Second
-	defaultMerlinHealthTimeout               = time.Second
-	defaultMerlinVIPInterface                = "lo"
-	defaultClientHeaderBufferSize            = 16
-	defaultClientBodyBufferSize              = 16
-	defaultLargeClientHeaderBufferBlocks     = 4
-	defaultGclbInstanceGroupPrefix           = ""
-	defaultGclbTargetPoolPrefix              = ""
-	defaultGclbExpectedNumber                = 0
+	unset                                          = -1
+	defaultResyncPeriod                            = time.Minute * 15
+	defaultIngressPort                             = 8080
+	defaultIngressHTTPSPort                        = unset
+	defaultIngressAllow                            = "0.0.0.0/0"
+	defaultIngressHealthPort                       = 8081
+	defaultIngressStripPath                        = true
+	defaultIngressExactPath                        = false
+	defaultHealthPort                              = 12082
+	defaultNginxBinary                             = "/usr/sbin/nginx"
+	defaultNginxWorkingDir                         = "/nginx"
+	defaultNginxWorkers                            = 1
+	defaultNginxWorkerConnections                  = 1024
+	defaultNginxWorkerShutdownTimeoutSeconds       = 0
+	defaultNginxKeepAliveSeconds                   = 60
+	defaultNginxBackendKeepalives                  = 512
+	defaultNginxBackendTimeoutSeconds              = 60
+	defaultNginxBackendConnectTimeoutSeconds       = 1
+	defaultNginxBackendMaxConnections              = 0
+	defaultNginxProxyBufferSize                    = 16
+	defaultNginxProxyBufferBlocks                  = 4
+	defaultNginxLogLevel                           = "warn"
+	defaultNginxServerNamesHashBucketSize          = unset
+	defaultNginxServerNamesHashMaxSize             = unset
+	defaultNginxProxyProtocol                      = false
+	defaultNginxUpdatePeriod                       = time.Second * 30
+	defaultNginxSSLPath                            = "/etc/ssl/default-ssl/default-ssl"
+	defaultNginxVhostStatsSharedMemory             = 1
+	defaultNginxOpenTracingPluginPath              = ""
+	defaultNginxOpenTracingConfigPath              = ""
+	defaultElbLabelValue                           = ""
+	defaultDrainDelay                              = time.Second * 60
+	defaultTargetGroupDeregistrationDelay          = time.Second * 300
+	defaultRegion                                  = "eu-west-1"
+	defaultElbExpectedNumber                       = 0
+	defaultPushgatewayIntervalSeconds              = 60
+	defaultAccessLogDir                            = "/var/log/nginx"
+	defaultRegistrationFrontendType                = "elb"
+	defaultGorbIngressInstanceIP                   = "127.0.0.1"
+	defaultGorbEndpoint                            = "http://127.0.0.1:80"
+	defaultGorbBackendMethod                       = "dr"
+	defaultGorbBackendWeight                       = 1000
+	defaultGorbServicesDefinition                  = "http-proxy:80,https-proxy:443"
+	defaultGorbVipLoadbalancer                     = "127.0.0.1"
+	defaultGorbManageLoopback                      = true
+	defaultGorbInterfaceProcFsPath                 = "/host-ipv4-proc/"
+	defaultGorbBackendHealthcheckInterval          = "1s"
+	defaultGorbBackendHealthcheckType              = "http"
+	defaultMerlinForwardMethod                     = "route"
+	defaultMerlinHealthUpThreshold                 = 3
+	defaultMerlinHealthDownThreshold               = 2
+	defaultMerlinHealthPeriod                      = 10 * time.Second
+	defaultMerlinHealthTimeout                     = time.Second
+	defaultMerlinVIPInterface                      = "lo"
+	defaultClientHeaderBufferSize                  = 16
+	defaultClientBodyBufferSize                    = 16
+	defaultLargeClientHeaderBufferBlocks           = 4
+	defaultGclbTargetPoolPrefix                    = ""
+	defaultGclbTargetPoolConnectionDrainingTimeout = 28 * time.Second
+	defaultGclbInstanceGroupPrefix                 = ""
+	defaultGclbExpectedNumber                      = 0
 )
 
 func init() {
@@ -328,6 +331,8 @@ func init() {
 			" otherwise it fails to start if it can't attach to this number.")
 	flag.StringVar(&gclbTargetPoolPrefix, "gclb-target-pool-prefix", defaultGclbTargetPoolPrefix,
 		"GLCB backend target pool prefix.")
+	flag.DurationVar(&gclbTargetPoolConnectionDrainingTimeout, "gclb-target-pool-connection-draining-timeout", defaultGclbTargetPoolConnectionDrainingTimeout,
+		"GCLB backend target pool draining timeout.")
 	flag.StringVar(&gclbInstanceGroupPrefix, "gclb-instance-group-prefix", defaultGclbInstanceGroupPrefix,
 		"GCLB backend Instance Group prefix.")
 }
@@ -380,6 +385,10 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 	nginxConfig.VhostStatsSharedMemory = nginxVhostStatsSharedMemory
 	nginxConfig.OpenTracingPlugin = nginxOpenTracingPluginPath
 	nginxConfig.OpenTracingConfig = nginxOpenTracingConfigPath
+	if registrationFrontendType == "gclb" && gclbTargetPoolPrefix != "" {
+		nginxConfig.GclbHealthCheckEnabled = true
+		nginxConfig.GclbTargetPoolDrainDuration = gclbTargetPoolConnectionDrainingTimeout
+	}
 	nginxUpdater := nginx.New(nginxConfig)
 
 	updaters := []controller.Updater{nginxUpdater}
@@ -486,10 +495,10 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 		}
 
 		config := gclb.Config{
-			ExpectedFrontends:   gclbExpectedNumber,
-			DrainDelay:          drainDelay,
-			InstanceGroupPrefix: gclbInstanceGroupPrefix,
-			TargetPoolPrefix:    gclbTargetPoolPrefix,
+			ExpectedFrontends:                   gclbExpectedNumber,
+			TargetPoolConnectionDrainingTimeout: gclbTargetPoolConnectionDrainingTimeout,
+			TargetPoolPrefix:                    gclbTargetPoolPrefix,
+			InstanceGroupPrefix:                 gclbInstanceGroupPrefix,
 		}
 
 		gclbStatusUpdater, err := gclb.NewUpdater(config)
@@ -499,7 +508,7 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 		updaters = append(updaters, gclbStatusUpdater)
 
 	default:
-		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb, merlin but"+
+		return nil, fmt.Errorf("invalid registration frontend type. Must be either gorb, elb, alb, merlin or gclb but"+
 			"was %s", registrationFrontendType)
 	}
 

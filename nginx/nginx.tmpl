@@ -221,7 +221,12 @@ http {
             access_log off;
             return 200;
         }
-
+{{ if .GclbHealthCheckEnabled }}
+        location /gclbhealth {
+            root /nginx;
+            index gclbhealthcheck;
+        }
+{{ end }}
         location /basic_status {
             access_log off;
             stub_status;
