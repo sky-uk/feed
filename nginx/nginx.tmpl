@@ -221,10 +221,10 @@ http {
             access_log off;
             return 200;
         }
-{{ if .GclbHealthCheckEnabled }}
-        location /gclbhealth {
+{{ if .ReadyHealthCheckEnabled }}
+        location /ready {
             root /nginx;
-            index gclbhealthcheck;
+            index ready;
         }
 {{ end }}
         location /basic_status {

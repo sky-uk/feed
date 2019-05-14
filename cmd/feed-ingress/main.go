@@ -50,6 +50,7 @@ var (
 	nginxVhostStatsSharedMemory             int
 	nginxOpenTracingPluginPath              string
 	nginxOpenTracingConfigPath              string
+	nginxReadyHealthCheckEnabled            bool
 	legacyBackendKeepaliveSeconds           int
 	registrationFrontendType                string
 	gorbIngressInstanceIP                   string
@@ -115,6 +116,7 @@ const (
 	defaultNginxVhostStatsSharedMemory             = 1
 	defaultNginxOpenTracingPluginPath              = ""
 	defaultNginxOpenTracingConfigPath              = ""
+	defaultNginxReadyHealthCheckEnabled            = false
 	defaultElbLabelValue                           = ""
 	defaultDrainDelay                              = time.Second * 60
 	defaultTargetGroupDeregistrationDelay          = time.Second * 300
@@ -247,6 +249,7 @@ func init() {
 	flag.IntVar(&nginxConfig.ClientHeaderBufferSize, "nginx-client-header-buffer-size-in-kb", defaultClientHeaderBufferSize, "Sets buffer size for reading client request header")
 	flag.IntVar(&nginxConfig.ClientBodyBufferSize, "nginx-client-body-buffer-size-in-kb", defaultClientBodyBufferSize, "Sets buffer size for reading client request body")
 	flag.IntVar(&nginxConfig.LargeClientHeaderBufferBlocks, "nginx-large-client-header-buffer-blocks", defaultLargeClientHeaderBufferBlocks, "Sets the maximum number of buffers used for reading large client request header")
+	flag.BoolVar(&nginxConfig.ReadyHealthCheckEnabled, "nginx-ready-health-check", defaultNginxReadyHealthCheckEnabled, "Enables the nginx /ready healthcheck endpoint, which is based on the presence of \"/nginx/ready\"")
 
 	// elb/alb/gclb flags
 	flag.StringVar(&region, "region", defaultRegion,
@@ -385,10 +388,6 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 	nginxConfig.VhostStatsSharedMemory = nginxVhostStatsSharedMemory
 	nginxConfig.OpenTracingPlugin = nginxOpenTracingPluginPath
 	nginxConfig.OpenTracingConfig = nginxOpenTracingConfigPath
-	if registrationFrontendType == "gclb" && gclbTargetPoolPrefix != "" {
-		nginxConfig.GclbHealthCheckEnabled = true
-		nginxConfig.GclbTargetPoolDrainDuration = gclbTargetPoolConnectionDrainingTimeout
-	}
 	nginxUpdater := nginx.New(nginxConfig)
 
 	updaters := []controller.Updater{nginxUpdater}
@@ -499,6 +498,7 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 			TargetPoolConnectionDrainingTimeout: gclbTargetPoolConnectionDrainingTimeout,
 			TargetPoolPrefix:                    gclbTargetPoolPrefix,
 			InstanceGroupPrefix:                 gclbInstanceGroupPrefix,
+			NginxWorkingDir:                     nginxConfig.WorkingDir,
 		}
 
 		gclbStatusUpdater, err := gclb.NewUpdater(config)

@@ -3,6 +3,8 @@ package gclb
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"sync"
 	"time"
 
@@ -12,12 +14,17 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
+const (
+	readyHealthCheckFileName = "ready"
+)
+
 // Config for GCLB
 type Config struct {
 	InstanceGroupPrefix                 string
 	TargetPoolPrefix                    string
 	ExpectedFrontends                   int
 	TargetPoolConnectionDrainingTimeout time.Duration
+	NginxWorkingDir                     string
 }
 
 // NewUpdater Google Cloud Load Balancer updater.
@@ -62,6 +69,9 @@ type initialised struct {
 // Start instances a no-op. Attaching to the GCLB will happen on the first Update,
 // after the nginx configuration has been set.
 func (g *gclb) Start() error {
+	if err := g.createHealthCheckFile(); err != nil {
+		log.Errorf("unable to create ready healthcheck file: %e", err)
+	}
 	return nil
 }
 
@@ -117,7 +127,11 @@ func (g *gclb) Stop() error {
 	   sessions close naturally, remove the instance from the pool."
 	*/
 	if len(g.targetPools) > 0 {
-		log.Infof("gclb: nginx has received sigquit, waiting %s for it to close connections before de-registering from target pool", g.config.TargetPoolConnectionDrainingTimeout.String())
+		log.Info("gclb: nginx has received sigquit")
+		if err := g.removeHealthCheckFile(); err != nil {
+			log.Errorf("unable to remove ready healthcheck file: %e", err)
+		}
+		log.Infof("waiting %s for it to close connections before de-registering from target pool", g.config.TargetPoolConnectionDrainingTimeout.String())
 		time.Sleep(g.config.TargetPoolConnectionDrainingTimeout)
 	}
 
@@ -236,4 +250,29 @@ func (g *gclb) Health() error {
 
 func (g *gclb) String() string {
 	return "GCLB frontend"
+}
+
+func (g *gclb) createHealthCheckFile() error {
+	if _, err := writeFile(g.getHealthCheckFilePath(), []byte{}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (g *gclb) removeHealthCheckFile() error {
+	if err := os.Remove(g.getHealthCheckFilePath()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (g *gclb) getHealthCheckFilePath() string {
+	return fmt.Sprintf("%s/%s", g.config.NginxWorkingDir, readyHealthCheckFileName)
+}
+func writeFile(location string, contents []byte) (bool, error) {
+	err := ioutil.WriteFile(location, contents, 0644)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
