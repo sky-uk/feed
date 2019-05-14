@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -112,11 +111,10 @@ func ConfigureLogging(debug bool) {
 
 // ConfigureMetrics sets up metrics pushing and default labels. This must be called before any metrics
 // are defined.
-func ConfigureMetrics(job string, prometheusLabels []string, pushgatewayURL string, pushgatewayIntervalSeconds int) {
+func ConfigureMetrics(job string, prometheusLabels KeyValues, pushgatewayURL string, pushgatewayIntervalSeconds int) {
 	labels := make(prometheus.Labels)
 	for _, l := range prometheusLabels {
-		keyValue := strings.Split(l, "=")
-		labels[keyValue[0]] = keyValue[1]
+		labels[l.key] = l.value
 	}
 	metrics.SetConstLabels(labels)
 	addMetricsPusher(job, pushgatewayURL, time.Second*time.Duration(pushgatewayIntervalSeconds))

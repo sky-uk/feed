@@ -47,4 +47,4 @@ COPY nginx.tmpl /nginx/
 RUN chown feed:feed /nginx/nginx.tmpl
 
 USER feed
-ENTRYPOINT ["/feed-ingress", "--nginx-workdir", "/nginx"]
+ENTRYPOINT ["/feed-ingress", "-nginx-workdir", "/nginx"]
