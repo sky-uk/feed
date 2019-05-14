@@ -251,17 +251,19 @@ func init() {
 	flag.BoolVar(&nginxConfig.ReadyHealthCheckEnabled, "nginx-ready-health-check", defaultNginxReadyHealthCheckEnabled, "Enables the nginx /ready healthcheck endpoint, which is based on the presence of \"/nginx/ready\"")
 
 	// elb/alb/gclb flags
+	flag.StringVar(&registrationFrontendType, "registration-frontend-type", defaultRegistrationFrontendType,
+		"Define the registration frontend type. Must be merlin, gorb, elb, alb or gclb")
+	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
+		" for feed-ingress to drain from the registration component on shutdown. Should match the ELB's drain time.")
+
+	// elb/alb flags
 	flag.StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
 		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
-	flag.StringVar(&registrationFrontendType, "registration-frontend-type", defaultRegistrationFrontendType,
-		"Define the registration frontend type. Must be merlin, gorb, elb or alb.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
-	flag.DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
-		" for feed-ingress to drain from the registration component on shutdown. Should match the ELB's drain time.")
 	flag.Var(&targetGroupNames, "alb-target-group-names",
 		"Names of ALB target groups to attach to, separated by commas.")
 	flag.DurationVar(&targetGroupDeregistrationDelay, "alb-target-group-deregistration-delay",
