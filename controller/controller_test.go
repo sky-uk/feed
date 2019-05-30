@@ -341,7 +341,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      ingressAllow,
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			nil,
 			defaultConfig(),
@@ -353,7 +353,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      ingressAllow,
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			nil,
 			defaultConfig(),
@@ -365,7 +365,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      ingressAllow,
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			nil,
 			defaultConfig(),
@@ -389,7 +389,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
 				map[string]string{
 					backendTimeoutSeconds: "10",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -410,7 +410,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      "",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -433,7 +433,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "true",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -457,7 +457,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "false",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -481,7 +481,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					exactPathAnnotation:         "true",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -505,7 +505,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					exactPathAnnotation:         "false",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -529,7 +529,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "false",
 					backendTimeoutSeconds:       "20",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -552,7 +552,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      "",
 					stripPathAnnotation:         "false",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -577,7 +577,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					backendTimeoutSeconds:       "20",
 					frontendElbSchemeAnnotation: "internal",
 					backendMaxConnections:       "512",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -602,7 +602,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "false",
 					backendTimeoutSeconds:       "20",
 					frontendElbSchemeAnnotation: "internal",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -624,7 +624,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
 				map[string]string{
 					ingressAllowAnnotation: "",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -654,7 +654,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      "",
 					proxyBufferSizeAnnotation:   "6",
 					proxyBufferBlocksAnnotation: "4",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -684,7 +684,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      "",
 					proxyBufferSizeAnnotation:   "64",
 					proxyBufferBlocksAnnotation: "12",
-				}),
+				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
 				Namespace:             ingressNamespace,
@@ -706,6 +706,29 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				DefaultProxyBufferSize:       2,
 				DefaultProxyBufferBlocks:     3,
 			},
+		},
+		{
+			"ingress without host definition",
+			createIngressesFixture("", ingressSvcName, ingressSvcPort,
+				map[string]string{}, ""),
+			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
+			nil,
+			defaultConfig(),
+		},
+		{
+			"ingress without path definition",
+			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
+				map[string]string{}, ""),
+			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
+			nil,
+			defaultConfig(),
+		},
+		{
+			"ingress without rules definition",
+			createIngressWithoutRules(),
+			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
+			nil,
+			defaultConfig(),
 		},
 	}
 
@@ -798,7 +821,7 @@ func createDefaultIngresses() []*v1beta1.Ingress {
 			ingressAllowAnnotation:      ingressAllow,
 			backendTimeoutSeconds:       "10",
 			frontendElbSchemeAnnotation: "internal",
-		})
+		}, ingressPath)
 }
 
 func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
@@ -807,13 +830,26 @@ func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
 			ingressAllowAnnotation:   ingressAllow,
 			backendTimeoutSeconds:    "10",
 			frontendSchemeAnnotation: "internal",
-		})
+		}, ingressPath)
 }
 
-func createIngressesFixture(host string, serviceName string, servicePort int, ingressAnnotations map[string]string) []*v1beta1.Ingress {
+func createIngressWithoutRules() []*v1beta1.Ingress {
+	return []*v1beta1.Ingress{
+		{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      ingressName,
+				Namespace: ingressNamespace,
+			},
+			Spec: v1beta1.IngressSpec{},
+		},
+	}
+
+}
+
+func createIngressesFixture(host string, serviceName string, servicePort int, ingressAnnotations map[string]string, path string) []*v1beta1.Ingress {
 
 	paths := []v1beta1.HTTPIngressPath{{
-		Path: ingressPath,
+		Path: path,
 		Backend: v1beta1.IngressBackend{
 			ServiceName: serviceName,
 			ServicePort: intstr.FromInt(servicePort),
@@ -845,22 +881,52 @@ func createIngressesFixture(host string, serviceName string, servicePort int, in
 		}
 	}
 
-	return []*v1beta1.Ingress{
-		{
-			ObjectMeta: v1.ObjectMeta{
-				Name:        ingressName,
-				Namespace:   ingressNamespace,
-				Annotations: annotations,
-			},
-			Spec: v1beta1.IngressSpec{
-				Rules: []v1beta1.IngressRule{{
-					Host: host,
-					IngressRuleValue: v1beta1.IngressRuleValue{HTTP: &v1beta1.HTTPIngressRuleValue{
-						Paths: paths,
+	if path == "" && host != "" {
+		return []*v1beta1.Ingress{
+			{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      ingressName,
+					Namespace: ingressNamespace,
+				},
+				Spec: v1beta1.IngressSpec{
+					Rules: []v1beta1.IngressRule{{
+						Host:             host,
+						IngressRuleValue: v1beta1.IngressRuleValue{},
 					}},
-				}},
+				},
 			},
-		},
+		}
+	} else if path == "" && host == "" {
+		return []*v1beta1.Ingress{
+			{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      ingressName,
+					Namespace: ingressNamespace,
+				},
+				Spec: v1beta1.IngressSpec{
+					Rules: []v1beta1.IngressRule{{}},
+				},
+			},
+		}
+
+	} else {
+		return []*v1beta1.Ingress{
+			{
+				ObjectMeta: v1.ObjectMeta{
+					Name:        ingressName,
+					Namespace:   ingressNamespace,
+					Annotations: annotations,
+				},
+				Spec: v1beta1.IngressSpec{
+					Rules: []v1beta1.IngressRule{{
+						Host: host,
+						IngressRuleValue: v1beta1.IngressRuleValue{HTTP: &v1beta1.HTTPIngressRuleValue{
+							Paths: paths,
+						}},
+					}},
+				},
+			},
+		}
 	}
 }
 
