@@ -172,6 +172,9 @@ func (c *controller) updateIngresses() error {
 	var entries []IngressEntry
 	for _, ingress := range ingresses {
 		for _, rule := range ingress.Spec.Rules {
+			log.Debugf("Debug data ", rule)
+			log.Debugf("Debug data rule %v", rule)
+			log.Debugf("Debug data ", rule.HTTP)
 			for _, path := range rule.HTTP.Paths {
 
 				serviceName := serviceName{namespace: ingress.Namespace, name: path.Backend.ServiceName}
