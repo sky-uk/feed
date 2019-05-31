@@ -50,7 +50,7 @@ test :
 # Docker build
 git_rev := $(shell git rev-parse --short HEAD)
 git_tag := $(shell git tag --points-at=$(git_rev))
-image_prefix := skycirrus/feed
+image_prefix := rewiko/feed
 
 docker : build
 	@echo "== build docker images"

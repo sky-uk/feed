@@ -92,7 +92,7 @@ func New(conf Config) Controller {
 		defaultBackendMaxConnections: conf.DefaultBackendMaxConnections,
 		defaultProxyBufferSize:       conf.DefaultProxyBufferSize,
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
-		doneCh:                       make(chan struct{}),
+		doneCh: make(chan struct{}),
 	}
 }
 
@@ -171,111 +171,121 @@ func (c *controller) updateIngresses() error {
 	var skipped []string
 	var entries []IngressEntry
 	for _, ingress := range ingresses {
-		for _, rule := range ingress.Spec.Rules {
-			log.Debugf("Debug data ", rule)
-			log.Debugf("Debug data rule %v", rule)
-			log.Debugf("Debug data ", rule.HTTP)
-			for _, path := range rule.HTTP.Paths {
+		if ingress.Spec.Rules != nil {
+			for _, rule := range ingress.Spec.Rules {
 
-				serviceName := serviceName{namespace: ingress.Namespace, name: path.Backend.ServiceName}
+				if rule.HTTP != nil {
+					if rule.HTTP.Paths != nil {
+						for _, path := range rule.HTTP.Paths {
 
-				if address := serviceMap[serviceName]; address != "" {
-					entry := IngressEntry{
-						Namespace:             ingress.Namespace,
-						Name:                  ingress.Name,
-						Host:                  rule.Host,
-						Path:                  path.Path,
-						ServiceAddress:        address,
-						ServicePort:           int32(path.Backend.ServicePort.IntValue()),
-						Allow:                 c.defaultAllow,
-						StripPaths:            c.defaultStripPath,
-						ExactPath:             c.defaultExactPath,
-						BackendTimeoutSeconds: c.defaultBackendTimeout,
-						BackendMaxConnections: c.defaultBackendMaxConnections,
-						ProxyBufferSize:       c.defaultProxyBufferSize,
-						ProxyBufferBlocks:     c.defaultProxyBufferBlocks,
-						CreationTimestamp:     ingress.CreationTimestamp.Time,
-						Ingress:               ingress,
-					}
+							serviceName := serviceName{namespace: ingress.Namespace, name: path.Backend.ServiceName}
 
-					log.Debugf("Found ingress to update: %s", ingress.Name)
+							if address := serviceMap[serviceName]; address != "" {
+								entry := IngressEntry{
+									Namespace:             ingress.Namespace,
+									Name:                  ingress.Name,
+									Host:                  rule.Host,
+									Path:                  path.Path,
+									ServiceAddress:        address,
+									ServicePort:           int32(path.Backend.ServicePort.IntValue()),
+									Allow:                 c.defaultAllow,
+									StripPaths:            c.defaultStripPath,
+									ExactPath:             c.defaultExactPath,
+									BackendTimeoutSeconds: c.defaultBackendTimeout,
+									BackendMaxConnections: c.defaultBackendMaxConnections,
+									ProxyBufferSize:       c.defaultProxyBufferSize,
+									ProxyBufferBlocks:     c.defaultProxyBufferBlocks,
+									CreationTimestamp:     ingress.CreationTimestamp.Time,
+									Ingress:               ingress,
+								}
 
-					if lbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
-						entry.LbScheme = lbScheme
+								log.Debugf("Found ingress to update: %s", ingress.Name)
+
+								if lbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
+									entry.LbScheme = lbScheme
+								} else {
+									entry.LbScheme = ingress.Annotations[frontendElbSchemeAnnotation]
+								}
+
+								if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
+									if allow == "" {
+										entry.Allow = []string{}
+									} else {
+										entry.Allow = strings.Split(allow, ",")
+									}
+								}
+
+								if stripPath, ok := ingress.Annotations[stripPathAnnotation]; ok {
+									if stripPath == "true" {
+										entry.StripPaths = true
+									} else if stripPath == "false" {
+										entry.StripPaths = false
+									} else {
+										log.Warnf("Ingress %s has an invalid strip path annotation: %s. Using default", ingress.Name, stripPath)
+									}
+								}
+
+								if exactPath, ok := ingress.Annotations[exactPathAnnotation]; ok {
+									if exactPath == "true" {
+										entry.ExactPath = true
+									} else if exactPath == "false" {
+										entry.ExactPath = false
+									} else {
+										log.Warnf("Ingress %s has an invalid exact path annotation: %s. Using default", ingress.Name, exactPath)
+									}
+								}
+
+								if backendKeepAlive, ok := ingress.Annotations[legacyBackendKeepAliveSeconds]; ok {
+									tmp, _ := strconv.Atoi(backendKeepAlive)
+									entry.BackendTimeoutSeconds = tmp
+								}
+
+								if timeout, ok := ingress.Annotations[backendTimeoutSeconds]; ok {
+									tmp, _ := strconv.Atoi(timeout)
+									entry.BackendTimeoutSeconds = tmp
+								}
+
+								if maxConnections, ok := ingress.Annotations[backendMaxConnections]; ok {
+									tmp, _ := strconv.Atoi(maxConnections)
+									entry.BackendMaxConnections = tmp
+								}
+
+								if proxyBufferSizeString, ok := ingress.Annotations[proxyBufferSizeAnnotation]; ok {
+									tmp, _ := strconv.Atoi(proxyBufferSizeString)
+									entry.ProxyBufferSize = tmp
+									if tmp > maxAllowedProxyBufferSize {
+										log.Warnf("ProxyBufferSize value %dk exceeds the max permissible value %dk. Using %dk.", tmp, maxAllowedProxyBufferSize, maxAllowedProxyBufferSize)
+										entry.ProxyBufferSize = maxAllowedProxyBufferSize
+									}
+								}
+
+								if proxyBufferBlocksString, ok := ingress.Annotations[proxyBufferBlocksAnnotation]; ok {
+									tmp, _ := strconv.Atoi(proxyBufferBlocksString)
+									entry.ProxyBufferBlocks = tmp
+									if tmp > maxAllowedProxyBufferBlocks {
+										log.Warnf("ProxyBufferBlocks value %d exceeds the max permissible value %d. Using %d", tmp, maxAllowedProxyBufferBlocks, maxAllowedProxyBufferBlocks)
+										entry.ProxyBufferBlocks = maxAllowedProxyBufferBlocks
+									}
+								}
+
+								if err := entry.validate(); err == nil {
+									entries = append(entries, entry)
+								} else {
+									skipped = append(skipped, fmt.Sprintf("%s (%v)", entry.NamespaceName(), err))
+								}
+							} else {
+								skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
+							}
+						}
 					} else {
-						entry.LbScheme = ingress.Annotations[frontendElbSchemeAnnotation]
-					}
-
-					if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
-						if allow == "" {
-							entry.Allow = []string{}
-						} else {
-							entry.Allow = strings.Split(allow, ",")
-						}
-					}
-
-					if stripPath, ok := ingress.Annotations[stripPathAnnotation]; ok {
-						if stripPath == "true" {
-							entry.StripPaths = true
-						} else if stripPath == "false" {
-							entry.StripPaths = false
-						} else {
-							log.Warnf("Ingress %s has an invalid strip path annotation: %s. Using default", ingress.Name, stripPath)
-						}
-					}
-
-					if exactPath, ok := ingress.Annotations[exactPathAnnotation]; ok {
-						if exactPath == "true" {
-							entry.ExactPath = true
-						} else if exactPath == "false" {
-							entry.ExactPath = false
-						} else {
-							log.Warnf("Ingress %s has an invalid exact path annotation: %s. Using default", ingress.Name, exactPath)
-						}
-					}
-
-					if backendKeepAlive, ok := ingress.Annotations[legacyBackendKeepAliveSeconds]; ok {
-						tmp, _ := strconv.Atoi(backendKeepAlive)
-						entry.BackendTimeoutSeconds = tmp
-					}
-
-					if timeout, ok := ingress.Annotations[backendTimeoutSeconds]; ok {
-						tmp, _ := strconv.Atoi(timeout)
-						entry.BackendTimeoutSeconds = tmp
-					}
-
-					if maxConnections, ok := ingress.Annotations[backendMaxConnections]; ok {
-						tmp, _ := strconv.Atoi(maxConnections)
-						entry.BackendMaxConnections = tmp
-					}
-
-					if proxyBufferSizeString, ok := ingress.Annotations[proxyBufferSizeAnnotation]; ok {
-						tmp, _ := strconv.Atoi(proxyBufferSizeString)
-						entry.ProxyBufferSize = tmp
-						if tmp > maxAllowedProxyBufferSize {
-							log.Warnf("ProxyBufferSize value %dk exceeds the max permissible value %dk. Using %dk.", tmp, maxAllowedProxyBufferSize, maxAllowedProxyBufferSize)
-							entry.ProxyBufferSize = maxAllowedProxyBufferSize
-						}
-					}
-
-					if proxyBufferBlocksString, ok := ingress.Annotations[proxyBufferBlocksAnnotation]; ok {
-						tmp, _ := strconv.Atoi(proxyBufferBlocksString)
-						entry.ProxyBufferBlocks = tmp
-						if tmp > maxAllowedProxyBufferBlocks {
-							log.Warnf("ProxyBufferBlocks value %d exceeds the max permissible value %d. Using %d", tmp, maxAllowedProxyBufferBlocks, maxAllowedProxyBufferBlocks)
-							entry.ProxyBufferBlocks = maxAllowedProxyBufferBlocks
-						}
-					}
-
-					if err := entry.validate(); err == nil {
-						entries = append(entries, entry)
-					} else {
-						skipped = append(skipped, fmt.Sprintf("%s (%v)", entry.NamespaceName(), err))
+						skipped = append(skipped, fmt.Sprintf("%s/%s (HTTP.Paths key doesn't exist in this ingress definition)", ingress.Namespace, ingress.Name))
 					}
 				} else {
-					skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
+					skipped = append(skipped, fmt.Sprintf("%s/%s (HTTP key doesn't exist in this ingress definition)", ingress.Namespace, ingress.Name))
 				}
 			}
+		} else {
+			skipped = append(skipped, fmt.Sprintf("%s/%s (Spec.Rules key doesn't exist in this ingress definition)", ingress.Namespace, ingress.Name))
 		}
 	}
 

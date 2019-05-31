@@ -299,6 +299,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			defaultConfig(),
 		},
 		{
+			"ingress without http spec",
+			createIngressWithoutHTTPSpec(),
+			createDefaultServices(),
+			nil,
+			defaultConfig(),
+		},
+		{
 			"ingress with corresponding service",
 			createDefaultIngresses(),
 			createDefaultServices(),
@@ -392,13 +399,13 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				}),
 			createDefaultServices(),
 			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				Allow:                 strings.Split(ingressDefaultAllow, ","),
+				Namespace:      ingressNamespace,
+				Name:           ingressName,
+				Host:           ingressHost,
+				Path:           ingressPath,
+				ServiceAddress: serviceIP,
+				ServicePort:    ingressSvcPort,
+				Allow:          strings.Split(ingressDefaultAllow, ","),
 				BackendTimeoutSeconds: backendTimeout,
 			}},
 			defaultConfig(),
@@ -413,14 +420,14 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				}),
 			createDefaultServices(),
 			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				Allow:                 []string{},
+				Namespace:      ingressNamespace,
+				Name:           ingressName,
+				Host:           ingressHost,
+				Path:           ingressPath,
+				ServiceAddress: serviceIP,
+				ServicePort:    ingressSvcPort,
+				LbScheme:       "internal",
+				Allow:          []string{},
 				BackendTimeoutSeconds: backendTimeout,
 			}},
 			defaultConfig(),
@@ -808,6 +815,21 @@ func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
 			backendTimeoutSeconds:    "10",
 			frontendSchemeAnnotation: "internal",
 		})
+}
+
+func createIngressWithoutHTTPSpec() []*v1beta1.Ingress {
+
+	return []*v1beta1.Ingress{
+		{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      ingressName,
+				Namespace: ingressNamespace,
+			},
+			Spec: v1beta1.IngressSpec{
+				Rules: []v1beta1.IngressRule{},
+			},
+		},
+	}
 }
 
 func createIngressesFixture(host string, serviceName string, servicePort int, ingressAnnotations map[string]string) []*v1beta1.Ingress {

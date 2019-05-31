@@ -85,8 +85,8 @@ func mockLoadBalancers(m *fakeElb, lbs ...lb) {
 		descriptions = append(descriptions, &aws_elb.LoadBalancerDescription{
 			LoadBalancerName:          aws.String(lb.name),
 			CanonicalHostedZoneNameID: aws.String(canonicalHostedZoneNameID),
-			Scheme:                    aws.String(lb.scheme),
-			DNSName:                   aws.String(elbDNSName),
+			Scheme:  aws.String(lb.scheme),
+			DNSName: aws.String(elbDNSName),
 		})
 
 	}
