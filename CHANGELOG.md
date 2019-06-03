@@ -1,3 +1,6 @@
+# v1.14.2
+* Skip ingress when http and/or path are not defined
+
 # v1.14.1
 * Set max_conns default to 0
 
@@ -31,7 +34,7 @@ Can be overridden with relevant annotations
 
 # v1.11.4
 * DO NOT USE THIS VERSION
-  
+
 # v1.11.2
 * Update nginx-opentracing version for bug fix to proxy headers
 
@@ -90,7 +93,7 @@ Feed expects two files: one ending in .crt (the CA) and the other in .key (the p
 
 # v1.5.0
 * Add `gorb-backend-healthcheck-type` that can be either 'tcp', 'http' or 'none'
-* Remove deprecated `elb-drain-delay` feed-ingress flag 
+* Remove deprecated `elb-drain-delay` feed-ingress flag
 
 # v1.4.2
 * Reduce logging each ingress in the controller from Info to Debug, introduced in v1.3.0
