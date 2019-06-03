@@ -884,18 +884,17 @@ func createIngressesFixture(host string, serviceName string, servicePort int, in
 	ingressDefinition := createIngressWithoutRules()
 	ingressRules := []v1beta1.IngressRule{}
 
-	if path == "" && host != "" {
-		ingressRules = append(ingressRules, v1beta1.IngressRule{
+	if host != "" {
+		ingressRuleValue := v1beta1.IngressRuleValue{}
+		if path != "" {
+			ingressRuleValue.HTTP = &v1beta1.HTTPIngressRuleValue{Paths: paths}
+		}
+		ingressRule := v1beta1.IngressRule{
 			Host:             host,
-			IngressRuleValue: v1beta1.IngressRuleValue{},
-		})
-	} else if path != "" && host != "" {
-		ingressRules = append(ingressRules, v1beta1.IngressRule{
-			Host: host,
-			IngressRuleValue: v1beta1.IngressRuleValue{HTTP: &v1beta1.HTTPIngressRuleValue{
-				Paths: paths,
-			}},
-		})
+			IngressRuleValue: ingressRuleValue,
+		}
+
+		ingressRules = append(ingressRules, ingressRule)
 	}
 
 	ingressDefinition[0].ObjectMeta.Annotations = annotations
