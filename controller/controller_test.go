@@ -881,53 +881,27 @@ func createIngressesFixture(host string, serviceName string, servicePort int, in
 		}
 	}
 
-	if path == "" && host != "" {
-		return []*v1beta1.Ingress{
-			{
-				ObjectMeta: v1.ObjectMeta{
-					Name:      ingressName,
-					Namespace: ingressNamespace,
-				},
-				Spec: v1beta1.IngressSpec{
-					Rules: []v1beta1.IngressRule{{
-						Host:             host,
-						IngressRuleValue: v1beta1.IngressRuleValue{},
-					}},
-				},
-			},
-		}
-	} else if path == "" && host == "" {
-		return []*v1beta1.Ingress{
-			{
-				ObjectMeta: v1.ObjectMeta{
-					Name:      ingressName,
-					Namespace: ingressNamespace,
-				},
-				Spec: v1beta1.IngressSpec{
-					Rules: []v1beta1.IngressRule{{}},
-				},
-			},
-		}
+	ingressDefinition := createIngressWithoutRules()
+	ingressRules := []v1beta1.IngressRule{}
 
-	} else {
-		return []*v1beta1.Ingress{
-			{
-				ObjectMeta: v1.ObjectMeta{
-					Name:        ingressName,
-					Namespace:   ingressNamespace,
-					Annotations: annotations,
-				},
-				Spec: v1beta1.IngressSpec{
-					Rules: []v1beta1.IngressRule{{
-						Host: host,
-						IngressRuleValue: v1beta1.IngressRuleValue{HTTP: &v1beta1.HTTPIngressRuleValue{
-							Paths: paths,
-						}},
-					}},
-				},
-			},
-		}
+	if path == "" && host != "" {
+		ingressRules = append(ingressRules, v1beta1.IngressRule{
+			Host:             host,
+			IngressRuleValue: v1beta1.IngressRuleValue{},
+		})
+	} else if path != "" && host != "" {
+		ingressRules = append(ingressRules, v1beta1.IngressRule{
+			Host: host,
+			IngressRuleValue: v1beta1.IngressRuleValue{HTTP: &v1beta1.HTTPIngressRuleValue{
+				Paths: paths,
+			}},
+		})
 	}
+
+	ingressDefinition[0].ObjectMeta.Annotations = annotations
+	ingressDefinition[0].Spec.Rules = ingressRules
+
+	return ingressDefinition
 }
 
 func createDefaultServices() []*v1.Service {
