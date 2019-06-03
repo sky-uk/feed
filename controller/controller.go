@@ -7,6 +7,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -155,7 +156,12 @@ func (c *controller) handleUpdates() {
 	}
 }
 
-func (c *controller) updateIngresses() error {
+func (c *controller) updateIngresses() (err error) {
+	defer func() {
+		if value := recover(); value != nil {
+			err = fmt.Errorf("unexpected error: %v: %v", value, string(debug.Stack()))
+		}
+	}()
 	ingresses, err := c.client.GetIngresses()
 	log.Infof("Found %d ingresses", len(ingresses))
 	if err != nil {
