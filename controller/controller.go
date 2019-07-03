@@ -100,9 +100,9 @@ func New(conf Config) Controller {
 		defaultBackendMaxConnections: conf.DefaultBackendMaxConnections,
 		defaultProxyBufferSize:       conf.DefaultProxyBufferSize,
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
-		doneCh:      make(chan struct{}),
-		mainIngress: conf.MainIngress,
-		ingressName: conf.IngressName,
+		doneCh:                       make(chan struct{}),
+		mainIngress:                  conf.MainIngress,
+		ingressName:                  conf.IngressName,
 	}
 }
 
