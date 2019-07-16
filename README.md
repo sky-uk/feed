@@ -42,16 +42,7 @@ This is a breaking change to support [multiple ingresses per cluster](#multiple-
 
 To upgrade, follow these steps:
 1. Tag the ELBs with `sky.uk/KubernetesClusterIngressName=<name>`
-2. Provide the following new arguments to feed-ingress: `ingress-name`, `main-ingress`
-
-For example:
-
-```
-  args:
-  - -ingress-name=main
-  - -main-ingress=true
-```
-
+2. Provide the mandatory argument `--ingress-name` to feed-ingress with a matching value.
 
 # Overview
 
@@ -184,11 +175,7 @@ securityContext:
 Multiple ingresses can be created per cluster.  Feed will use the `sky.uk/KubernetesClusterIngressName=<name>` tag to
 attach to the right ELB.
 
-It will handle ingress resources in two ways:
-1. If the argument `main-ingress` is set to `true`, ingress resources will be created where the `sky.uk/ingress-name` 
-annotation matches the `ingress-name` argument or where no annotation is provided.  This is for backwards compatibility.
-2. If the argument `main-ingress` is set to `false`, ingress resources will be created where the `sky.uk/ingress-name`
-annotation matches the `ingress-name` argument.
+Ingress resources will be created where the `sky.uk/ingress-name` annotation matches the `ingress-name` argument.
 
 
 #### Support

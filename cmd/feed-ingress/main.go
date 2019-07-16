@@ -40,7 +40,6 @@ var (
 	pushgatewayIntervalSeconds     int
 	pushgatewayLabels              cmd.KeyValues
 	controllerConfig               controller.Config
-	mainIngress                    bool
 	ingressName                    string
 	nginxConfig                    nginx.Conf
 	nginxLogHeaders                cmd.CommaSeparatedValues
@@ -137,7 +136,6 @@ const (
 	defaultClientHeaderBufferSize            = 16
 	defaultClientBodyBufferSize              = 16
 	defaultLargeClientHeaderBufferBlocks     = 4
-	defaultMainIngress                       = false
 	defaultIngressName                       = ""
 )
 
@@ -172,8 +170,6 @@ func init() {
 			" '/myhost/myapp/health/'. Can be overridden with the sky.uk/exact-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
-	flag.BoolVar(&mainIngress, "main-ingress", defaultMainIngress,
-		"Whether this is the main ingress for the environment.")
 	flag.StringVar(&ingressName, "ingress-name", defaultIngressName,
 		"Which ingress this instance is for.  This is used to filter ingresses so that only those with this"+
 			"ingress name will be updated.")
@@ -349,7 +345,6 @@ func main() {
 	if ingressName == defaultIngressName {
 		log.Fatal("The argument ingress-name is required")
 	}
-	controllerConfig.MainIngress = mainIngress
 	controllerConfig.IngressName = ingressName
 
 	feedController := controller.New(controllerConfig)

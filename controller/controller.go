@@ -69,7 +69,6 @@ type controller struct {
 	started                      bool
 	updatesHealth                util.SafeError
 	sync.Mutex
-	mainIngress bool
 	ingressName string
 }
 
@@ -84,7 +83,6 @@ type Config struct {
 	DefaultBackendMaxConnections int
 	DefaultProxyBufferSize       int
 	DefaultProxyBufferBlocks     int
-	MainIngress                  bool
 	IngressName                  string
 }
 
@@ -101,7 +99,6 @@ func New(conf Config) Controller {
 		defaultProxyBufferSize:       conf.DefaultProxyBufferSize,
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
 		doneCh:                       make(chan struct{}),
-		mainIngress:                  conf.MainIngress,
 		ingressName:                  conf.IngressName,
 	}
 }
@@ -320,8 +317,6 @@ func (c *controller) validIngressName(ingress *v1beta1.Ingress) bool {
 
 	if ingressName, ok := ingress.Annotations[ingressNameAnnotation]; ok {
 		isValid = ingressName == c.ingressName
-	} else if c.mainIngress {
-		isValid = true
 	}
 
 	return isValid

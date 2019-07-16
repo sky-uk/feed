@@ -278,7 +278,6 @@ func defaultConfig() Config {
 	return Config{
 		DefaultAllow:                 ingressDefaultAllow,
 		DefaultBackendTimeoutSeconds: backendTimeout,
-		MainIngress:                  true,
 		IngressName:                  defaultIngressName,
 	}
 }
@@ -344,6 +343,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      ingressAllow,
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			nil,
@@ -356,6 +356,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      ingressAllow,
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			nil,
@@ -368,6 +369,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      ingressAllow,
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			nil,
@@ -392,6 +394,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
 				map[string]string{
 					backendTimeoutSeconds: "10",
+					ingressNameAnnotation: defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -402,6 +405,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				Allow:                 strings.Split(ingressDefaultAllow, ","),
+				IngressName:           defaultIngressName,
 				BackendTimeoutSeconds: backendTimeout,
 			}},
 			defaultConfig(),
@@ -413,6 +417,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      "",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -423,6 +428,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				BackendTimeoutSeconds: backendTimeout,
 			}},
@@ -436,6 +442,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "true",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -446,6 +453,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            true,
 				BackendTimeoutSeconds: backendTimeout,
@@ -460,6 +468,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "false",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -470,6 +479,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: backendTimeout,
@@ -484,6 +494,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					exactPathAnnotation:         "true",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -494,6 +505,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				ExactPath:             true,
 				BackendTimeoutSeconds: backendTimeout,
@@ -508,6 +520,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					exactPathAnnotation:         "false",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -518,6 +531,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				ExactPath:             false,
 				BackendTimeoutSeconds: backendTimeout,
@@ -532,6 +546,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "false",
 					backendTimeoutSeconds:       "20",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -542,6 +557,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: 20,
@@ -555,6 +571,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      "",
 					stripPathAnnotation:         "false",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -565,6 +582,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: backendTimeout,
@@ -579,6 +597,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "false",
 					backendTimeoutSeconds:       "20",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 					backendMaxConnections:       "512",
 				}, ingressPath),
 			createDefaultServices(),
@@ -590,6 +609,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: 20,
@@ -605,6 +625,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "false",
 					backendTimeoutSeconds:       "20",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -615,6 +636,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: 20,
@@ -627,6 +649,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
 				map[string]string{
 					ingressAllowAnnotation: "",
+					ingressNameAnnotation:  defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -637,6 +660,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: 10,
@@ -648,8 +672,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				DefaultBackendTimeoutSeconds: backendTimeout,
 				DefaultProxyBufferSize:       2,
 				DefaultProxyBufferBlocks:     3,
-				MainIngress:                  true,
-				IngressName:                  "main",
+				IngressName:                  defaultIngressName,
 			},
 		},
 		{
@@ -659,6 +682,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      "",
 					proxyBufferSizeAnnotation:   "6",
 					proxyBufferBlocksAnnotation: "4",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -669,6 +693,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: 10,
@@ -680,8 +705,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				DefaultBackendTimeoutSeconds: backendTimeout,
 				DefaultProxyBufferSize:       2,
 				DefaultProxyBufferBlocks:     3,
-				MainIngress:                  true,
-				IngressName:                  "main",
+				IngressName:                  defaultIngressName,
 			},
 		},
 		{
@@ -691,6 +715,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					ingressAllowAnnotation:      "",
 					proxyBufferSizeAnnotation:   "64",
 					proxyBufferBlocksAnnotation: "12",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -701,6 +726,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: 10,
@@ -712,8 +738,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				DefaultBackendTimeoutSeconds: backendTimeout,
 				DefaultProxyBufferSize:       2,
 				DefaultProxyBufferBlocks:     3,
-				MainIngress:                  true,
-				IngressName:                  "main",
+				IngressName:                  defaultIngressName,
 			},
 		},
 		{
@@ -724,6 +749,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "false",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -734,6 +760,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 				ServiceAddress:        serviceIP,
 				ServicePort:           ingressSvcPort,
 				LbScheme:              "internal",
+				IngressName:           defaultIngressName,
 				Allow:                 []string{},
 				StripPaths:            false,
 				BackendTimeoutSeconds: backendTimeout,
@@ -748,7 +775,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 					stripPathAnnotation:         "false",
 					backendTimeoutSeconds:       "10",
 					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       "main",
+					ingressNameAnnotation:       defaultIngressName,
 				}, ingressPath),
 			createDefaultServices(),
 			[]IngressEntry{{
@@ -767,7 +794,7 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 			Config{
 				DefaultAllow:                 ingressDefaultAllow,
 				DefaultBackendTimeoutSeconds: backendTimeout,
-				IngressName:                  "main",
+				IngressName:                  defaultIngressName,
 			},
 		},
 		{
@@ -817,7 +844,9 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		{
 			"ingress without host definition",
 			createIngressesFixture("", ingressSvcName, ingressSvcPort,
-				map[string]string{}, ""),
+				map[string]string{
+					ingressNameAnnotation: defaultIngressName,
+				}, ""),
 			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
 			nil,
 			defaultConfig(),
@@ -825,7 +854,9 @@ func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
 		{
 			"ingress without path definition",
 			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{}, ""),
+				map[string]string{
+					ingressNameAnnotation: defaultIngressName,
+				}, ""),
 			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
 			nil,
 			defaultConfig(),
@@ -903,6 +934,7 @@ func createLbEntriesFixture() IngressEntries {
 		ServicePort:           ingressSvcPort,
 		Allow:                 strings.Split(ingressAllow, ","),
 		LbScheme:              lbScheme,
+		IngressName:           defaultIngressName,
 		BackendTimeoutSeconds: backendTimeout,
 	}}
 }
@@ -928,6 +960,7 @@ func createDefaultIngresses() []*v1beta1.Ingress {
 			ingressAllowAnnotation:      ingressAllow,
 			backendTimeoutSeconds:       "10",
 			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
 		}, ingressPath)
 }
 
@@ -937,6 +970,7 @@ func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
 			ingressAllowAnnotation:   ingressAllow,
 			backendTimeoutSeconds:    "10",
 			frontendSchemeAnnotation: "internal",
+			ingressNameAnnotation:    defaultIngressName,
 		}, ingressPath)
 }
 
@@ -946,6 +980,9 @@ func createIngressWithoutRules() []*v1beta1.Ingress {
 			ObjectMeta: v1.ObjectMeta{
 				Name:      ingressName,
 				Namespace: ingressNamespace,
+				Annotations: map[string]string{
+					ingressNameAnnotation: defaultIngressName,
+				},
 			},
 			Spec: v1beta1.IngressSpec{},
 		},
