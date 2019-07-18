@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/util/intstr"
 )
 
@@ -74,11 +75,14 @@ func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 	client := new(fake.FakeClient)
 	ingressWatcher, _ := createFakeWatcher()
 	serviceWatcher, _ := createFakeWatcher()
+	namespaceWatcher, _ := createFakeWatcher()
 
-	client.On("GetIngresses").Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetAllIngresses").Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetIngresses", mock.Anything).Return([]*v1beta1.Ingress{}, nil)
 	client.On("GetServices").Return([]*v1.Service{}, nil)
 	client.On("WatchIngresses").Return(ingressWatcher)
 	client.On("WatchServices").Return(serviceWatcher)
+	client.On("WatchNamespaces").Return(namespaceWatcher)
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
 	updater.On("Update", mock.Anything).Return(nil)
@@ -224,7 +228,7 @@ func TestControllerIsUnhealthyIfUpdaterIsUnhealthy(t *testing.T) {
 	assert.NoError(controller.Health())
 	assert.Equal(lbErr, controller.Health())
 
-	controller.Stop()
+	_ = controller.Stop()
 }
 
 func TestControllerReturnsErrorIfUpdaterFails(t *testing.T) {
@@ -248,6 +252,7 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 
 	ingressWatcher, updateCh := createFakeWatcher()
 	serviceWatcher, _ := createFakeWatcher()
+	namespaceWatcher, _ := createFakeWatcher()
 
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
@@ -255,10 +260,11 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	updater.On("Update", mock.Anything).Return(fmt.Errorf("kaboom, update failed :(")).Once()
 	updater.On("Health").Return(nil)
 
-	client.On("GetIngresses").Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetAllIngresses").Return([]*v1beta1.Ingress{}, nil)
 	client.On("GetServices").Return([]*v1.Service{}, nil)
 	client.On("WatchIngresses").Return(ingressWatcher)
 	client.On("WatchServices").Return(serviceWatcher)
+	client.On("WatchNamespaces").Return(namespaceWatcher)
 	assert.NoError(controller.Start())
 
 	// expect
@@ -271,7 +277,7 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	assert.Error(controller.Health())
 
 	// cleanup
-	controller.Stop()
+	_ = controller.Stop()
 }
 
 func defaultConfig() Config {
@@ -282,634 +288,804 @@ func defaultConfig() Config {
 	}
 }
 
-func TestUpdaterIsUpdatedOnK8sUpdates(t *testing.T) {
+type testSpec struct {
+	description string
+	ingresses   []*v1beta1.Ingress
+	services    []*v1.Service
+	namespaces  []*v1.Namespace
+	entries     IngressEntries
+	config      Config
+}
+
+func TestUpdaterIsUpdatedForIngressTaggedWithSkyFrontendScheme(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress tagged with sky.uk/frontend-scheme",
+		createIngressesFromNonELBAnnotation(),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		createLbEntriesFixture(),
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithCorrespondingService(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with corresponding service",
+		createDefaultIngresses(),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		createLbEntriesFixture(),
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithExtraServices(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with extra services",
+		createDefaultIngresses(),
+		append(createDefaultServices(),
+			createServiceFixture("another one", ingressNamespace, serviceIP)...),
+		createDefaultNamespaces(),
+		createLbEntriesFixture(),
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithoutCorrespondingService(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress without corresponding service",
+		createDefaultIngresses(),
+		[]*v1.Service{},
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForServiceWithNonMatchingNamespace(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with service with non-matching namespace",
+		createDefaultIngresses(),
+		createServiceFixture(ingressSvcName, "lalala land", serviceIP),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForServiceWithNonMatchingName(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with service with non-matching name",
+		createDefaultIngresses(),
+		createServiceFixture("lalala service", ingressNamespace, serviceIP),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithMissingHostName(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with missing host name",
+		createIngressesFixture(ingressNamespace, "", ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      ingressAllow,
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithMissingServiceName(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with missing service name",
+		createIngressesFixture(ingressNamespace, ingressHost, "", ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      ingressAllow,
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithMissingServicePort(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with missing service port",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, 0, map[string]string{
+			ingressAllowAnnotation:      ingressAllow,
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithMissingServiceIP(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with missing service IP",
+		createDefaultIngresses(),
+		createServiceFixture(ingressSvcName, ingressNamespace, ""),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithNoneAsServiceIP(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with 'None' as service IP",
+		createDefaultIngresses(),
+		createServiceFixture(ingressSvcName, ingressNamespace, "None"),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithDefaultAllow(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with default allow",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			backendTimeoutSeconds: "10",
+			ingressNameAnnotation: defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			Allow:                 strings.Split(ingressDefaultAllow, ","),
+			IngressName:           defaultIngressName,
+			BackendTimeoutSeconds: backendTimeout,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithEmptyAllow(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with empty allow",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			BackendTimeoutSeconds: backendTimeout,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithStripPathsTrue(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with strip paths set to true",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "true",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            true,
+			BackendTimeoutSeconds: backendTimeout,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithStripPathsFalse(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with strip paths set to false",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: backendTimeout,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithExactPathTrue(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with exact path set to true",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			exactPathAnnotation:         "true",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			ExactPath:             true,
+			BackendTimeoutSeconds: backendTimeout,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithExactPathFalse(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with exact path set to false",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			exactPathAnnotation:         "false",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			ExactPath:             false,
+			BackendTimeoutSeconds: backendTimeout,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithOverriddenBackendTimeout(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with overridden backend timeout",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "20",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: 20,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithDefaultBackendTimeout(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with default backend timeout",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: backendTimeout,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithOverriddenBackendMaxConnections(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with overridden backend max connections",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "20",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+			backendMaxConnections:       "512",
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: 20,
+			BackendMaxConnections: 512,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithDefaultBackendMaxConnections(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with default backend max connections",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "20",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: 20,
+			BackendMaxConnections: defaultMaxConnections,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithDefaultProxyBufferValuesWhenNotOverridden(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with default proxy buffer values when not overridden by the ingress definition",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation: "",
+			ingressNameAnnotation:  defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: 10,
+			BackendMaxConnections: defaultMaxConnections,
+			ProxyBufferSize:       2,
+			ProxyBufferBlocks:     3,
+		}},
+		Config{
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			DefaultProxyBufferSize:       2,
+			DefaultProxyBufferBlocks:     3,
+			IngressName:                  defaultIngressName,
+		},
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressOverridesDefaultProxyBufferValues(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress definition overrides default proxy buffer values",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			proxyBufferSizeAnnotation:   "6",
+			proxyBufferBlocksAnnotation: "4",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: 10,
+			BackendMaxConnections: defaultMaxConnections,
+			ProxyBufferSize:       6,
+			ProxyBufferBlocks:     4,
+		}},
+		Config{
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			DefaultProxyBufferSize:       2,
+			DefaultProxyBufferBlocks:     3,
+			IngressName:                  defaultIngressName,
+		},
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressDefinitionResetsToMacWhenProxyBufferValuesExceedMax(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress definition resets to max when proxy buffer values exceed max allowed values",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			proxyBufferSizeAnnotation:   "64",
+			proxyBufferBlocksAnnotation: "12",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: 10,
+			BackendMaxConnections: defaultMaxConnections,
+			ProxyBufferSize:       32,
+			ProxyBufferBlocks:     8,
+		}},
+		Config{
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			DefaultProxyBufferSize:       2,
+			DefaultProxyBufferBlocks:     3,
+			IngressName:                  defaultIngressName,
+		},
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressNameNotSetInIngress(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress name not set in ingress",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressName:           defaultIngressName,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: backendTimeout,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressNameSetToDefaultInIngress(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress name set to default in ingress",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: backendTimeout,
+			IngressName:           defaultIngressName,
+		}},
+		Config{
+			DefaultAllow:                 ingressDefaultAllow,
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			IngressName:                  defaultIngressName,
+		},
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressNameSetToTestAndConfigSetToDefault(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with ingress name set to test and config set to default",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       "test",
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressNameSetToTestInIngressAndConfig(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress name set to test in ingress and config",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       "test",
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: backendTimeout,
+			IngressName:           "test",
+		}},
+		Config{
+			DefaultAllow:                 ingressDefaultAllow,
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			IngressName:                  "test",
+		},
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressInNamespaceMatchingSelector(t *testing.T) {
+	runAndAssertUpdates(t, expectGetIngresses, testSpec{
+		"ingress is in a namespace that matches the namespace selector",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		createDefaultServices(),
+		createNamespaceFixture(ingressNamespace, map[string]string{"team": "theteam"}),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: backendTimeout,
+			IngressName:           defaultIngressName,
+		}},
+		Config{
+			DefaultAllow:                 ingressDefaultAllow,
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			IngressName:                  defaultIngressName,
+			NamespaceSelector:            &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"},
+		},
+	})
+}
+
+func TestUpdaterIsNotUpdatedForIngressInNamespaceMatchingSelector(t *testing.T) {
+	runAndAssertUpdates(t, expectGetIngresses, testSpec{
+		"ingress is in a namespace that matches the namespace selector",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:      "",
+			stripPathAnnotation:         "false",
+			backendTimeoutSeconds:       "10",
+			frontendElbSchemeAnnotation: "internal",
+			ingressNameAnnotation:       defaultIngressName,
+		}, ingressPath),
+		nil,
+		createNamespaceFixture(ingressNamespace, map[string]string{"team": "otherteam"}),
+		nil,
+		Config{
+			DefaultAllow:                 ingressDefaultAllow,
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			IngressName:                  defaultIngressName,
+			NamespaceSelector:            &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"},
+		},
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithoutHostDefinition(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress without host definition",
+		createIngressesFixture(ingressNamespace, "", ingressSvcName, ingressSvcPort, map[string]string{
+			ingressNameAnnotation: defaultIngressName,
+		}, ""),
+		createServiceFixture(ingressSvcName, "lalala land", serviceIP),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithoutPathDefinition(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress without path definition",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressNameAnnotation: defaultIngressName,
+		}, ""),
+		createServiceFixture(ingressSvcName, "lalala land", serviceIP),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithoutRulesDefinition(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress without rules definition",
+		createIngressWithoutRules(),
+		createServiceFixture(ingressSvcName, "lalala land", serviceIP),
+		createDefaultNamespaces(),
+		nil,
+		defaultConfig(),
+	})
+}
+
+type clientExpectation func(client *fake.FakeClient, ingresses []*v1beta1.Ingress)
+
+var expectGetAllIngresses = func(client *fake.FakeClient, ingresses []*v1beta1.Ingress) {
+	client.On("GetAllIngresses").Return(ingresses, nil)
+}
+
+var expectGetIngresses = func(client *fake.FakeClient, ingresses []*v1beta1.Ingress) {
+	client.On("GetIngresses", &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"}).Return(ingresses, nil)
+}
+
+func runAndAssertUpdates(t *testing.T, clientExpectation clientExpectation, test testSpec) {
 	//given
 	assert := assert.New(t)
 
-	var tests = []struct {
-		description string
-		ingresses   []*v1beta1.Ingress
-		services    []*v1.Service
-		entries     IngressEntries
-		config      Config
-	}{
-		{
-			"ingress tagged with sky.uk/frontend-scheme",
-			createIngressesFromNonELBAnnotation(),
-			createDefaultServices(),
-			createLbEntriesFixture(),
-			defaultConfig(),
-		},
-		{
-			"ingress with corresponding service",
-			createDefaultIngresses(),
-			createDefaultServices(),
-			createLbEntriesFixture(),
-			defaultConfig(),
-		},
-		{
-			"ingress with extra services",
-			createDefaultIngresses(),
-			append(createDefaultServices(),
-				createServiceFixture("another one", ingressNamespace, serviceIP)...),
-			createLbEntriesFixture(),
-			defaultConfig(),
-		},
-		{
-			"ingress without corresponding service",
-			createDefaultIngresses(),
-			[]*v1.Service{},
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress with service with non-matching namespace",
-			createDefaultIngresses(),
-			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress with service with non-matching name",
-			createDefaultIngresses(),
-			createServiceFixture("lalala service", ingressNamespace, serviceIP),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress with missing host name",
-			createIngressesFixture("", ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      ingressAllow,
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress with missing service name",
-			createIngressesFixture(ingressHost, "", ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      ingressAllow,
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress with missing service port",
-			createIngressesFixture(ingressHost, ingressSvcName, 0,
-				map[string]string{
-					ingressAllowAnnotation:      ingressAllow,
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress with missing service IP",
-			createDefaultIngresses(),
-			createServiceFixture(ingressSvcName, ingressNamespace, ""),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress with 'None' as service IP",
-			createDefaultIngresses(),
-			createServiceFixture(ingressSvcName, ingressNamespace, "None"),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress with default allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					backendTimeoutSeconds: "10",
-					ingressNameAnnotation: defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				Allow:                 strings.Split(ingressDefaultAllow, ","),
-				IngressName:           defaultIngressName,
-				BackendTimeoutSeconds: backendTimeout,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with empty allow",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				BackendTimeoutSeconds: backendTimeout,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with strip paths set to true",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "true",
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            true,
-				BackendTimeoutSeconds: backendTimeout,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with strip paths set to false",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "false",
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: backendTimeout,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with exact path set to true",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					exactPathAnnotation:         "true",
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				ExactPath:             true,
-				BackendTimeoutSeconds: backendTimeout,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with exact path set to false",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					exactPathAnnotation:         "false",
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				ExactPath:             false,
-				BackendTimeoutSeconds: backendTimeout,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with overridden backend timeout",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "false",
-					backendTimeoutSeconds:       "20",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: 20,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with default backend timeout",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "false",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: backendTimeout,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with overridden backend max connections",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "false",
-					backendTimeoutSeconds:       "20",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-					backendMaxConnections:       "512",
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: 20,
-				BackendMaxConnections: 512,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with default backend max connections",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "false",
-					backendTimeoutSeconds:       "20",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: 20,
-				BackendMaxConnections: defaultMaxConnections,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress with default proxy buffer values when not overridden by the ingress definition",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation: "",
-					ingressNameAnnotation:  defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: 10,
-				BackendMaxConnections: defaultMaxConnections,
-				ProxyBufferSize:       2,
-				ProxyBufferBlocks:     3,
-			}},
-			Config{
-				DefaultBackendTimeoutSeconds: backendTimeout,
-				DefaultProxyBufferSize:       2,
-				DefaultProxyBufferBlocks:     3,
-				IngressName:                  defaultIngressName,
-			},
-		},
-		{
-			"ingress definition overrides default proxy buffer values",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					proxyBufferSizeAnnotation:   "6",
-					proxyBufferBlocksAnnotation: "4",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: 10,
-				BackendMaxConnections: defaultMaxConnections,
-				ProxyBufferSize:       6,
-				ProxyBufferBlocks:     4,
-			}},
-			Config{
-				DefaultBackendTimeoutSeconds: backendTimeout,
-				DefaultProxyBufferSize:       2,
-				DefaultProxyBufferBlocks:     3,
-				IngressName:                  defaultIngressName,
-			},
-		},
-		{
-			"ingress definition resets to max when proxy buffer values exceed max allowed values",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					proxyBufferSizeAnnotation:   "64",
-					proxyBufferBlocksAnnotation: "12",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: 10,
-				BackendMaxConnections: defaultMaxConnections,
-				ProxyBufferSize:       32,
-				ProxyBufferBlocks:     8,
-			}},
-			Config{
-				DefaultBackendTimeoutSeconds: backendTimeout,
-				DefaultProxyBufferSize:       2,
-				DefaultProxyBufferBlocks:     3,
-				IngressName:                  defaultIngressName,
-			},
-		},
-		{
-			"ingress name not set in ingress",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "false",
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				IngressName:           defaultIngressName,
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: backendTimeout,
-			}},
-			defaultConfig(),
-		},
-		{
-			"ingress name set to default in ingress",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "false",
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       defaultIngressName,
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: backendTimeout,
-				IngressName:           defaultIngressName,
-			}},
-			Config{
-				DefaultAllow:                 ingressDefaultAllow,
-				DefaultBackendTimeoutSeconds: backendTimeout,
-				IngressName:                  defaultIngressName,
-			},
-		},
-		{
-			"ingress with ingress name set to test and config set to default",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "false",
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       "test",
-				}, ingressPath),
-			createDefaultServices(),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress name set to test in ingress and config",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressAllowAnnotation:      "",
-					stripPathAnnotation:         "false",
-					backendTimeoutSeconds:       "10",
-					frontendElbSchemeAnnotation: "internal",
-					ingressNameAnnotation:       "test",
-				}, ingressPath),
-			createDefaultServices(),
-			[]IngressEntry{{
-				Namespace:             ingressNamespace,
-				Name:                  ingressName,
-				Host:                  ingressHost,
-				Path:                  ingressPath,
-				ServiceAddress:        serviceIP,
-				ServicePort:           ingressSvcPort,
-				LbScheme:              "internal",
-				Allow:                 []string{},
-				StripPaths:            false,
-				BackendTimeoutSeconds: backendTimeout,
-				IngressName:           "test",
-			}},
-			Config{
-				DefaultAllow:                 ingressDefaultAllow,
-				DefaultBackendTimeoutSeconds: backendTimeout,
-				IngressName:                  "test",
-			},
-		},
-		{
-			"ingress without host definition",
-			createIngressesFixture("", ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressNameAnnotation: defaultIngressName,
-				}, ""),
-			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress without path definition",
-			createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-				map[string]string{
-					ingressNameAnnotation: defaultIngressName,
-				}, ""),
-			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
-			nil,
-			defaultConfig(),
-		},
-		{
-			"ingress without rules definition",
-			createIngressWithoutRules(),
-			createServiceFixture(ingressSvcName, "lalala land", serviceIP),
-			nil,
-			defaultConfig(),
-		},
-	}
+	fmt.Printf("test: %s\n", test.description)
+	// add ingress pointers to entries
+	test.entries = addIngresses(test.ingresses, test.entries)
 
-	for _, test := range tests {
-		fmt.Printf("test: %s\n", test.description)
-		// add ingress pointers to entries
-		test.entries = addIngresses(test.ingresses, test.entries)
+	// setup clients
+	client := new(fake.FakeClient)
+	updater := new(fakeUpdater)
 
-		// setup clients
-		client := new(fake.FakeClient)
-		updater := new(fakeUpdater)
+	config := test.config
 
-		config := test.config
+	config.KubernetesClient = client
+	config.Updaters = []Updater{updater}
 
-		config.KubernetesClient = client
-		config.Updaters = []Updater{updater}
+	controller := New(config)
 
-		controller := New(config)
+	updater.On("Start").Return(nil)
+	updater.On("Stop").Return(nil)
+	// once for each update: ingress, service, namespace
+	updater.On("Update", test.entries).Return(nil).Times(3)
 
-		updater.On("Start").Return(nil)
-		updater.On("Stop").Return(nil)
-		// once for ingress update, once for service update
-		updater.On("Update", test.entries).Return(nil).Times(2)
+	clientExpectation(client, test.ingresses)
+	client.On("GetServices").Return(test.services, nil)
 
-		client.On("GetIngresses").Return(test.ingresses, nil)
-		client.On("GetServices").Return(test.services, nil)
+	ingressWatcher, ingressCh := createFakeWatcher()
+	serviceWatcher, serviceCh := createFakeWatcher()
+	namespaceWatcher, namespaceCh := createFakeWatcher()
+	client.On("WatchIngresses").Return(ingressWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
+	client.On("WatchNamespaces").Return(namespaceWatcher)
 
-		ingressWatcher, ingressCh := createFakeWatcher()
-		serviceWatcher, serviceCh := createFakeWatcher()
-		client.On("WatchIngresses").Return(ingressWatcher)
-		client.On("WatchServices").Return(serviceWatcher)
+	//when
+	assert.NoError(controller.Start())
+	ingressCh <- struct{}{}
+	serviceCh <- struct{}{}
+	namespaceCh <- struct{}{}
+	time.Sleep(smallWaitTime)
 
-		//when
-		assert.NoError(controller.Start())
-		ingressCh <- struct{}{}
-		serviceCh <- struct{}{}
-		time.Sleep(smallWaitTime)
-
-		//then
-		assert.NoError(controller.Stop())
-		time.Sleep(smallWaitTime)
-		updater.AssertExpectations(t)
-	}
+	//then
+	assert.NoError(controller.Stop())
+	time.Sleep(smallWaitTime)
+	updater.AssertExpectations(t)
+	client.AssertExpectations(t)
 }
 
 func addIngresses(ingresses []*v1beta1.Ingress, entries IngressEntries) IngressEntries {
@@ -955,23 +1131,21 @@ const (
 )
 
 func createDefaultIngresses() []*v1beta1.Ingress {
-	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-		map[string]string{
-			ingressAllowAnnotation:      ingressAllow,
-			backendTimeoutSeconds:       "10",
-			frontendElbSchemeAnnotation: "internal",
-			ingressNameAnnotation:       defaultIngressName,
-		}, ingressPath)
+	return createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+		ingressAllowAnnotation:      ingressAllow,
+		backendTimeoutSeconds:       "10",
+		frontendElbSchemeAnnotation: "internal",
+		ingressNameAnnotation:       defaultIngressName,
+	}, ingressPath)
 }
 
 func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
-	return createIngressesFixture(ingressHost, ingressSvcName, ingressSvcPort,
-		map[string]string{
-			ingressAllowAnnotation:   ingressAllow,
-			backendTimeoutSeconds:    "10",
-			frontendSchemeAnnotation: "internal",
-			ingressNameAnnotation:    defaultIngressName,
-		}, ingressPath)
+	return createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+		ingressAllowAnnotation:   ingressAllow,
+		backendTimeoutSeconds:    "10",
+		frontendSchemeAnnotation: "internal",
+		ingressNameAnnotation:    defaultIngressName,
+	}, ingressPath)
 }
 
 func createIngressWithoutRules() []*v1beta1.Ingress {
@@ -990,7 +1164,7 @@ func createIngressWithoutRules() []*v1beta1.Ingress {
 
 }
 
-func createIngressesFixture(host string, serviceName string, servicePort int, ingressAnnotations map[string]string, path string) []*v1beta1.Ingress {
+func createIngressesFixture(namespace string, host string, serviceName string, servicePort int, ingressAnnotations map[string]string, path string) []*v1beta1.Ingress {
 
 	paths := []v1beta1.HTTPIngressPath{{
 		Path: path,
@@ -1043,6 +1217,7 @@ func createIngressesFixture(host string, serviceName string, servicePort int, in
 		ingressRules = append(ingressRules, ingressRule)
 	}
 
+	ingressDefinition[0].ObjectMeta.Namespace = namespace
 	ingressDefinition[0].ObjectMeta.Annotations = annotations
 	ingressDefinition[0].Spec.Rules = ingressRules
 
@@ -1063,6 +1238,27 @@ func createServiceFixture(name string, namespace string, clusterIP string) []*v1
 			Spec: v1.ServiceSpec{
 				ClusterIP: clusterIP,
 			},
+		},
+	}
+}
+
+func createDefaultNamespaces() []*v1.Namespace {
+	return createNamespaceFixture(ingressNamespace, map[string]string{})
+}
+
+func createNamespaceFixture(name string, labels map[string]string) []*v1.Namespace {
+	return []*v1.Namespace{
+		{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Namespace",
+				APIVersion: "v1",
+			},
+			ObjectMeta: v1.ObjectMeta{
+				Name:   name,
+				Labels: labels,
+			},
+			Spec:   v1.NamespaceSpec{},
+			Status: v1.NamespaceStatus{},
 		},
 	}
 }

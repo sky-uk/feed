@@ -87,9 +87,17 @@ spec:
         - -pushgateway-label=environment=dev
         - -pushgateway-label=version=v1.0.2
 
-        # Attach to the ELBs with label sky.uk/KubernetesClusterFrontend set to this value.
+        # Set status to unhealthy if fewer than this number of matching ELBs are found
         - -elb-expected-number=2
-        - -elb-label-value=dev
+
+        # Attach to the ELBs with label sky.uk/KubernetesClusterFrontend set to this value.
+        - -elb-frontend-tag-value=dev
+
+        # Attach to the ELBs with label sky.uk/KubernetesClusterIngressName set to this value.
+        - -ingress-name=main
+
+        # Only consider ingresses in namespaces with this label. Optional.
+        - -ingress-namespace-selector=app=myapp
 
         # ELB drain time - time to wait while ELB drains requests from feed when stopping. Should be
         # at least as long as the ELBs drain timeout.

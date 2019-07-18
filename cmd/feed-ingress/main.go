@@ -41,6 +41,7 @@ var (
 	pushgatewayLabels              cmd.KeyValues
 	controllerConfig               controller.Config
 	ingressName                    string
+	namespaceSelector              string
 	nginxConfig                    nginx.Conf
 	nginxLogHeaders                cmd.CommaSeparatedValues
 	nginxTrustedFrontends          cmd.CommaSeparatedValues
@@ -137,6 +138,9 @@ const (
 	defaultClientBodyBufferSize              = 16
 	defaultLargeClientHeaderBufferBlocks     = 4
 	defaultIngressName                       = ""
+	defaultNamespaceSelector                 = ""
+
+	namespaceSelectorFlag = "ingress-namespace-selector"
 )
 
 func init() {
@@ -173,6 +177,8 @@ func init() {
 	flag.StringVar(&ingressName, "ingress-name", defaultIngressName,
 		"Which ingress this instance is for.  This is used to filter ingresses so that only those with this"+
 			"ingress name will be updated.")
+	flag.StringVar(&namespaceSelector, namespaceSelectorFlag, defaultNamespaceSelector,
+		"Only consider ingresses within namespaces having labels matching this selector (e.g. app=loadtest).")
 
 	// nginx flags
 	flag.StringVar(&nginxConfig.BinaryLocation, "nginx-binary", defaultNginxBinary,
@@ -347,6 +353,8 @@ func main() {
 	}
 	controllerConfig.IngressName = ingressName
 
+	controllerConfig.NamespaceSelector = parseNamespaceSelector(namespaceSelector)
+
 	feedController := controller.New(controllerConfig)
 
 	cmd.AddHealthMetrics(feedController, metrics.PrometheusIngressSubsystem)
@@ -359,6 +367,19 @@ func main() {
 	log.Info("Controller started")
 
 	select {}
+}
+
+func parseNamespaceSelector(nameValueStr string) *k8s.NamespaceSelector {
+	if len(nameValueStr) == 0 {
+		return nil
+	}
+
+	nameValue := strings.SplitN(nameValueStr, "=", 2)
+	if len(nameValue) != 2 {
+		log.Fatalf("invalid format for -%s (%s)", namespaceSelectorFlag, nameValueStr)
+		return nil
+	}
+	return &k8s.NamespaceSelector{LabelName: nameValue[0], LabelValue: nameValue[1]}
 }
 
 func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, error) {

@@ -9,7 +9,7 @@ travis : checkformat check docker
 
 setup:
 	@echo "== setup"
-	go get -u github.com/golang/lint/golint
+	go get -u golang.org/x/lint/golint
 	go get -u golang.org/x/tools/cmd/goimports
 	go get -u github.com/golang/dep/cmd/dep
 	dep ensure

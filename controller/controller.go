@@ -69,7 +69,8 @@ type controller struct {
 	started                      bool
 	updatesHealth                util.SafeError
 	sync.Mutex
-	ingressName string
+	ingressName       string
+	namespaceSelector *k8s.NamespaceSelector
 }
 
 // Config for creating a new ingress controller.
@@ -84,6 +85,7 @@ type Config struct {
 	DefaultProxyBufferSize       int
 	DefaultProxyBufferBlocks     int
 	IngressName                  string
+	NamespaceSelector            *k8s.NamespaceSelector
 }
 
 // New creates an ingress controller.
@@ -100,6 +102,7 @@ func New(conf Config) Controller {
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
 		doneCh:                       make(chan struct{}),
 		ingressName:                  conf.IngressName,
+		namespaceSelector:            conf.NamespaceSelector,
 	}
 }
 
@@ -138,7 +141,8 @@ func (c *controller) Start() error {
 func (c *controller) watchForUpdates() {
 	ingressWatcher := c.client.WatchIngresses()
 	serviceWatcher := c.client.WatchServices()
-	c.watcher = k8s.CombineWatchers(ingressWatcher, serviceWatcher)
+	namespaceWatcher := c.client.WatchNamespaces()
+	c.watcher = k8s.CombineWatchers(ingressWatcher, serviceWatcher, namespaceWatcher)
 	c.watcherDone.Add(1)
 	go c.handleUpdates()
 }
@@ -168,7 +172,13 @@ func (c *controller) updateIngresses() (err error) {
 			err = fmt.Errorf("unexpected error: %v: %v", value, string(debug.Stack()))
 		}
 	}()
-	ingresses, err := c.client.GetIngresses()
+
+	var ingresses []*v1beta1.Ingress
+	if c.namespaceSelector == nil {
+		ingresses, err = c.client.GetAllIngresses()
+	} else {
+		ingresses, err = c.client.GetIngresses(c.namespaceSelector)
+	}
 	log.Infof("Found %d ingresses", len(ingresses))
 	if err != nil {
 		return err
@@ -192,8 +202,8 @@ func (c *controller) updateIngresses() (err error) {
 
 					if address := serviceMap[serviceName]; address == "" {
 						skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
-					} else if !c.validIngressName(ingress) {
-						skipped = append(skipped, fmt.Sprintf("%s/%s (ingress name [%s] is not valid. Config: [%s])",
+					} else if !c.ingressNameSupported(ingress) {
+						skipped = append(skipped, fmt.Sprintf("%s/%s (unsupported ingress name [%s]; this feed supports only [%s])",
 							ingress.Namespace, ingress.Name, ingress.Annotations[ingressNameAnnotation], c.ingressName))
 					} else {
 						entry := IngressEntry{
@@ -236,7 +246,8 @@ func (c *controller) updateIngresses() (err error) {
 							} else if stripPath == "false" {
 								entry.StripPaths = false
 							} else {
-								log.Warnf("Ingress %s has an invalid strip path annotation: %s. Using default", ingress.Name, stripPath)
+								log.Warnf("Ingress %s/%s has an invalid strip path annotation [%s]. Using default",
+									ingress.Namespace, ingress.Name, stripPath)
 							}
 						}
 
@@ -246,7 +257,8 @@ func (c *controller) updateIngresses() (err error) {
 							} else if exactPath == "false" {
 								entry.ExactPath = false
 							} else {
-								log.Warnf("Ingress %s has an invalid exact path annotation: %s. Using default", ingress.Name, exactPath)
+								log.Warnf("Ingress %s/%s has an invalid exact path annotation [%s]. Using default",
+									ingress.Namespace, ingress.Name, exactPath)
 							}
 						}
 
@@ -311,7 +323,7 @@ func (c *controller) updateIngresses() (err error) {
 	return nil
 }
 
-func (c *controller) validIngressName(ingress *v1beta1.Ingress) bool {
+func (c *controller) ingressNameSupported(ingress *v1beta1.Ingress) bool {
 
 	isValid := false
 

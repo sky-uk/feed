@@ -23,6 +23,31 @@ If you are using v2 of `feed-ingress` the ELBs should also be tagged with `sky.u
 See [upgrade from v1 to v2](#upgrade-from-v1-to-v2) for more information.
 * A Route53 hosted zone has been created to match your ingress resources.
 
+## RBAC permissions
+
+The following RBAC permissions are required by the service account under which feed runs:
+
+```yaml
+rules:
+- apiGroups:
+  - ""
+  - extensions
+  resources:
+  - ingresses
+  - namespaces
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses/status
+  verbs:
+  - update
+```
+
 ## Known Limitations
 
 * nginx reloads can be disruptive. On reload, nginx will finish in-flight requests, then abruptly
@@ -42,7 +67,9 @@ This is a breaking change to support [multiple ingresses per cluster](#multiple-
 
 To upgrade, follow these steps:
 1. Tag the ELBs with `sky.uk/KubernetesClusterIngressName=<name>`
-2. Provide the mandatory argument `--ingress-name` to feed-ingress with a matching value.
+2. Provide the mandatory argument `-ingress-name=<name>` to feed-ingress with a value matching the ELB tag.
+3. Rename the argument `-elb-label-value` to `-elb-frontend-tag-value`
+4. Annotate all ingresses with `sky.uk/ingress-name=<name>`
 
 # Overview
 
@@ -172,11 +199,13 @@ securityContext:
 
 ### Multiple ingresses per cluster
 
-Multiple ingresses can be created per cluster.  Feed will use the `sky.uk/KubernetesClusterIngressName=<name>` tag to
-attach to the right ELB.
+Multiple ingresses can be created per cluster. ELBs should be tagged with `sky.uk/KubernetesClusterIngressName=<name>`
+and feed instances started with `-ingress.name=<name>`. Feed instances will attach to ELBs with matching ingress names.
 
-Ingress resources will be created where the `sky.uk/ingress-name` annotation matches the `ingress-name` argument.
+A feed instance will adopt ingress resources with a matching `sky.uk/ingress-name=<value>` annotation. Ingress
+resources with no annotation will not be adopted and will have no traffic sent to their associated services.
 
+Use the script `ingress-no-annotation.sh` to find ingresses without this annotation.
 
 #### Support
 
