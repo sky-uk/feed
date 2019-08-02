@@ -29,10 +29,10 @@ const bufferedWatcherDuration = time.Millisecond * 50
 // including reconnects, to notify that there may be new ingresses that need to be retrieved.
 // It's intended that client code will call the getters to retrieve the current state when notified.
 type Client interface {
-	// GetIngresses returns all the ingresses in the cluster.
+	// GetAllIngresses returns all the ingresses in the cluster.
 	GetAllIngresses() ([]*v1beta1.Ingress, error)
 
-	// GetIngresses returns all ingresses in namespaces with matching labels
+	// GetIngresses returns ingresses in namespaces with matching labels
 	GetIngresses(*NamespaceSelector) ([]*v1beta1.Ingress, error)
 
 	// GetServices returns all the services in the cluster.
@@ -88,18 +88,7 @@ func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
 }
 
 func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
-	c.createIngressSource()
-
-	if !c.ingressController.HasSynced() {
-		return nil, errors.New("ingresses haven't synced yet")
-	}
-
-	ingresses := []*v1beta1.Ingress{}
-	for _, obj := range c.ingressStore.List() {
-		ingresses = append(ingresses, obj.(*v1beta1.Ingress))
-	}
-
-	return ingresses, nil
+	return c.GetIngresses(nil)
 }
 
 func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, error) {
@@ -114,7 +103,7 @@ func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, 
 
 	filteredIngresses := []*v1beta1.Ingress{}
 	for _, ingress := range allIngresses {
-		if ingressInSupportedNamespace(ingress, selector, c.namespaceStore.List()) {
+		if selector != nil && ingressInSupportedNamespace(ingress, selector, c.namespaceStore.List()) {
 			filteredIngresses = append(filteredIngresses, ingress)
 		}
 	}
@@ -143,7 +132,6 @@ func ingressInSupportedNamespace(ingress *v1beta1.Ingress, selector *NamespaceSe
 }
 
 func (c *client) WatchIngresses() Watcher {
-	c.createNamespaceSource()
 	c.createIngressSource()
 	return c.ingressWatcher
 }
