@@ -40,7 +40,7 @@ var (
 	pushgatewayIntervalSeconds     int
 	pushgatewayLabels              cmd.KeyValues
 	controllerConfig               controller.Config
-	ingressName                    string
+	ingressControllerName          string
 	namespaceSelector              string
 	nginxConfig                    nginx.Conf
 	nginxLogHeaders                cmd.CommaSeparatedValues
@@ -79,68 +79,69 @@ var (
 )
 
 const (
-	unset                                    = -1
-	defaultResyncPeriod                      = time.Minute * 15
-	defaultIngressPort                       = 8080
-	defaultIngressHTTPSPort                  = unset
-	defaultIngressAllow                      = "0.0.0.0/0"
-	defaultIngressHealthPort                 = 8081
-	defaultIngressStripPath                  = true
-	defaultIngressExactPath                  = false
-	defaultHealthPort                        = 12082
-	defaultNginxBinary                       = "/usr/sbin/nginx"
-	defaultNginxWorkingDir                   = "/nginx"
-	defaultNginxWorkers                      = 1
-	defaultNginxWorkerConnections            = 1024
-	defaultNginxWorkerShutdownTimeoutSeconds = 0
-	defaultNginxKeepAliveSeconds             = 60
-	defaultNginxBackendKeepalives            = 512
-	defaultNginxBackendTimeoutSeconds        = 60
-	defaultNginxBackendConnectTimeoutSeconds = 1
-	defaultNginxBackendMaxConnections        = 0
-	defaultNginxProxyBufferSize              = 16
-	defaultNginxProxyBufferBlocks            = 4
-	defaultNginxLogLevel                     = "warn"
-	defaultNginxServerNamesHashBucketSize    = unset
-	defaultNginxServerNamesHashMaxSize       = unset
-	defaultNginxProxyProtocol                = false
-	defaultNginxUpdatePeriod                 = time.Second * 30
-	defaultNginxSSLPath                      = "/etc/ssl/default-ssl/default-ssl"
-	defaultNginxVhostStatsSharedMemory       = 1
-	defaultNginxOpenTracingPluginPath        = ""
-	defaultNginxOpenTracingConfigPath        = ""
-	defaultElbFrontendTagValue               = ""
-	defaultElbIngressNameTagValue            = ""
-	defaultDrainDelay                        = time.Second * 60
-	defaultTargetGroupDeregistrationDelay    = time.Second * 300
-	defaultRegion                            = "eu-west-1"
-	defaultElbExpectedNumber                 = 0
-	defaultPushgatewayIntervalSeconds        = 60
-	defaultAccessLogDir                      = "/var/log/nginx"
-	defaultRegistrationFrontendType          = "elb"
-	defaultGorbIngressInstanceIP             = "127.0.0.1"
-	defaultGorbEndpoint                      = "http://127.0.0.1:80"
-	defaultGorbBackendMethod                 = "dr"
-	defaultGorbBackendWeight                 = 1000
-	defaultGorbServicesDefinition            = "http-proxy:80,https-proxy:443"
-	defaultGorbVipLoadbalancer               = "127.0.0.1"
-	defaultGorbManageLoopback                = true
-	defaultGorbInterfaceProcFsPath           = "/host-ipv4-proc/"
-	defaultGorbBackendHealthcheckInterval    = "1s"
-	defaultGorbBackendHealthcheckType        = "http"
-	defaultMerlinForwardMethod               = "route"
-	defaultMerlinHealthUpThreshold           = 3
-	defaultMerlinHealthDownThreshold         = 2
-	defaultMerlinHealthPeriod                = 10 * time.Second
-	defaultMerlinHealthTimeout               = time.Second
-	defaultMerlinVIPInterface                = "lo"
-	defaultClientHeaderBufferSize            = 16
-	defaultClientBodyBufferSize              = 16
-	defaultLargeClientHeaderBufferBlocks     = 4
-	defaultIngressName                       = ""
-	defaultNamespaceSelector                 = ""
+	unset                                     = -1
+	defaultResyncPeriod                       = time.Minute * 15
+	defaultIngressPort                        = 8080
+	defaultIngressHTTPSPort                   = unset
+	defaultIngressAllow                       = "0.0.0.0/0"
+	defaultIngressHealthPort                  = 8081
+	defaultIngressStripPath                   = true
+	defaultIngressExactPath                   = false
+	defaultHealthPort                         = 12082
+	defaultNginxBinary                        = "/usr/sbin/nginx"
+	defaultNginxWorkingDir                    = "/nginx"
+	defaultNginxWorkers                       = 1
+	defaultNginxWorkerConnections             = 1024
+	defaultNginxWorkerShutdownTimeoutSeconds  = 0
+	defaultNginxKeepAliveSeconds              = 60
+	defaultNginxBackendKeepalives             = 512
+	defaultNginxBackendTimeoutSeconds         = 60
+	defaultNginxBackendConnectTimeoutSeconds  = 1
+	defaultNginxBackendMaxConnections         = 0
+	defaultNginxProxyBufferSize               = 16
+	defaultNginxProxyBufferBlocks             = 4
+	defaultNginxLogLevel                      = "warn"
+	defaultNginxServerNamesHashBucketSize     = unset
+	defaultNginxServerNamesHashMaxSize        = unset
+	defaultNginxProxyProtocol                 = false
+	defaultNginxUpdatePeriod                  = time.Second * 30
+	defaultNginxSSLPath                       = "/etc/ssl/default-ssl/default-ssl"
+	defaultNginxVhostStatsSharedMemory        = 1
+	defaultNginxOpenTracingPluginPath         = ""
+	defaultNginxOpenTracingConfigPath         = ""
+	defaultElbFrontendTagValue                = ""
+	defaultElbIngressNameTagValue             = ""
+	defaultDrainDelay                         = time.Second * 60
+	defaultTargetGroupDeregistrationDelay     = time.Second * 300
+	defaultRegion                             = "eu-west-1"
+	defaultElbExpectedNumber                  = 0
+	defaultPushgatewayIntervalSeconds         = 60
+	defaultAccessLogDir                       = "/var/log/nginx"
+	defaultRegistrationFrontendType           = "elb"
+	defaultGorbIngressInstanceIP              = "127.0.0.1"
+	defaultGorbEndpoint                       = "http://127.0.0.1:80"
+	defaultGorbBackendMethod                  = "dr"
+	defaultGorbBackendWeight                  = 1000
+	defaultGorbServicesDefinition             = "http-proxy:80,https-proxy:443"
+	defaultGorbVipLoadbalancer                = "127.0.0.1"
+	defaultGorbManageLoopback                 = true
+	defaultGorbInterfaceProcFsPath            = "/host-ipv4-proc/"
+	defaultGorbBackendHealthcheckInterval     = "1s"
+	defaultGorbBackendHealthcheckType         = "http"
+	defaultMerlinForwardMethod                = "route"
+	defaultMerlinHealthUpThreshold            = 3
+	defaultMerlinHealthDownThreshold          = 2
+	defaultMerlinHealthPeriod                 = 10 * time.Second
+	defaultMerlinHealthTimeout                = time.Second
+	defaultMerlinVIPInterface                 = "lo"
+	defaultClientHeaderBufferSize             = 16
+	defaultClientBodyBufferSize               = 16
+	defaultLargeClientHeaderBufferBlocks      = 4
+	defaultIngressControllerName              = ""
+	defaultIngressControllerNamespaceSelector = ""
 
-	namespaceSelectorFlag = "ingress-namespace-selector"
+	ingressControllerNameFlag              = "ingress-controller-name"
+	ingressControllerNamespaceSelectorFlag = "ingress-controller-namespace-selector"
 )
 
 func init() {
@@ -174,10 +175,9 @@ func init() {
 			" '/myhost/myapp/health/'. Can be overridden with the sky.uk/exact-path annotation per ingress")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
-	flag.StringVar(&ingressName, "ingress-name", defaultIngressName,
-		"Which ingress this instance is for.  This is used to filter ingresses so that only those with this"+
-			"ingress name will be updated.")
-	flag.StringVar(&namespaceSelector, namespaceSelectorFlag, defaultNamespaceSelector,
+	flag.StringVar(&ingressControllerName, ingressControllerNameFlag, defaultIngressControllerName,
+		"The name of this instance. It will consider only ingress resources with matching sky.uk/ingress-controller-name annotation values.")
+	flag.StringVar(&namespaceSelector, ingressControllerNamespaceSelectorFlag, defaultIngressControllerNamespaceSelector,
 		"Only consider ingresses within namespaces having labels matching this selector (e.g. app=loadtest).")
 
 	// nginx flags
@@ -251,8 +251,7 @@ func init() {
 	flag.StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
 	flag.StringVar(&elbFrontendTagValue, "elb-frontend-tag-value", defaultElbFrontendTagValue,
-		"Alias to ELBs tagged with "+elb.ElbTag+"=value. Route53 entries will be created to these,"+
-			"depending on the scheme and ingress name.")
+		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
 	flag.StringVar(&registrationFrontendType, "registration-frontend-type", defaultRegistrationFrontendType,
 		"Define the registration frontend type. Must be merlin, gorb, elb or alb.")
 	flag.IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
@@ -348,10 +347,10 @@ func main() {
 		controllerConfig.DefaultBackendTimeoutSeconds = legacyBackendKeepaliveSeconds
 	}
 
-	if ingressName == defaultIngressName {
-		log.Fatal("The argument ingress-name is required")
+	if ingressControllerName == defaultIngressControllerName {
+		log.Fatalf("The argument %s is required", ingressControllerNameFlag)
 	}
-	controllerConfig.IngressName = ingressName
+	controllerConfig.Name = ingressControllerName
 
 	controllerConfig.NamespaceSelector = parseNamespaceSelector(namespaceSelector)
 
@@ -376,7 +375,7 @@ func parseNamespaceSelector(nameValueStr string) *k8s.NamespaceSelector {
 
 	nameValue := strings.SplitN(nameValueStr, "=", 2)
 	if len(nameValue) != 2 {
-		log.Fatalf("invalid format for -%s (%s)", namespaceSelectorFlag, nameValueStr)
+		log.Fatalf("invalid format for -%s (%s)", ingressControllerNamespaceSelectorFlag, nameValueStr)
 		return nil
 	}
 	return &k8s.NamespaceSelector{LabelName: nameValue[0], LabelValue: nameValue[1]}
@@ -402,7 +401,7 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 	switch registrationFrontendType {
 
 	case "elb":
-		elbUpdater, err := elb.New(region, elbFrontendTagValue, ingressName, elbExpectedNumber, drainDelay)
+		elbUpdater, err := elb.New(region, elbFrontendTagValue, ingressControllerName, elbExpectedNumber, drainDelay)
 		if err != nil {
 			return updaters, err
 		}
@@ -411,7 +410,7 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 		statusConfig := elb_status.Config{
 			Region:              region,
 			FrontendTagValue:    elbFrontendTagValue,
-			IngressNameTagValue: ingressName,
+			IngressNameTagValue: ingressControllerName,
 			KubernetesClient:    kubernetesClient,
 		}
 		elbStatusUpdater, err := elb_status.New(statusConfig)

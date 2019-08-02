@@ -25,7 +25,7 @@ const (
 	ingressName               = "ingress_name"
 	region                    = "eu-west-1"
 	frontendTag               = "sky.uk/KubernetesClusterFrontend"
-	ingressNameTag            = "sky.uk/KubernetesClusterIngressName"
+	ingressNameTag            = "sky.uk/KubernetesClusterIngressControllerName"
 	canonicalHostedZoneNameID = "test-id"
 	elbDNSName                = "elb-dnsname"
 	elbInternalScheme         = "internal"
@@ -233,7 +233,7 @@ func TestNameAndDNSNameAndHostedZoneIDLoadBalancerDetailsAreExtracted(t *testing
 	)
 
 	//when
-	frontends, _ := FindFrontEndElbsWithIngressName(mockElb, clusterName, ingressName)
+	frontends, _ := FindFrontEndElbsWithIngressControllerName(mockElb, clusterName, ingressName)
 
 	//then
 	assert.Equal(t, "cluster-frontend", frontends[elbInternalScheme].Name)

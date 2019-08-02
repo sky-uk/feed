@@ -40,7 +40,7 @@ const (
 	// sets Nginx (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
 	backendMaxConnections = "sky.uk/backend-max-connections"
 
-	ingressNameAnnotation = "sky.uk/ingress-name"
+	ingressControllerNameAnnotation = "sky.uk/ingress-controller-name"
 )
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
@@ -69,7 +69,7 @@ type controller struct {
 	started                      bool
 	updatesHealth                util.SafeError
 	sync.Mutex
-	ingressName       string
+	name              string
 	namespaceSelector *k8s.NamespaceSelector
 }
 
@@ -84,7 +84,7 @@ type Config struct {
 	DefaultBackendMaxConnections int
 	DefaultProxyBufferSize       int
 	DefaultProxyBufferBlocks     int
-	IngressName                  string
+	Name                         string
 	NamespaceSelector            *k8s.NamespaceSelector
 }
 
@@ -101,7 +101,7 @@ func New(conf Config) Controller {
 		defaultProxyBufferSize:       conf.DefaultProxyBufferSize,
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
 		doneCh:                       make(chan struct{}),
-		ingressName:                  conf.IngressName,
+		name:                         conf.Name,
 		namespaceSelector:            conf.NamespaceSelector,
 	}
 }
@@ -202,9 +202,9 @@ func (c *controller) updateIngresses() (err error) {
 
 					if address := serviceMap[serviceName]; address == "" {
 						skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
-					} else if !c.ingressNameSupported(ingress) {
-						skipped = append(skipped, fmt.Sprintf("%s/%s (unsupported ingress name [%s]; this feed supports only [%s])",
-							ingress.Namespace, ingress.Name, ingress.Annotations[ingressNameAnnotation], c.ingressName))
+					} else if !c.ingressControllerNameSupported(ingress) {
+						skipped = append(skipped, fmt.Sprintf("%s/%s (ingress requests a different controller name [%s]; this feed instance is named [%s])",
+							ingress.Namespace, ingress.Name, ingress.Annotations[ingressControllerNameAnnotation], c.name))
 					} else {
 						entry := IngressEntry{
 							Namespace:      ingress.Namespace,
@@ -221,7 +221,7 @@ func (c *controller) updateIngresses() (err error) {
 							ProxyBufferBlocks:     c.defaultProxyBufferBlocks,
 							CreationTimestamp:     ingress.CreationTimestamp.Time,
 							Ingress:               ingress,
-							IngressName:           ingress.Annotations[ingressNameAnnotation],
+							IngressControllerName: ingress.Annotations[ingressControllerNameAnnotation],
 						}
 
 						log.Debugf("Found ingress to update: %s", ingress.Name)
@@ -323,12 +323,12 @@ func (c *controller) updateIngresses() (err error) {
 	return nil
 }
 
-func (c *controller) ingressNameSupported(ingress *v1beta1.Ingress) bool {
+func (c *controller) ingressControllerNameSupported(ingress *v1beta1.Ingress) bool {
 
 	isValid := false
 
-	if ingressName, ok := ingress.Annotations[ingressNameAnnotation]; ok {
-		isValid = ingressName == c.ingressName
+	if ingressControllerName, ok := ingress.Annotations[ingressControllerNameAnnotation]; ok {
+		isValid = ingressControllerName == c.name
 	}
 
 	return isValid

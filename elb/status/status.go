@@ -50,7 +50,7 @@ type status struct {
 
 // Start discovers the elbs and generates loadBalancer statuses.
 func (s *status) Start() error {
-	clusterFrontEnds, err := elb.FindFrontEndElbsWithIngressName(s.awsElb, s.frontendTagValue, s.ingressNameTagValue)
+	clusterFrontEnds, err := elb.FindFrontEndElbsWithIngressControllerName(s.awsElb, s.frontendTagValue, s.ingressNameTagValue)
 	if err != nil {
 		return err
 	}

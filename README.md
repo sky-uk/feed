@@ -19,7 +19,7 @@ can be applied to a cluster.
 
 * An internal and internet-facing ELB has been created and can reach your kubernetes cluster.
 The ELBs should be tagged with `sky.uk/KubernetesClusterFrontend=<name>` which is used by feed to discover them.
-If you are using v2 of `feed-ingress` the ELBs should also be tagged with `sky.uk/KubernetesClusterIngressName=<name>`.
+If you are using v2 of `feed-ingress` the ELBs should also be tagged with `sky.uk/KubernetesClusterIngressControllerName=<name>`.
 See [upgrade from v1 to v2](#upgrade-from-v1-to-v2) for more information.
 * A Route53 hosted zone has been created to match your ingress resources.
 
@@ -58,18 +58,17 @@ rules:
 * feed-dns only supports a single hosted zone at this time, but this should be straightforward to add support for.
   PRs are welcome.
 
-
 # Upgrading
 
 ## Upgrade from v1 to v2
 
-This is a breaking change to support [multiple ingresses per cluster](#multiple-ingresses-per-cluster).
+This is a breaking change to support [multiple ingress controllers per cluster](#multiple-ingress-controllers-per-cluster).
 
 To upgrade, follow these steps:
-1. Tag the ELBs with `sky.uk/KubernetesClusterIngressName=<name>`
-2. Provide the mandatory argument `-ingress-name=<name>` to feed-ingress with a value matching the ELB tag.
+1. Tag the ELBs with `sky.uk/KubernetesClusterIngressControllerName=<name>`
+2. Provide the mandatory argument `-ingress-controller-name=<name>` to feed-ingress with a value matching the ELB tag.
 3. Rename the argument `-elb-label-value` to `-elb-frontend-tag-value`
-4. Annotate all ingresses with `sky.uk/ingress-name=<name>`
+4. Annotate all ingresses with `sky.uk/ingress-controller-name=<name>`
 
 # Overview
 
@@ -197,15 +196,15 @@ securityContext:
 
 ```
 
-### Multiple ingresses per cluster
+### Multiple ingress controllers per cluster
 
-Multiple ingresses can be created per cluster. ELBs should be tagged with `sky.uk/KubernetesClusterIngressName=<name>`
-and feed instances started with `-ingress.name=<name>`. Feed instances will attach to ELBs with matching ingress names.
+Multiple feed-ingress controllers can be created per cluster. ELBs should be tagged with `sky.uk/KubernetesClusterIngressControllerName=<name>`
+and feed instances started with `-ingress-controller-name=<name>`. Feed instances will attach to ELBs with matching ingress controller names.
 
-A feed instance will adopt ingress resources with a matching `sky.uk/ingress-name=<value>` annotation. Ingress
-resources with no annotation will not be adopted and will have no traffic sent to their associated services.
+A feed ingress controller will adopt ingress resources with a matching `sky.uk/ingress-controller-name=<value>` annotation.
+Ingress resources with no annotation will not be adopted and will have no traffic sent to their associated services.
 
-Use the script `ingress-no-annotation.sh` to find ingresses without this annotation.
+Use the script `ingresses-without-controller.sh` to find ingresses without this annotation.
 
 #### Support
 

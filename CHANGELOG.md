@@ -1,5 +1,5 @@
 # v2.0.0
-* Added support for multiple ingresses per cluster to feed-ingress
+* Added support for multiple feed-ingress controllers per cluster
 
 This is a breaking change.  Follow the instructions to [upgrade from v1 to v2](https://github.com/sky-uk/feed#upgrade-from-v1-to-v2)
 

@@ -1,10 +1,10 @@
 #!/bin/bash -e
 
-ingress_name="sky.uk/ingress-name"
+ingress_name="sky.uk/ingress-controller-name"
 
 if [[ $# -eq 0 ]]; then
     cat >&2 <<EOF
-Lists ingresses that are missing the "$ingress_name" annotation.
+Lists ingress resources that are missing the "$ingress_name" annotation.
 Usage: $(basename $0) <k8s-context>
 EOF
     exit 1
