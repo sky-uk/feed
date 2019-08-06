@@ -445,7 +445,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultAllow(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -471,7 +471,7 @@ func TestUpdaterIsUpdatedForIngressWithEmptyAllow(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -499,7 +499,7 @@ func TestUpdaterIsUpdatedForIngressWithStripPathsTrue(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -528,7 +528,7 @@ func TestUpdaterIsUpdatedForIngressWithStripPathsFalse(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -557,7 +557,7 @@ func TestUpdaterIsUpdatedForIngressWithExactPathTrue(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -586,7 +586,7 @@ func TestUpdaterIsUpdatedForIngressWithExactPathFalse(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -615,7 +615,7 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendTimeout(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -643,7 +643,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultBackendTimeout(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -673,7 +673,7 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendMaxConnections(t *testin
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -703,7 +703,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultBackendMaxConnections(t *testing.T
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -730,7 +730,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultProxyBufferValuesWhenNotOverridden
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -766,7 +766,7 @@ func TestUpdaterIsUpdatedForIngressOverridesDefaultProxyBufferValues(t *testing.
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -802,7 +802,7 @@ func TestUpdaterIsUpdatedForIngressDefinitionResetsToMacWhenProxyBufferValuesExc
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -825,7 +825,7 @@ func TestUpdaterIsUpdatedForIngressDefinitionResetsToMacWhenProxyBufferValuesExc
 	})
 }
 
-func TestUpdaterIsUpdatedForIngressNameNotSetInIngress(t *testing.T) {
+func TestUpdaterIsUpdatedForIngressControllerNameNotSetInIngress(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"controller name not set in ingress",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
@@ -839,7 +839,7 @@ func TestUpdaterIsUpdatedForIngressNameNotSetInIngress(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -854,7 +854,7 @@ func TestUpdaterIsUpdatedForIngressNameNotSetInIngress(t *testing.T) {
 	})
 }
 
-func TestUpdaterIsUpdatedForIngressNameSetToDefaultInIngress(t *testing.T) {
+func TestUpdaterIsUpdatedForIngressControllerNameSetToDefaultInIngress(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"controller name set to default in ingress",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
@@ -868,7 +868,7 @@ func TestUpdaterIsUpdatedForIngressNameSetToDefaultInIngress(t *testing.T) {
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -887,9 +887,9 @@ func TestUpdaterIsUpdatedForIngressNameSetToDefaultInIngress(t *testing.T) {
 	})
 }
 
-func TestUpdaterIsUpdatedForIngressNameSetToTestAndConfigSetToDefault(t *testing.T) {
+func TestUpdaterIsNotUpdatedForIngressControllerNameSetToTestAndConfigSetToDefault(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
-		"ingress with controller name set to test and config set to default",
+		"ingress requesting controller==test; feed is named " + defaultControllerName,
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
@@ -904,9 +904,9 @@ func TestUpdaterIsUpdatedForIngressNameSetToTestAndConfigSetToDefault(t *testing
 	})
 }
 
-func TestUpdaterIsUpdatedForIngressNameSetToTestInIngressAndConfig(t *testing.T) {
+func TestUpdaterIsUpdatedForIngressControllerNameSetToTestInIngressAndConfig(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
-		"controller name set to test in ingress and config",
+		"ingress requesting controller==test; feed is named test",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
@@ -918,7 +918,7 @@ func TestUpdaterIsUpdatedForIngressNameSetToTestInIngressAndConfig(t *testing.T)
 		createDefaultNamespaces(),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -951,7 +951,7 @@ func TestUpdaterIsUpdatedForIngressInNamespaceMatchingSelector(t *testing.T) {
 		createNamespaceFixture(ingressNamespace, map[string]string{"team": "theteam"}),
 		[]IngressEntry{{
 			Namespace:             ingressNamespace,
-			Name:                  ingressControllerName,
+			Name:                  ingressName,
 			Host:                  ingressHost,
 			Path:                  ingressPath,
 			ServiceAddress:        serviceIP,
@@ -971,9 +971,9 @@ func TestUpdaterIsUpdatedForIngressInNamespaceMatchingSelector(t *testing.T) {
 	})
 }
 
-func TestUpdaterIsNotUpdatedForIngressInNamespaceMatchingSelector(t *testing.T) {
+func TestUpdaterIsNotUpdatedForIngressInNamespaceNotMatchingSelector(t *testing.T) {
 	runAndAssertUpdates(t, expectGetIngresses, testSpec{
-		"ingress is in a namespace that matches the namespace selector",
+		"ingress is in a namespace that doesn't match the namespace selector",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
@@ -1103,7 +1103,7 @@ func addIngresses(ingresses []*v1beta1.Ingress, entries IngressEntries) IngressE
 func createLbEntriesFixture() IngressEntries {
 	return []IngressEntry{{
 		Namespace:             ingressNamespace,
-		Name:                  ingressControllerName,
+		Name:                  ingressName,
 		Host:                  ingressHost,
 		Path:                  ingressPath,
 		ServiceAddress:        serviceIP,
@@ -1118,7 +1118,7 @@ func createLbEntriesFixture() IngressEntries {
 const (
 	ingressHost           = "foo.sky.com"
 	ingressPath           = "/foo"
-	ingressControllerName = "foo-ingress"
+	ingressName           = "foo-ingress"
 	ingressSvcName        = "foo-svc"
 	ingressSvcPort        = 80
 	ingressNamespace      = "happysky"
@@ -1152,7 +1152,7 @@ func createIngressWithoutRules() []*v1beta1.Ingress {
 	return []*v1beta1.Ingress{
 		{
 			ObjectMeta: v1.ObjectMeta{
-				Name:      ingressControllerName,
+				Name:      ingressName,
 				Namespace: ingressNamespace,
 				Annotations: map[string]string{
 					ingressControllerNameAnnotation: defaultControllerName,

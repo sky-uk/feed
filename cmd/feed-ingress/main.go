@@ -328,6 +328,11 @@ func init() {
 func main() {
 	flag.Parse()
 
+	if ingressControllerName == defaultIngressControllerName {
+		log.Fatalf("The argument %s is required", ingressControllerNameFlag)
+	}
+	controllerConfig.Name = ingressControllerName
+
 	cmd.ConfigureLogging(debug)
 	cmd.ConfigureMetrics("feed-ingress", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)
 
@@ -347,12 +352,10 @@ func main() {
 		controllerConfig.DefaultBackendTimeoutSeconds = legacyBackendKeepaliveSeconds
 	}
 
-	if ingressControllerName == defaultIngressControllerName {
-		log.Fatalf("The argument %s is required", ingressControllerNameFlag)
+	controllerConfig.NamespaceSelector, err = parseNamespaceSelector(namespaceSelector)
+	if err != nil {
+		log.Fatalf("invalid format for -%s (%s)", ingressControllerNamespaceSelectorFlag, namespaceSelector)
 	}
-	controllerConfig.Name = ingressControllerName
-
-	controllerConfig.NamespaceSelector = parseNamespaceSelector(namespaceSelector)
 
 	feedController := controller.New(controllerConfig)
 
@@ -368,17 +371,16 @@ func main() {
 	select {}
 }
 
-func parseNamespaceSelector(nameValueStr string) *k8s.NamespaceSelector {
+func parseNamespaceSelector(nameValueStr string) (*k8s.NamespaceSelector, error) {
 	if len(nameValueStr) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	nameValue := strings.SplitN(nameValueStr, "=", 2)
 	if len(nameValue) != 2 {
-		log.Fatalf("invalid format for -%s (%s)", ingressControllerNamespaceSelectorFlag, nameValueStr)
-		return nil
+		log.Errorf("expecting name=value but was (%s)", nameValueStr)
 	}
-	return &k8s.NamespaceSelector{LabelName: nameValue[0], LabelValue: nameValue[1]}
+	return &k8s.NamespaceSelector{LabelName: nameValue[0], LabelValue: nameValue[1]}, nil
 }
 
 func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, error) {

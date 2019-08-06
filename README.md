@@ -65,7 +65,7 @@ rules:
 This is a breaking change to support [multiple ingress controllers per cluster](#multiple-ingress-controllers-per-cluster).
 
 To upgrade, follow these steps:
-1. Tag the ELBs with `sky.uk/KubernetesClusterIngressControllerName=<name>`
+1. Tag the ELBs with `sky.uk/KubernetesClusterIngressControllerName=<name>` to indicate which feed-ingress controllers should attach to them
 2. Provide the mandatory argument `-ingress-controller-name=<name>` to feed-ingress with a value matching the ELB tag.
 3. Rename the argument `-elb-label-value` to `-elb-frontend-tag-value`
 4. Annotate all ingresses with `sky.uk/ingress-controller-name=<name>`
