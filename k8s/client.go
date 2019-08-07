@@ -96,38 +96,57 @@ func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, 
 		return nil, errors.New("namespaces haven't synced yet")
 	}
 
-	allIngresses, err := c.GetAllIngresses()
-	if err != nil {
-		return nil, err
+	allIngresses := []*v1beta1.Ingress{}
+	for _, obj := range c.ingressStore.List() {
+		allIngresses = append(allIngresses, obj.(*v1beta1.Ingress))
 	}
+
+	if selector == nil {
+		return allIngresses, nil
+	}
+
+	supportedNamespaces := supportedNamespaces(selector, toNamespaces(c.namespaceStore.List()))
 
 	filteredIngresses := []*v1beta1.Ingress{}
 	for _, ingress := range allIngresses {
-		if selector != nil && ingressInSupportedNamespace(ingress, selector, c.namespaceStore.List()) {
+		if ingressInNamespace(ingress, supportedNamespaces) {
 			filteredIngresses = append(filteredIngresses, ingress)
 		}
 	}
-
 	return filteredIngresses, nil
 }
 
-func ingressInSupportedNamespace(ingress *v1beta1.Ingress, selector *NamespaceSelector, namespaces []interface{}) bool {
+func toNamespaces(interfaces []interface{}) []*v1.Namespace {
+	namespaces := make([]*v1.Namespace, len(interfaces))
+	for i, obj := range interfaces {
+		namespaces[i] = obj.(*v1.Namespace)
+	}
+	return namespaces
+}
+
+func supportedNamespaces(selector *NamespaceSelector, namespaces []*v1.Namespace) []*v1.Namespace {
 	if selector == nil {
-		return true
+		return namespaces
 	}
 
-	for _, obj := range namespaces {
-		namespace := obj.(*v1.Namespace)
-
-		if namespace.Name == ingress.Namespace {
-			if val, ok := namespace.Labels[selector.LabelName]; ok && val == selector.LabelValue {
-				log.Debugf("Including ingress %s. Its namespace is annotated with %s=%s", ingress.Name, selector.LabelName, selector.LabelValue)
-				return true
-			}
+	filteredNamespaces := []*v1.Namespace{}
+	for _, namespace := range namespaces {
+		if val, ok := namespace.Labels[selector.LabelName]; ok && val == selector.LabelValue {
+			filteredNamespaces = append(filteredNamespaces, namespace)
 		}
 	}
+	log.Debugf("Found %d of %d namespaces that match the selector %s=%s",
+		len(filteredNamespaces), len(namespaces), selector.LabelName, selector.LabelValue)
 
-	log.Debugf("Excluding ingress %s. Its namespace is not annotated with %s=%s", ingress.Name, selector.LabelName, selector.LabelValue)
+	return filteredNamespaces
+}
+
+func ingressInNamespace(ingress *v1beta1.Ingress, namespaces []*v1.Namespace) bool {
+	for _, namespace := range namespaces {
+		if namespace.Name == ingress.Namespace {
+			return true
+		}
+	}
 	return false
 }
 
