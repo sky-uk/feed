@@ -30,7 +30,7 @@ spec:
       restartPolicy: Always
 
       containers:
-      - image: skycirrus/feed-ingress:v1.7.0
+      - image: skycirrus/feed-ingress:v2.0.0
         name: feed-ingress
         securityContext:
           capabilities:
@@ -65,88 +65,87 @@ spec:
           protocol: TCP
 
         args:
+        - merlin
+
         # Ingress nginx port that frontend will direct traffic towards.
-        - -ingress-port=80
-        - -ingress-https-port=443
+        - --ingress-port=80
+        - --ingress-https-port=443
 
         # Health port on nginx, used by frontend to determine health.
-        - -ingress-health-port=8081
+        - --ingress-health-port=8081
 
         # Default security whitelist for ingress. Can be overridden with the sky.uk/allow annotation.
-        - -ingress-allow=10.0.0.0/8
+        - --ingress-allow=10.0.0.0/8
 
         # Health port for the controller to respond on.
-        - -health-port=12082
+        - --health-port=12082
 
         # Log level of nginx. Recommended to leave at error, or set to crit if too much spam.
-        - -nginx-loglevel=error
+        - --nginx-loglevel=error
 
         # How often to reload nginx if needed. Setting too low can cause 504s from the frontend in the case of heavy
         # ingress updates.
-        - -nginx-update-period=5m
+        - --nginx-update-period=5m
 
         # Use pushgateway for prometheus metrics. Optional - metrics available at /metrics on health port.
-        - -pushgateway=mypushgateway.com
-        - -pushgateway-interval=20
-        - -pushgateway-label=k8s_cluster=dev
-        - -pushgateway-label=environment=dev
-        - -pushgateway-label=version=v1.0.2
-
-        # Specify merlin as the frontend component
-        - -registration-frontend-type=merlin
+        - --pushgateway=mypushgateway.com
+        - --pushgateway-interval=20
+        - --pushgateway-label=k8s_cluster=dev
+        - --pushgateway-label=environment=dev
+        - --pushgateway-label=version=v1.0.2
 
         # gRPC endpoint
-        - -merlin-endpoint=dns:///merlin-servers
+        - --merlin-endpoint=dns:///merlin-servers
 
         # Virtual Service IDs to attach to
-        - -merlin-service-id=my-virtual-service
-        - -merlin-https-service-id=my-https-virtual-service
+        - --merlin-service-id=my-virtual-service
+        - --merlin-https-service-id=my-https-virtual-service
 
         # Real server IP to associate with virtual service - the IP of the ingress node.
-        - -merlin-instance-ip=$(INSTANCEIP)
+        - --merlin-instance-ip=$(INSTANCEIP)
 
         # Forward method that IPVS should use - pick route, masq, or tunnel.
-        - -merlin-forward-method=route
+        - --merlin-forward-method=route
 
         # Drain delay to bleed off connections when detaching.
-        - -merlin-drain-delay=60s
+        - --merlin-drain-delay=60s
 
         # Virtual IP to bind to the local interface for tunneling and direct routing. Usually the virtual service IP.
-        - -merlin-vip=10.10.10.1
+        - --merlin-vip=10.10.10.1
 
         # Interface to bind virtual IP to.
-        - -merlin-vip-interface=lo
+        - --merlin-vip-interface=lo
 
         # Internet facing Virtual IP.
-        - -merlin-internet-facing-vip=1.0.0.0
+        - --merlin-internet-facing-vip=1.0.0.0
 
         # Each worker uses a full cpu, so scale up vertically on a box by increasing this value.
-        - -nginx-workers=1
+        - --nginx-workers=1
 
         # Connections*workers needs to be less than available ephemeral ports. Linux default is 60999-32768=28231.
-        - -nginx-worker-connections=20000
+        - --nginx-worker-connections=20000
 
         # Needs to be greater than any frontend idle timeout.
-        - -nginx-keepalive-seconds=304
+        - --nginx-keepalive-seconds=304
 
         # CIDRs of the frontend to trust X-Forwarded-For, for determining client IP allow/deny.
-        - -nginx-trusted-frontends=10.0.0.0/8
+        - --nginx-trusted-frontends=10.0.0.0/8
 
         # Max number of idle connections to a backend.
-        - -nginx-backend-keepalive-count=1024
+        - --nginx-backend-keepalive-count=1024
 
         # Default max time for a request to a backend. Can be overridden by an annotation on the ingress resource.
-        - -nginx-default-backend-timeout-seconds=5
+        - --nginx-default-backend-timeout-seconds=5
 
         # Needs to be greater than 64 to support very large domain names.
-        - -nginx-server-names-hash-bucket-size=128
+        - --nginx-server-names-hash-bucket-size=128
 
         # Access logs turned on - add or remove the "-access-log" flag to turn them on/off.
-        - -access-log
-        - -access-log-dir=/var/log/nginx
+        - --access-log
+        - --access-log-dir=/var/log/nginx
 
         # Add custom headers to the access logs.
-        - -nginx-log-headers=X-Amzn-Trace-Id
+        - --nginx-log-headers=X-Amzn-Trace-Id
 
         # Controller health determines readiness. This has no effect on ingress traffic from frontend.
         readinessProbe:

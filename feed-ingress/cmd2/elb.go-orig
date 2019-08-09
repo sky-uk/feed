@@ -1,4 +1,4 @@
-package main
+package cmd2
 
 import (
 	"flag"
@@ -110,7 +110,6 @@ const (
 	defaultNginxOpenTracingPluginPath         = ""
 	defaultNginxOpenTracingConfigPath         = ""
 	defaultElbFrontendTagValue                = ""
-	defaultElbIngressNameTagValue             = ""
 	defaultDrainDelay                         = time.Second * 60
 	defaultTargetGroupDeregistrationDelay     = time.Second * 300
 	defaultRegion                             = "eu-west-1"
@@ -400,7 +399,7 @@ func createIngressUpdaters(kubernetesClient k8s.Client) ([]controller.Updater, e
 
 	updaters := []controller.Updater{nginxUpdater}
 
-	switch registrationFrontendType {
+	switch registrationFrontendType { // move to Cobra
 
 	case "elb":
 		elbUpdater, err := elb.New(region, elbFrontendTagValue, ingressControllerName, elbExpectedNumber, drainDelay)

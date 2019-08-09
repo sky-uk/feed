@@ -23,7 +23,7 @@ spec:
       terminationGracePeriodSeconds: 30
 
       containers:
-      - image: skycirrus/feed-dns:v1.3.0
+      - image: skycirrus/feed-dns:v2.0.0
         name: feed-dns
 
         resources:

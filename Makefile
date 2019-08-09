@@ -1,5 +1,15 @@
+ifdef VERSION
+	version := $(VERSION)
+else
+	git_rev := $(shell git rev-parse --short HEAD)
+	git_tag := $(shell git tag --points-at=$(git_rev))
+	version := $(if $(git_tag),$(git_tag),dev-$(git_rev))
+endif
+
 pkgs := $(shell go list ./... | grep -v /vendor/)
 files := $(shell find . -path ./vendor -prune -o -name '*.go' -print)
+build_time := $(shell date -u)
+ldflags := -X "github.com/sky-uk/feed/feed-ingress/cmd.version=$(version)" -X "github.com/sky-uk/feed/feed-ingress/cmd.buildTime=$(build_time)"
 
 .PHONY: all format test build vet lint copy docker release checkformat check clean
 
@@ -21,7 +31,7 @@ format :
 
 build :
 	@echo "== build"
-	@go install -v ./cmd/...
+	@go install -v ./feed-ingress/... ./feed-dns/...
 
 unformatted = $(shell goimports -l $(files))
 
