@@ -370,7 +370,7 @@ func TestUpdaterIsUpdatedForIngressWithMissingHostName(t *testing.T) {
 		createIngressesFixture(ingressNamespace, "", ingressSvcName, ingressSvcPort, map[string]string{
 			ingressAllowAnnotation:          ingressAllow,
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -386,7 +386,7 @@ func TestUpdaterIsUpdatedForIngressWithMissingServiceName(t *testing.T) {
 		createIngressesFixture(ingressNamespace, ingressHost, "", ingressSvcPort, map[string]string{
 			ingressAllowAnnotation:          ingressAllow,
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -402,7 +402,7 @@ func TestUpdaterIsUpdatedForIngressWithMissingServicePort(t *testing.T) {
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, 0, map[string]string{
 			ingressAllowAnnotation:          ingressAllow,
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -464,7 +464,7 @@ func TestUpdaterIsUpdatedForIngressWithEmptyAllow(t *testing.T) {
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
 			ingressAllowAnnotation:          "",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -492,7 +492,7 @@ func TestUpdaterIsUpdatedForIngressWithStripPathsTrue(t *testing.T) {
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "true",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -521,7 +521,7 @@ func TestUpdaterIsUpdatedForIngressWithStripPathsFalse(t *testing.T) {
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -550,7 +550,7 @@ func TestUpdaterIsUpdatedForIngressWithExactPathTrue(t *testing.T) {
 			ingressAllowAnnotation:          "",
 			exactPathAnnotation:             "true",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -579,7 +579,7 @@ func TestUpdaterIsUpdatedForIngressWithExactPathFalse(t *testing.T) {
 			ingressAllowAnnotation:          "",
 			exactPathAnnotation:             "false",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -608,7 +608,7 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendTimeout(t *testing.T) {
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "20",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -636,7 +636,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultBackendTimeout(t *testing.T) {
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -665,7 +665,7 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendMaxConnections(t *testin
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "20",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 			backendMaxConnections:           "512",
 		}, ingressPath),
@@ -696,7 +696,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultBackendMaxConnections(t *testing.T
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "20",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -832,7 +832,7 @@ func TestUpdaterIsUpdatedForIngressControllerNameNotSetInIngress(t *testing.T) {
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -861,7 +861,7 @@ func TestUpdaterIsUpdatedForIngressControllerNameSetToDefaultInIngress(t *testin
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -894,7 +894,7 @@ func TestUpdaterIsNotUpdatedForIngressControllerNameSetToTestAndConfigSetToDefau
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: "test",
 		}, ingressPath),
 		createDefaultServices(),
@@ -911,7 +911,7 @@ func TestUpdaterIsUpdatedForIngressControllerNameSetToTestInIngressAndConfig(t *
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: "test",
 		}, ingressPath),
 		createDefaultServices(),
@@ -944,7 +944,7 @@ func TestUpdaterIsUpdatedForIngressInNamespaceMatchingSelector(t *testing.T) {
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		createDefaultServices(),
@@ -978,7 +978,7 @@ func TestUpdaterIsNotUpdatedForIngressInNamespaceNotMatchingSelector(t *testing.
 			ingressAllowAnnotation:          "",
 			stripPathAnnotation:             "false",
 			backendTimeoutSeconds:           "10",
-			frontendElbSchemeAnnotation:     "internal",
+			frontendSchemeAnnotation:        "internal",
 			ingressControllerNameAnnotation: defaultControllerName,
 		}, ingressPath),
 		nil,
@@ -1134,7 +1134,7 @@ func createDefaultIngresses() []*v1beta1.Ingress {
 	return createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
 		ingressAllowAnnotation:          ingressAllow,
 		backendTimeoutSeconds:           "10",
-		frontendElbSchemeAnnotation:     "internal",
+		frontendSchemeAnnotation:        "internal",
 		ingressControllerNameAnnotation: defaultControllerName,
 	}, ingressPath)
 }
@@ -1184,8 +1184,6 @@ func createIngressesFixture(namespace string, host string, serviceName string, s
 			annotations[stripPathAnnotation] = annotationVal
 		case exactPathAnnotation:
 			annotations[exactPathAnnotation] = annotationVal
-		case frontendElbSchemeAnnotation:
-			annotations[frontendElbSchemeAnnotation] = annotationVal
 		case frontendSchemeAnnotation:
 			annotations[frontendSchemeAnnotation] = annotationVal
 		case backendTimeoutSeconds:

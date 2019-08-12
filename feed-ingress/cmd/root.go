@@ -37,14 +37,13 @@ var (
 	controllerConfig  controller.Config
 	healthPort        int
 
-	nginxConfig                   nginx.Conf
-	nginxLogHeaders               []string
-	nginxTrustedFrontends         []string
-	nginxSSLPath                  string
-	nginxVhostStatsSharedMemory   int
-	nginxOpenTracingPluginPath    string
-	nginxOpenTracingConfigPath    string
-	legacyBackendKeepaliveSeconds int
+	nginxConfig                 nginx.Conf
+	nginxLogHeaders             []string
+	nginxTrustedFrontends       []string
+	nginxSSLPath                string
+	nginxVhostStatsSharedMemory int
+	nginxOpenTracingPluginPath  string
+	nginxOpenTracingConfigPath  string
 
 	ingressControllerName string
 	namespaceSelector     string
@@ -162,8 +161,6 @@ func configureNginxFlags() {
 	rootCmd.PersistentFlags().IntVar(&nginxConfig.BackendKeepalives, "nginx-backend-keepalive-count", defaultNginxBackendKeepalives,
 		"Maximum number of keepalive connections per backend service. Keepalive connections count against"+
 			" nginx-worker-connections limit, and will be restricted by that global limit as well.")
-	rootCmd.PersistentFlags().IntVar(&legacyBackendKeepaliveSeconds, "nginx-default-backend-keepalive-seconds", unset,
-		"Deprecated. Use -nginx-default-backend-timeout-seconds instead.")
 	rootCmd.PersistentFlags().IntVar(&controllerConfig.DefaultBackendTimeoutSeconds, "nginx-default-backend-timeout-seconds",
 		defaultNginxBackendTimeoutSeconds,
 		"Timeout for requests to backends. Can be overridden per ingress with the sky.uk/backend-timeout-seconds annotation.")

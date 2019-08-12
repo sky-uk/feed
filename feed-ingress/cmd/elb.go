@@ -48,12 +48,6 @@ func init() {
 			" otherwise it fails to start if it can't attach to this number.")
 	elbCmd.Flags().DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+
 		" for feed-ingress to drain from the registration component on shutdown. Should match the ELB's drain time.")
-	elbCmd.Flags().StringSliceVar(&targetGroupNames, "alb-target-group-names", []string{},
-		"Names of ALB target groups to attach to, separated by commas.")
-	elbCmd.Flags().DurationVar(&targetGroupDeregistrationDelay, "alb-target-group-deregistration-delay",
-		defaultTargetGroupDeregistrationDelay,
-		"Delay to wait for feed-ingress to deregister from the ALB target group on shutdown. Should match"+
-			" the target group setting in AWS.")
 }
 
 func appendElbIngressUpdaters(kubernetesClient k8s.Client, updaters []controller.Updater) ([]controller.Updater, error) {

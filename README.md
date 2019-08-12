@@ -63,17 +63,21 @@ PRs are welcome.
 ## Upgrade from v1 to v2
 
 This is a breaking change to support [multiple ingress controllers per cluster](#multiple-ingress-controllers-per-cluster).
-The command-line structure has also changed. There are subcommands for the various load balancer types and
+The feed-ingress command-line structure has also changed. There are subcommands for the various load balancer types and
 arguments use double dashes to be POSIX-compliant.
 
 To upgrade, follow these steps:
 1. Tag the ELBs with `sky.uk/KubernetesClusterIngressControllerName=<name>` to indicate which feed-ingress controllers should attach to them
 1. Annotate all ingresses with `sky.uk/ingress-controller-name=<name>`
+1. Replace deprecated ingress resource annotations with their replacements:
+   `sky.uk/frontend-elb-scheme` becomes `sky.uk/frontend-scheme`,
+   `sky.uk/backend-keepalive-seconds` becomes `sky.uk/backend-timeout-seconds`
 1. Use double dashes for all arguments 
 1. Provide the mandatory argument `--ingress-controller-name=<name>` to feed-ingress with a value matching the ELB tag.
 1. Instead of using the argument `-registration-frontend-type`, use instead a subcommand of `feed-ingress`
    (for example `feed-ingress -registration-frontend-type=elb <args...>` becomes `feed-ingress elb <args>`)
 1. Rename the argument `-elb-label-value` to `--elb-frontend-tag-value`
+1. Rename the argument `--nginx-default-backend-keepalive-seconds` to `--nginx-default-backend-timeout-seconds`
 
 # Overview
 
@@ -238,8 +242,8 @@ Any records pointing to one of the endpoints associated with this controller tha
 entry are deleted. For any new ingress entry, a record is created to point to the correct endpoint. Existing
 records which do not meet these conditions remain untouched.
 
-Each ingress must have the following tag `sky.uk/frontend-scheme` (`sky.uk/frontend-elb-scheme` is **deprecated**)
-set to `internal` or `internet-facing` so the record can be set to the correct endpoint.
+Each ingress must have the following be annotated with `sky.uk/frontend-scheme` set to `internal` or `internet-facing`
+so the record can be set to the correct endpoint.
 
 If you're using ELBs then ALIAS (A) records will be created. If you've explicitly provided CNAMEs of your
 load balancers then CNAMEs will be created.

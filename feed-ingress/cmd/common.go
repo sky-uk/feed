@@ -17,7 +17,7 @@ type appendIngressUpdaters = func(kubernetesClient k8s.Client, updaters []contro
 
 func runCmd(appender appendIngressUpdaters) {
 	if ingressControllerName == defaultIngressControllerName {
-		log.Fatalf("The argument %s is required", ingressControllerNameFlag)
+		log.Fatalf("The argument --%s is required", ingressControllerNameFlag)
 	}
 	controllerConfig.Name = ingressControllerName
 
@@ -35,14 +35,9 @@ func runCmd(appender appendIngressUpdaters) {
 		log.Fatal("Unable to create ingress updaters: ", err)
 	}
 
-	// If the legacy setting is set, use it instead to preserve backwards compatibility.
-	if legacyBackendKeepaliveSeconds != unset {
-		controllerConfig.DefaultBackendTimeoutSeconds = legacyBackendKeepaliveSeconds
-	}
-
 	controllerConfig.NamespaceSelector, err = parseNamespaceSelector(namespaceSelector)
 	if err != nil {
-		log.Fatalf("invalid format for -%s (%s)", ingressControllerNamespaceSelectorFlag, namespaceSelector)
+		log.Fatalf("invalid format for --%s (%s)", ingressControllerNamespaceSelectorFlag, namespaceSelector)
 	}
 
 	feedController := controller.New(controllerConfig)
