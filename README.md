@@ -77,7 +77,7 @@ To upgrade, follow these steps:
 1. Instead of using the argument `-registration-frontend-type`, use instead a subcommand of `feed-ingress`
    (for example `feed-ingress -registration-frontend-type=elb <args...>` becomes `feed-ingress elb <args>`)
 1. Rename the argument `-elb-label-value` to `--elb-frontend-tag-value`
-1. Rename the argument `--nginx-default-backend-keepalive-seconds` to `--nginx-default-backend-timeout-seconds`
+1. Rename the argument `-nginx-default-backend-keepalive-seconds` to `--nginx-default-backend-timeout-seconds`
 
 # Overview
 
