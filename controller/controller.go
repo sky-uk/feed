@@ -65,8 +65,9 @@ type controller struct {
 	started                      bool
 	updatesHealth                util.SafeError
 	sync.Mutex
-	name              string
-	namespaceSelector *k8s.NamespaceSelector
+	name                    string
+	includeUnnamedIngresses bool
+	namespaceSelector       *k8s.NamespaceSelector
 }
 
 // Config for creating a new ingress controller.
@@ -81,6 +82,7 @@ type Config struct {
 	DefaultProxyBufferSize       int
 	DefaultProxyBufferBlocks     int
 	Name                         string
+	IncludeUnnamedIngresses      bool
 	NamespaceSelector            *k8s.NamespaceSelector
 }
 
@@ -98,6 +100,7 @@ func New(conf Config) Controller {
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
 		doneCh:                       make(chan struct{}),
 		name:                         conf.Name,
+		includeUnnamedIngresses:      conf.IncludeUnnamedIngresses,
 		namespaceSelector:            conf.NamespaceSelector,
 	}
 }
@@ -199,7 +202,7 @@ func (c *controller) updateIngresses() (err error) {
 					if address := serviceMap[serviceName]; address == "" {
 						skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
 					} else if !c.ingressControllerNameSupported(ingress) {
-						skipped = append(skipped, fmt.Sprintf("%s/%s (ingress requests a different controller name [%s]; this feed instance is named [%s])",
+						skipped = append(skipped, fmt.Sprintf("%s/%s (ingress requests controller [%s]; this instance is [%s])",
 							ingress.Namespace, ingress.Name, ingress.Annotations[ingressControllerNameAnnotation], c.name))
 					} else {
 						entry := IngressEntry{
@@ -318,6 +321,8 @@ func (c *controller) ingressControllerNameSupported(ingress *v1beta1.Ingress) bo
 
 	if ingressControllerName, ok := ingress.Annotations[ingressControllerNameAnnotation]; ok {
 		isValid = ingressControllerName == c.name
+	} else {
+		isValid = c.includeUnnamedIngresses
 	}
 
 	return isValid

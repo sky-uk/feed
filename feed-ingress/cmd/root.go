@@ -45,8 +45,9 @@ var (
 	nginxOpenTracingPluginPath  string
 	nginxOpenTracingConfigPath  string
 
-	ingressControllerName string
-	namespaceSelector     string
+	ingressControllerName   string
+	includeUnnamedIngresses bool
+	namespaceSelector       string
 
 	pushgatewayURL             string
 	pushgatewayIntervalSeconds int
@@ -92,6 +93,7 @@ const (
 	defaultLargeClientHeaderBufferBlocks     = 4
 
 	defaultIngressControllerName              = ""
+	defaultIncludeUnnamedIngresses            = false
 	defaultIngressControllerNamespaceSelector = ""
 
 	defaultPushgatewayIntervalSeconds = 60
@@ -99,6 +101,7 @@ const (
 
 const (
 	ingressControllerNameFlag              = "ingress-controller-name"
+	includeUnnamedIngressesFlag            = "include-unnamed-ingresses"
 	ingressControllerNamespaceSelectorFlag = "ingress-controller-namespace-selector"
 )
 
@@ -140,8 +143,13 @@ func configureGeneralFlags() {
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
 	rootCmd.PersistentFlags().StringVar(&ingressControllerName, ingressControllerNameFlag, defaultIngressControllerName,
 		"The name of this instance. It will consider only ingress resources with matching sky.uk/ingress-controller-name annotation values.")
+	rootCmd.PersistentFlags().BoolVar(&includeUnnamedIngresses, includeUnnamedIngressesFlag, defaultIncludeUnnamedIngresses,
+		"In addition to ingress resources with matching sky.uk/ingress-controller-name annotations, also consider those with no such annotation.")
 	rootCmd.PersistentFlags().StringVar(&namespaceSelector, ingressControllerNamespaceSelectorFlag, defaultIngressControllerNamespaceSelector,
 		"Only consider ingresses within namespaces having labels matching this selector (e.g. app=loadtest).")
+
+	_ = rootCmd.PersistentFlags().MarkDeprecated(includeUnnamedIngressesFlag,
+		"please annotate ingress resources explicitly with sky.uk/ingress-controller-name")
 }
 
 func configureNginxFlags() {

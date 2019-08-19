@@ -904,6 +904,60 @@ func TestUpdaterIsNotUpdatedForIngressControllerNameSetToTestAndConfigSetToDefau
 	})
 }
 
+func TestUpdaterIsUpdatedWhenIncludingUnnamedIngresses(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress has no controller name; feed-ingress is not including unnamed",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: backendTimeout,
+			IngressControllerName: "",
+		}},
+		Config{
+			DefaultAllow:                 ingressDefaultAllow,
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			Name:                         defaultControllerName,
+			IncludeUnnamedIngresses:      true,
+		},
+	})
+}
+
+func TestUpdaterIsNotUpdatedWhenExcludingUnnamedIngresses(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress has no controller name; feed-ingress is not including unnamed",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		nil,
+		Config{
+			DefaultAllow:                 ingressDefaultAllow,
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			Name:                         defaultControllerName,
+			IncludeUnnamedIngresses:      false,
+		},
+	})
+}
+
 func TestUpdaterIsUpdatedForIngressControllerNameSetToTestInIngressAndConfig(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress requesting controller==test; feed is named test",
