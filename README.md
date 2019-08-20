@@ -74,6 +74,9 @@ To upgrade, follow these steps:
    `sky.uk/backend-keepalive-seconds` becomes `sky.uk/backend-timeout-seconds`
 1. Use double dashes for all arguments 
 1. Provide the mandatory argument `--ingress-controller-name=<name>` to feed-ingress with a value matching the ELB tag.
+   For migrating existing deployments, you may provide the new (but deprecated) flag `--include-unnamed-ingresses`
+   which instructs feed-ingress to additionally consider ingress resources that have
+   no `sky.uk/ingress-controller-name` annotation 
 1. Instead of using the argument `-registration-frontend-type`, use instead a subcommand of `feed-ingress`
    (for example `feed-ingress -registration-frontend-type=elb <args...>` becomes `feed-ingress elb <args>`)
 1. Rename the argument `-elb-label-value` to `--elb-frontend-tag-value`
