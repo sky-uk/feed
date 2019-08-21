@@ -68,15 +68,14 @@ arguments use double dashes to be POSIX-compliant.
 
 To upgrade, follow these steps:
 1. Tag the ELBs with `sky.uk/KubernetesClusterIngressControllerName=<name>` to indicate which feed-ingress controllers should attach to them
-1. Annotate all ingresses with `sky.uk/ingress-controller-name=<name>`
+1. Annotate all ingresses with `kubernetes.io/ingress.class=<name>`
 1. Replace deprecated ingress resource annotations with their replacements:
    `sky.uk/frontend-elb-scheme` becomes `sky.uk/frontend-scheme`,
    `sky.uk/backend-keepalive-seconds` becomes `sky.uk/backend-timeout-seconds`
 1. Use double dashes for all arguments 
 1. Provide the mandatory argument `--ingress-controller-name=<name>` to feed-ingress with a value matching the ELB tag.
    For migrating existing deployments, you may provide the new (but deprecated) flag `--include-unnamed-ingresses`
-   which instructs feed-ingress to additionally consider ingress resources that have
-   no `sky.uk/ingress-controller-name` annotation 
+   which instructs feed-ingress to additionally consider ingress resources that have no `kubernetes.io/ingress.class` annotation 
 1. Instead of using the argument `-registration-frontend-type`, use instead a subcommand of `feed-ingress`
    (for example `feed-ingress -registration-frontend-type=elb <args...>` becomes `feed-ingress elb <args>`)
 1. Rename the argument `-elb-label-value` to `--elb-frontend-tag-value`
@@ -215,10 +214,12 @@ securityContext:
 Multiple feed-ingress controllers can be created per cluster. ELBs should be tagged with `sky.uk/KubernetesClusterIngressControllerName=<name>`
 and feed instances started with `--ingress-controller-name=<name>`. Feed instances will attach to ELBs with matching ingress controller names.
 
-A feed ingress controller will adopt ingress resources with a matching `sky.uk/ingress-controller-name=<value>` annotation.
-Ingress resources with no annotation will not be adopted and will have no traffic sent to their associated services.
+A feed ingress controller will adopt ingress resources with a matching `kubernetes.io/ingress.class=<value>` annotation.
+Ingress resources with no annotation will normally not be adopted and will have no traffic sent to their associated services.
+However, see the deprecated flag `--include-unnamed-ingresses` which instructs feed-ingress to additionally consider
+ingress resources that have no `kubernetes.io/ingress.class` annotation.
 
-Use the script `ingresses-without-controller.sh` to find ingresses without this annotation.
+Use the script `unannotated-ingresses.sh` to find ingresses without this annotation.
 
 #### Support
 

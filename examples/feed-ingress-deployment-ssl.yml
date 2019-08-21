@@ -95,7 +95,8 @@ spec:
         # Attach to the ELBs with label sky.uk/KubernetesClusterFrontend set to this value.
         - --elb-frontend-tag-value=dev
 
-        # Attach to the ELBs with label sky.uk/KubernetesClusterIngressControllerName set to this value.
+        # Attach to the ELBs with label sky.uk/KubernetesClusterIngressControllerName set to this value
+        # and adopt ingress resources with a matching kubernetes.io/ingress.class value
         - --ingress-controller-name=main
 
         # Only consider ingresses in namespaces with this label. Optional.

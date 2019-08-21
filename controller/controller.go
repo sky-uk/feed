@@ -36,7 +36,7 @@ const (
 	// sets Nginx (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
 	backendMaxConnections = "sky.uk/backend-max-connections"
 
-	ingressControllerNameAnnotation = "sky.uk/ingress-controller-name"
+	ingressControllerNameAnnotation = "kubernetes.io/ingress.class"
 )
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
