@@ -18,7 +18,7 @@ import (
 )
 
 const smallWaitTime = time.Millisecond * 50
-const defaultControllerName = "main"
+const defaultIngressClass = "main"
 
 type fakeUpdater struct {
 	mock.Mock
@@ -284,7 +284,7 @@ func defaultConfig() Config {
 	return Config{
 		DefaultAllow:                 ingressDefaultAllow,
 		DefaultBackendTimeoutSeconds: backendTimeout,
-		Name:                         defaultControllerName,
+		Name:                         defaultIngressClass,
 	}
 }
 
@@ -368,10 +368,10 @@ func TestUpdaterIsUpdatedForIngressWithMissingHostName(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with missing host name",
 		createIngressesFixture(ingressNamespace, "", ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          ingressAllow,
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   ingressAllow,
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -384,10 +384,10 @@ func TestUpdaterIsUpdatedForIngressWithMissingServiceName(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with missing service name",
 		createIngressesFixture(ingressNamespace, ingressHost, "", ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          ingressAllow,
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   ingressAllow,
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -400,10 +400,10 @@ func TestUpdaterIsUpdatedForIngressWithMissingServicePort(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with missing service port",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, 0, map[string]string{
-			ingressAllowAnnotation:          ingressAllow,
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   ingressAllow,
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -438,8 +438,8 @@ func TestUpdaterIsUpdatedForIngressWithDefaultAllow(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with default allow",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			backendTimeoutSeconds:           "10",
-			ingressControllerNameAnnotation: defaultControllerName,
+			backendTimeoutSeconds:  "10",
+			ingressClassAnnotation: defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -451,7 +451,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultAllow(t *testing.T) {
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			Allow:                 strings.Split(ingressDefaultAllow, ","),
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			BackendTimeoutSeconds: backendTimeout,
 		}},
 		defaultConfig(),
@@ -462,10 +462,10 @@ func TestUpdaterIsUpdatedForIngressWithEmptyAllow(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with empty allow",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -477,7 +477,7 @@ func TestUpdaterIsUpdatedForIngressWithEmptyAllow(t *testing.T) {
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			BackendTimeoutSeconds: backendTimeout,
 		}},
@@ -489,11 +489,11 @@ func TestUpdaterIsUpdatedForIngressWithStripPathsTrue(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with strip paths set to true",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "true",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "true",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -505,7 +505,7 @@ func TestUpdaterIsUpdatedForIngressWithStripPathsTrue(t *testing.T) {
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            true,
 			BackendTimeoutSeconds: backendTimeout,
@@ -518,11 +518,11 @@ func TestUpdaterIsUpdatedForIngressWithStripPathsFalse(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with strip paths set to false",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -534,7 +534,7 @@ func TestUpdaterIsUpdatedForIngressWithStripPathsFalse(t *testing.T) {
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: backendTimeout,
@@ -547,11 +547,11 @@ func TestUpdaterIsUpdatedForIngressWithExactPathTrue(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with exact path set to true",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			exactPathAnnotation:             "true",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			exactPathAnnotation:      "true",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -563,7 +563,7 @@ func TestUpdaterIsUpdatedForIngressWithExactPathTrue(t *testing.T) {
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			ExactPath:             true,
 			BackendTimeoutSeconds: backendTimeout,
@@ -576,11 +576,11 @@ func TestUpdaterIsUpdatedForIngressWithExactPathFalse(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with exact path set to false",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			exactPathAnnotation:             "false",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			exactPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -592,7 +592,7 @@ func TestUpdaterIsUpdatedForIngressWithExactPathFalse(t *testing.T) {
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			ExactPath:             false,
 			BackendTimeoutSeconds: backendTimeout,
@@ -605,11 +605,11 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendTimeout(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with overridden backend timeout",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "20",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "20",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -621,7 +621,7 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendTimeout(t *testing.T) {
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: 20,
@@ -634,10 +634,10 @@ func TestUpdaterIsUpdatedForIngressWithDefaultBackendTimeout(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with default backend timeout",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -649,7 +649,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultBackendTimeout(t *testing.T) {
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: backendTimeout,
@@ -662,12 +662,12 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendMaxConnections(t *testin
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with overridden backend max connections",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "20",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
-			backendMaxConnections:           "512",
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "20",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
+			backendMaxConnections:    "512",
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -679,7 +679,7 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendMaxConnections(t *testin
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: 20,
@@ -693,11 +693,11 @@ func TestUpdaterIsUpdatedForIngressWithDefaultBackendMaxConnections(t *testing.T
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with default backend max connections",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "20",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "20",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -709,7 +709,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultBackendMaxConnections(t *testing.T
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: 20,
@@ -723,8 +723,8 @@ func TestUpdaterIsUpdatedForIngressWithDefaultProxyBufferValuesWhenNotOverridden
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with default proxy buffer values when not overridden by the ingress definition",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation: "",
+			ingressClassAnnotation: defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -736,7 +736,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultProxyBufferValuesWhenNotOverridden
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: 10,
@@ -748,7 +748,7 @@ func TestUpdaterIsUpdatedForIngressWithDefaultProxyBufferValuesWhenNotOverridden
 			DefaultBackendTimeoutSeconds: backendTimeout,
 			DefaultProxyBufferSize:       2,
 			DefaultProxyBufferBlocks:     3,
-			Name:                         defaultControllerName,
+			Name:                         defaultIngressClass,
 		},
 	})
 }
@@ -757,10 +757,10 @@ func TestUpdaterIsUpdatedForIngressOverridesDefaultProxyBufferValues(t *testing.
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress definition overrides default proxy buffer values",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			proxyBufferSizeAnnotation:       "6",
-			proxyBufferBlocksAnnotation:     "4",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:      "",
+			proxyBufferSizeAnnotation:   "6",
+			proxyBufferBlocksAnnotation: "4",
+			ingressClassAnnotation:      defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -772,7 +772,7 @@ func TestUpdaterIsUpdatedForIngressOverridesDefaultProxyBufferValues(t *testing.
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: 10,
@@ -784,7 +784,7 @@ func TestUpdaterIsUpdatedForIngressOverridesDefaultProxyBufferValues(t *testing.
 			DefaultBackendTimeoutSeconds: backendTimeout,
 			DefaultProxyBufferSize:       2,
 			DefaultProxyBufferBlocks:     3,
-			Name:                         defaultControllerName,
+			Name:                         defaultIngressClass,
 		},
 	})
 }
@@ -793,10 +793,10 @@ func TestUpdaterIsUpdatedForIngressDefinitionResetsToMacWhenProxyBufferValuesExc
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress definition resets to max when proxy buffer values exceed max allowed values",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			proxyBufferSizeAnnotation:       "64",
-			proxyBufferBlocksAnnotation:     "12",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:      "",
+			proxyBufferSizeAnnotation:   "64",
+			proxyBufferBlocksAnnotation: "12",
+			ingressClassAnnotation:      defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -808,7 +808,7 @@ func TestUpdaterIsUpdatedForIngressDefinitionResetsToMacWhenProxyBufferValuesExc
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: 10,
@@ -820,20 +820,20 @@ func TestUpdaterIsUpdatedForIngressDefinitionResetsToMacWhenProxyBufferValuesExc
 			DefaultBackendTimeoutSeconds: backendTimeout,
 			DefaultProxyBufferSize:       2,
 			DefaultProxyBufferBlocks:     3,
-			Name:                         defaultControllerName,
+			Name:                         defaultIngressClass,
 		},
 	})
 }
 
-func TestUpdaterIsUpdatedForIngressControllerNameNotSetInIngress(t *testing.T) {
+func TestUpdaterIsUpdatedForIngressClassNotSetInIngress(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
-		"controller name not set in ingress",
+		"ingress without ingress class set",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -845,7 +845,7 @@ func TestUpdaterIsUpdatedForIngressControllerNameNotSetInIngress(t *testing.T) {
 			ServiceAddress:        serviceIP,
 			ServicePort:           ingressSvcPort,
 			LbScheme:              "internal",
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: backendTimeout,
@@ -854,15 +854,15 @@ func TestUpdaterIsUpdatedForIngressControllerNameNotSetInIngress(t *testing.T) {
 	})
 }
 
-func TestUpdaterIsUpdatedForIngressControllerNameSetToDefaultInIngress(t *testing.T) {
+func TestUpdaterIsUpdatedForIngressClassSetToDefaultInIngress(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
-		"controller name set to default in ingress",
+		"ingress with class set to default value",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -877,25 +877,25 @@ func TestUpdaterIsUpdatedForIngressControllerNameSetToDefaultInIngress(t *testin
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: backendTimeout,
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 		}},
 		Config{
 			DefaultAllow:                 ingressDefaultAllow,
 			DefaultBackendTimeoutSeconds: backendTimeout,
-			Name:                         defaultControllerName,
+			Name:                         defaultIngressClass,
 		},
 	})
 }
 
-func TestUpdaterIsNotUpdatedForIngressControllerNameSetToTestAndConfigSetToDefault(t *testing.T) {
+func TestUpdaterIsNotUpdatedForIngressClassSetToTestAndConfigSetToDefault(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
-		"ingress requesting controller==test; feed is named " + defaultControllerName,
+		"ingress requesting class==test; feed instance has class " + defaultIngressClass,
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: "test",
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   "test",
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -904,9 +904,9 @@ func TestUpdaterIsNotUpdatedForIngressControllerNameSetToTestAndConfigSetToDefau
 	})
 }
 
-func TestUpdaterIsUpdatedWhenIncludingUnnamedIngresses(t *testing.T) {
+func TestUpdaterIsUpdatedWhenIncludingClasslessIngresses(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
-		"ingress has no controller name; feed-ingress is not including unnamed",
+		"ingress has no class annotation; feed-ingress is including classless ingresses",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
 			ingressAllowAnnotation:   "",
 			stripPathAnnotation:      "false",
@@ -926,20 +926,20 @@ func TestUpdaterIsUpdatedWhenIncludingUnnamedIngresses(t *testing.T) {
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: backendTimeout,
-			IngressControllerName: "",
+			IngressClass:          "",
 		}},
 		Config{
 			DefaultAllow:                 ingressDefaultAllow,
 			DefaultBackendTimeoutSeconds: backendTimeout,
-			Name:                         defaultControllerName,
-			IncludeUnnamedIngresses:      true,
+			Name:                         defaultIngressClass,
+			IncludeClasslessIngresses:    true,
 		},
 	})
 }
 
-func TestUpdaterIsNotUpdatedWhenExcludingUnnamedIngresses(t *testing.T) {
+func TestUpdaterIsNotUpdatedWhenExcludingClasslessIngresses(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
-		"ingress has no controller name; feed-ingress is not including unnamed",
+		"ingress has no class annotation; feed-ingress is excluding classless ingresses",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
 			ingressAllowAnnotation:   "",
 			stripPathAnnotation:      "false",
@@ -952,21 +952,21 @@ func TestUpdaterIsNotUpdatedWhenExcludingUnnamedIngresses(t *testing.T) {
 		Config{
 			DefaultAllow:                 ingressDefaultAllow,
 			DefaultBackendTimeoutSeconds: backendTimeout,
-			Name:                         defaultControllerName,
-			IncludeUnnamedIngresses:      false,
+			Name:                         defaultIngressClass,
+			IncludeClasslessIngresses:    false,
 		},
 	})
 }
 
-func TestUpdaterIsUpdatedForIngressControllerNameSetToTestInIngressAndConfig(t *testing.T) {
+func TestUpdaterIsUpdatedForIngressClassSetToTestInIngressAndConfig(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
-		"ingress requesting controller==test; feed is named test",
+		"ingress requesting class==test; feed has class test",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: "test",
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   "test",
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -981,7 +981,7 @@ func TestUpdaterIsUpdatedForIngressControllerNameSetToTestInIngressAndConfig(t *
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: backendTimeout,
-			IngressControllerName: "test",
+			IngressClass:          "test",
 		}},
 		Config{
 			DefaultAllow:                 ingressDefaultAllow,
@@ -995,11 +995,11 @@ func TestUpdaterIsUpdatedForIngressInNamespaceMatchingSelector(t *testing.T) {
 	runAndAssertUpdates(t, expectGetIngresses, testSpec{
 		"ingress is in a namespace that matches the namespace selector",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createNamespaceFixture(ingressNamespace, map[string]string{"team": "theteam"}),
@@ -1014,12 +1014,12 @@ func TestUpdaterIsUpdatedForIngressInNamespaceMatchingSelector(t *testing.T) {
 			Allow:                 []string{},
 			StripPaths:            false,
 			BackendTimeoutSeconds: backendTimeout,
-			IngressControllerName: defaultControllerName,
+			IngressClass:          defaultIngressClass,
 		}},
 		Config{
 			DefaultAllow:                 ingressDefaultAllow,
 			DefaultBackendTimeoutSeconds: backendTimeout,
-			Name:                         defaultControllerName,
+			Name:                         defaultIngressClass,
 			NamespaceSelector:            &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"},
 		},
 	})
@@ -1029,11 +1029,11 @@ func TestUpdaterIsNotUpdatedForIngressInNamespaceNotMatchingSelector(t *testing.
 	runAndAssertUpdates(t, expectGetIngresses, testSpec{
 		"ingress is in a namespace that doesn't match the namespace selector",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:          "",
-			stripPathAnnotation:             "false",
-			backendTimeoutSeconds:           "10",
-			frontendSchemeAnnotation:        "internal",
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressAllowAnnotation:   "",
+			stripPathAnnotation:      "false",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
 		}, ingressPath),
 		nil,
 		createNamespaceFixture(ingressNamespace, map[string]string{"team": "otherteam"}),
@@ -1041,7 +1041,7 @@ func TestUpdaterIsNotUpdatedForIngressInNamespaceNotMatchingSelector(t *testing.
 		Config{
 			DefaultAllow:                 ingressDefaultAllow,
 			DefaultBackendTimeoutSeconds: backendTimeout,
-			Name:                         defaultControllerName,
+			Name:                         defaultIngressClass,
 			NamespaceSelector:            &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"},
 		},
 	})
@@ -1051,7 +1051,7 @@ func TestUpdaterIsUpdatedForIngressWithoutHostDefinition(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress without host definition",
 		createIngressesFixture(ingressNamespace, "", ingressSvcName, ingressSvcPort, map[string]string{
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressClassAnnotation: defaultIngressClass,
 		}, ""),
 		createServiceFixture(ingressSvcName, "lalala land", serviceIP),
 		createDefaultNamespaces(),
@@ -1064,7 +1064,7 @@ func TestUpdaterIsUpdatedForIngressWithoutPathDefinition(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress without path definition",
 		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressControllerNameAnnotation: defaultControllerName,
+			ingressClassAnnotation: defaultIngressClass,
 		}, ""),
 		createServiceFixture(ingressSvcName, "lalala land", serviceIP),
 		createDefaultNamespaces(),
@@ -1164,7 +1164,7 @@ func createLbEntriesFixture() IngressEntries {
 		ServicePort:           ingressSvcPort,
 		Allow:                 strings.Split(ingressAllow, ","),
 		LbScheme:              lbScheme,
-		IngressControllerName: defaultControllerName,
+		IngressClass:          defaultIngressClass,
 		BackendTimeoutSeconds: backendTimeout,
 	}}
 }
@@ -1186,19 +1186,19 @@ const (
 
 func createDefaultIngresses() []*v1beta1.Ingress {
 	return createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-		ingressAllowAnnotation:          ingressAllow,
-		backendTimeoutSeconds:           "10",
-		frontendSchemeAnnotation:        "internal",
-		ingressControllerNameAnnotation: defaultControllerName,
+		ingressAllowAnnotation:   ingressAllow,
+		backendTimeoutSeconds:    "10",
+		frontendSchemeAnnotation: "internal",
+		ingressClassAnnotation:   defaultIngressClass,
 	}, ingressPath)
 }
 
 func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
 	return createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-		ingressAllowAnnotation:          ingressAllow,
-		backendTimeoutSeconds:           "10",
-		frontendSchemeAnnotation:        "internal",
-		ingressControllerNameAnnotation: defaultControllerName,
+		ingressAllowAnnotation:   ingressAllow,
+		backendTimeoutSeconds:    "10",
+		frontendSchemeAnnotation: "internal",
+		ingressClassAnnotation:   defaultIngressClass,
 	}, ingressPath)
 }
 
@@ -1209,7 +1209,7 @@ func createIngressWithoutRules() []*v1beta1.Ingress {
 				Name:      ingressName,
 				Namespace: ingressNamespace,
 				Annotations: map[string]string{
-					ingressControllerNameAnnotation: defaultControllerName,
+					ingressClassAnnotation: defaultIngressClass,
 				},
 			},
 			Spec: v1beta1.IngressSpec{},
@@ -1248,8 +1248,8 @@ func createIngressesFixture(namespace string, host string, serviceName string, s
 			annotations[proxyBufferSizeAnnotation] = annotationVal
 		case proxyBufferBlocksAnnotation:
 			annotations[proxyBufferBlocksAnnotation] = annotationVal
-		case ingressControllerNameAnnotation:
-			annotations[ingressControllerNameAnnotation] = annotationVal
+		case ingressClassAnnotation:
+			annotations[ingressClassAnnotation] = annotationVal
 		}
 	}
 

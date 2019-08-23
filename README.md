@@ -19,7 +19,7 @@ can be applied to a cluster.
 
 * An internal and internet-facing ELB exists which can reach your Kubernetes cluster.
 The ELBs should be tagged with `sky.uk/KubernetesClusterFrontend=<name>` which is used by feed to discover them.
-If you are using v2 of `feed-ingress` the ELBs should also be tagged with `sky.uk/KubernetesClusterIngressControllerName=<name>`.
+If you are using v2 of `feed-ingress` the ELBs should also be tagged with `sky.uk/KubernetesClusterIngressClass=<name>`.
 See [upgrade from v1 to v2](#upgrade-from-v1-to-v2) for more information.
 * A Route 53 hosted zone has been created to match your ingress resources.
 
@@ -67,14 +67,14 @@ The feed-ingress command-line structure has also changed. There are subcommands 
 arguments use double dashes to be POSIX-compliant.
 
 To upgrade, follow these steps:
-1. Tag the ELBs with `sky.uk/KubernetesClusterIngressControllerName=<name>` to indicate which feed-ingress controllers should attach to them
+1. Tag the ELBs with `sky.uk/KubernetesClusterIngressClass=<name>` to indicate which feed-ingress controllers should attach to them
 1. Annotate all ingresses with `kubernetes.io/ingress.class=<name>`
 1. Replace deprecated ingress resource annotations with their replacements:
    `sky.uk/frontend-elb-scheme` becomes `sky.uk/frontend-scheme`,
    `sky.uk/backend-keepalive-seconds` becomes `sky.uk/backend-timeout-seconds`
 1. Use double dashes for all arguments 
-1. Provide the mandatory argument `--ingress-controller-name=<name>` to feed-ingress with a value matching the ELB tag.
-   For migrating existing deployments, you may provide the new (but deprecated) flag `--include-unnamed-ingresses`
+1. Provide the mandatory argument `--ingress-class=<name>` to feed-ingress with a value matching the ELB tag.
+   For migrating existing deployments, you may provide the new (but deprecated) flag `--include-classless-ingresses`
    which instructs feed-ingress to additionally consider ingress resources that have no `kubernetes.io/ingress.class` annotation 
 1. Instead of using the argument `-registration-frontend-type`, use instead a subcommand of `feed-ingress`
    (for example `feed-ingress -registration-frontend-type=elb <args...>` becomes `feed-ingress elb <args>`)
@@ -211,15 +211,15 @@ securityContext:
 
 ### Multiple ingress controllers per cluster
 
-Multiple feed-ingress controllers can be created per cluster. ELBs should be tagged with `sky.uk/KubernetesClusterIngressControllerName=<name>`
-and feed instances started with `--ingress-controller-name=<name>`. Feed instances will attach to ELBs with matching ingress controller names.
+Multiple feed-ingress controllers can be created per cluster. ELBs should be tagged with `sky.uk/KubernetesClusterIngressClass=<name>`
+and feed instances started with `--ingress-class=<name>`. Feed instances will attach to ELBs with matching ingress class names.
 
 A feed ingress controller will adopt ingress resources with a matching `kubernetes.io/ingress.class=<value>` annotation.
 Ingress resources with no annotation will normally not be adopted and will have no traffic sent to their associated services.
-However, see the deprecated flag `--include-unnamed-ingresses` which instructs feed-ingress to additionally consider
-ingress resources that have no `kubernetes.io/ingress.class` annotation.
+However, see the deprecated flag `--include-classless-ingresses` which instructs feed-ingress to additionally consider
+ingress resources with no `kubernetes.io/ingress.class` annotation.
 
-Use the script `unannotated-ingresses.sh` to find ingresses without this annotation.
+Use the script `classless-ingresses.sh` to find ingresses without this annotation.
 
 #### Support
 

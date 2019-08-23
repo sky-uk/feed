@@ -21,20 +21,20 @@ import (
 // ElbTag is the tag key used for identifying ELBs to attach to for a cluster.
 const ElbTag = "sky.uk/KubernetesClusterFrontend"
 
-// IngressControllerNameTag is the tag key used for identifying ELBs to attach to for a given ingress controller.
-const IngressControllerNameTag = "sky.uk/KubernetesClusterIngressControllerName"
+// IngressClassTag is the tag key used for identifying ELBs to attach to for a given ingress controller.
+const IngressClassTag = "sky.uk/KubernetesClusterIngressClass"
 
 // New creates a new ELB frontend
-func New(region string, frontendTagValue string, ingressControllerNameTagValue string, expectedNumber int, drainDelay time.Duration) (controller.Updater, error) {
+func New(region string, frontendTagValue string, ingressClassTagValue string, expectedNumber int, drainDelay time.Duration) (controller.Updater, error) {
 	if frontendTagValue == "" {
 		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", ElbTag)
 	}
-	if ingressControllerNameTagValue == "" {
-		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", IngressControllerNameTag)
+	if ingressClassTagValue == "" {
+		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", IngressClassTag)
 	}
 
 	initMetrics()
-	log.Infof("ELB Front end region: %s, cluster: %s, expected frontends: %d, ingress controller: %s", region, frontendTagValue, expectedNumber, ingressControllerNameTagValue)
+	log.Infof("ELB Front end region: %s, cluster: %s, expected frontends: %d, ingress controller: %s", region, frontendTagValue, expectedNumber, ingressClassTagValue)
 
 	session, err := session.NewSession(&aws.Config{Region: &region})
 	if err != nil {
@@ -45,7 +45,7 @@ func New(region string, frontendTagValue string, ingressControllerNameTagValue s
 		metadata:                      ec2metadata.New(session),
 		awsElb:                        aws_elb.New(session),
 		frontendTagValue:              frontendTagValue,
-		ingressControllerNameTagValue: ingressControllerNameTagValue,
+		ingressControllerNameTagValue: ingressClassTagValue,
 		region:                        region,
 		expectedNumber:                expectedNumber,
 		initialised:                   initialised{},
@@ -109,7 +109,7 @@ func (e *elb) attachToFrontEnds() error {
 
 	instance := id.InstanceID
 	log.Infof("Attaching to ELBs from instance %s", instance)
-	clusterFrontEnds, err := FindFrontEndElbsWithIngressControllerName(e.awsElb, e.frontendTagValue, e.ingressControllerNameTagValue)
+	clusterFrontEnds, err := FindFrontEndElbsWithIngressClassName(e.awsElb, e.frontendTagValue, e.ingressControllerNameTagValue)
 
 	if err != nil {
 		return err
@@ -150,14 +150,14 @@ func (e *elb) attachToFrontEnds() error {
 	return nil
 }
 
-// FindFrontEndElbs supports finding elbs without Ingress Controller Name for backwards compatibility
+// FindFrontEndElbs supports finding ELBs without ingress class for backwards compatibility
 // with feed-dns, which does not support multiple ingress controllers
 func FindFrontEndElbs(awsElb ELB, frontendTagValue string) (map[string]LoadBalancerDetails, error) {
-	return FindFrontEndElbsWithIngressControllerName(awsElb, frontendTagValue, "")
+	return FindFrontEndElbsWithIngressClassName(awsElb, frontendTagValue, "")
 }
 
-// FindFrontEndElbsWithIngressControllerName finds all elbs tagged with frontendTagValue and ingressControllerNameTagValue
-func FindFrontEndElbsWithIngressControllerName(awsElb ELB, frontendTagValue string, ingressControllerNameTagValue string) (map[string]LoadBalancerDetails, error) {
+// FindFrontEndElbsWithIngressClassName finds all ELBs tagged with frontendTagValue and ingressClassValue
+func FindFrontEndElbsWithIngressClassName(awsElb ELB, frontendTagValue string, ingressClassValue string) (map[string]LoadBalancerDetails, error) {
 	maxTagQuery := 20
 	// Find the load balancers that are tagged with this cluster name
 	request := &aws_elb.DescribeLoadBalancersInput{}
@@ -195,8 +195,8 @@ func FindFrontEndElbsWithIngressControllerName(awsElb ELB, frontendTagValue stri
 
 	requiredTags := map[string]string{ElbTag: frontendTagValue}
 
-	if ingressControllerNameTagValue != "" {
-		requiredTags[IngressControllerNameTag] = ingressControllerNameTagValue
+	if ingressClassValue != "" {
+		requiredTags[IngressClassTag] = ingressClassValue
 	}
 
 	clusterFrontEnds := make(map[string]LoadBalancerDetails)

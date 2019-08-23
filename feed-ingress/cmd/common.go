@@ -16,10 +16,10 @@ import (
 type appendIngressUpdaters = func(kubernetesClient k8s.Client, updaters []controller.Updater) ([]controller.Updater, error)
 
 func runCmd(appender appendIngressUpdaters) {
-	if ingressControllerName == defaultIngressControllerName {
-		log.Fatalf("The argument --%s is required", ingressControllerNameFlag)
+	if ingressClassName == defaultIngressClassName {
+		log.Fatalf("The argument --%s is required", ingressClassFlag)
 	}
-	controllerConfig.Name = ingressControllerName
+	controllerConfig.Name = ingressClassName
 
 	cmdutil.ConfigureLogging(debug)
 	cmdutil.ConfigureMetrics("feed-ingress", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)

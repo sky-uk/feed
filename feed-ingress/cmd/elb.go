@@ -51,7 +51,7 @@ func init() {
 }
 
 func appendElbIngressUpdaters(kubernetesClient k8s.Client, updaters []controller.Updater) ([]controller.Updater, error) {
-	elbUpdater, err := elb.New(region, elbFrontendTagValue, ingressControllerName, elbExpectedNumber, drainDelay)
+	elbUpdater, err := elb.New(region, elbFrontendTagValue, ingressClassName, elbExpectedNumber, drainDelay)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func appendElbIngressUpdaters(kubernetesClient k8s.Client, updaters []controller
 	statusConfig := elbstatus.Config{
 		Region:              region,
 		FrontendTagValue:    elbFrontendTagValue,
-		IngressNameTagValue: ingressControllerName,
+		IngressNameTagValue: ingressClassName,
 		KubernetesClient:    kubernetesClient,
 	}
 	elbStatusUpdater, err := elbstatus.New(statusConfig)

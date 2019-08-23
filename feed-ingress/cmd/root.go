@@ -45,7 +45,7 @@ var (
 	nginxOpenTracingPluginPath  string
 	nginxOpenTracingConfigPath  string
 
-	ingressControllerName   string
+	ingressClassName        string
 	includeUnnamedIngresses bool
 	namespaceSelector       string
 
@@ -92,7 +92,7 @@ const (
 	defaultClientBodyBufferSize              = 16
 	defaultLargeClientHeaderBufferBlocks     = 4
 
-	defaultIngressControllerName              = ""
+	defaultIngressClassName                   = ""
 	defaultIncludeUnnamedIngresses            = false
 	defaultIngressControllerNamespaceSelector = ""
 
@@ -100,11 +100,11 @@ const (
 )
 
 const (
-	ingressControllerNameFlag              = "ingress-controller-name"
-	includeUnnamedIngressesFlag            = "include-unnamed-ingresses"
+	ingressClassFlag                       = "ingress-class"
+	includeClasslessIngressesFlag          = "include-classless-ingresses"
 	ingressControllerNamespaceSelectorFlag = "ingress-controller-namespace-selector"
 
-	ingressControllerNameAnnotation = "kubernetes.io/ingress.class"
+	ingressClassAnnotation = "kubernetes.io/ingress.class"
 )
 
 func init() {
@@ -143,15 +143,15 @@ func configureGeneralFlags() {
 			" '/myhost/myapp/health/'. Can be overridden with the sky.uk/exact-path annotation per ingress")
 	rootCmd.PersistentFlags().IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller on /health. Also provides /debug/pprof.")
-	rootCmd.PersistentFlags().StringVar(&ingressControllerName, ingressControllerNameFlag, defaultIngressControllerName,
-		fmt.Sprintf("The name of this instance. It will consider only ingress resources with matching %s annotation values.", ingressControllerNameAnnotation))
-	rootCmd.PersistentFlags().BoolVar(&includeUnnamedIngresses, includeUnnamedIngressesFlag, defaultIncludeUnnamedIngresses,
-		fmt.Sprintf("In addition to ingress resources with matching %s annotations, also consider those with no such annotation.", ingressControllerNameAnnotation))
+	rootCmd.PersistentFlags().StringVar(&ingressClassName, ingressClassFlag, defaultIngressClassName,
+		fmt.Sprintf("The name of this instance. It will consider only ingress resources with matching %s annotation values.", ingressClassAnnotation))
+	rootCmd.PersistentFlags().BoolVar(&includeUnnamedIngresses, includeClasslessIngressesFlag, defaultIncludeUnnamedIngresses,
+		fmt.Sprintf("In addition to ingress resources with matching %s annotations, also consider those with no such annotation.", ingressClassAnnotation))
 	rootCmd.PersistentFlags().StringVar(&namespaceSelector, ingressControllerNamespaceSelectorFlag, defaultIngressControllerNamespaceSelector,
 		"Only consider ingresses within namespaces having labels matching this selector (e.g. app=loadtest).")
 
-	_ = rootCmd.PersistentFlags().MarkDeprecated(includeUnnamedIngressesFlag,
-		fmt.Sprintf("please annotate ingress resources explicitly with %s", ingressControllerNameAnnotation))
+	_ = rootCmd.PersistentFlags().MarkDeprecated(includeClasslessIngressesFlag,
+		fmt.Sprintf("please annotate ingress resources explicitly with %s", ingressClassAnnotation))
 }
 
 func configureNginxFlags() {

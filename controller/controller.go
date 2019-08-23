@@ -36,7 +36,7 @@ const (
 	// sets Nginx (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
 	backendMaxConnections = "sky.uk/backend-max-connections"
 
-	ingressControllerNameAnnotation = "kubernetes.io/ingress.class"
+	ingressClassAnnotation = "kubernetes.io/ingress.class"
 )
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
@@ -65,9 +65,9 @@ type controller struct {
 	started                      bool
 	updatesHealth                util.SafeError
 	sync.Mutex
-	name                    string
-	includeUnnamedIngresses bool
-	namespaceSelector       *k8s.NamespaceSelector
+	name                      string
+	includeClasslessIngresses bool
+	namespaceSelector         *k8s.NamespaceSelector
 }
 
 // Config for creating a new ingress controller.
@@ -82,7 +82,7 @@ type Config struct {
 	DefaultProxyBufferSize       int
 	DefaultProxyBufferBlocks     int
 	Name                         string
-	IncludeUnnamedIngresses      bool
+	IncludeClasslessIngresses    bool
 	NamespaceSelector            *k8s.NamespaceSelector
 }
 
@@ -100,7 +100,7 @@ func New(conf Config) Controller {
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
 		doneCh:                       make(chan struct{}),
 		name:                         conf.Name,
-		includeUnnamedIngresses:      conf.IncludeUnnamedIngresses,
+		includeClasslessIngresses:    conf.IncludeClasslessIngresses,
 		namespaceSelector:            conf.NamespaceSelector,
 	}
 }
@@ -201,9 +201,9 @@ func (c *controller) updateIngresses() (err error) {
 
 					if address := serviceMap[serviceName]; address == "" {
 						skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
-					} else if !c.ingressControllerNameSupported(ingress) {
-						skipped = append(skipped, fmt.Sprintf("%s/%s (ingress requests controller [%s]; this instance is [%s])",
-							ingress.Namespace, ingress.Name, ingress.Annotations[ingressControllerNameAnnotation], c.name))
+					} else if !c.ingressClassSupported(ingress) {
+						skipped = append(skipped, fmt.Sprintf("%s/%s (ingress requests class [%s]; this instance is [%s])",
+							ingress.Namespace, ingress.Name, ingress.Annotations[ingressClassAnnotation], c.name))
 					} else {
 						entry := IngressEntry{
 							Namespace:      ingress.Namespace,
@@ -220,7 +220,7 @@ func (c *controller) updateIngresses() (err error) {
 							ProxyBufferBlocks:     c.defaultProxyBufferBlocks,
 							CreationTimestamp:     ingress.CreationTimestamp.Time,
 							Ingress:               ingress,
-							IngressControllerName: ingress.Annotations[ingressControllerNameAnnotation],
+							IngressClass:          ingress.Annotations[ingressClassAnnotation],
 						}
 
 						log.Debugf("Found ingress to update: %s", ingress.Name)
@@ -315,14 +315,14 @@ func (c *controller) updateIngresses() (err error) {
 	return nil
 }
 
-func (c *controller) ingressControllerNameSupported(ingress *v1beta1.Ingress) bool {
+func (c *controller) ingressClassSupported(ingress *v1beta1.Ingress) bool {
 
 	isValid := false
 
-	if ingressControllerName, ok := ingress.Annotations[ingressControllerNameAnnotation]; ok {
-		isValid = ingressControllerName == c.name
+	if ingressClass, ok := ingress.Annotations[ingressClassAnnotation]; ok {
+		isValid = ingressClass == c.name
 	} else {
-		isValid = c.includeUnnamedIngresses
+		isValid = c.includeClasslessIngresses
 	}
 
 	return isValid

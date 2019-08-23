@@ -14,7 +14,7 @@ type IngressEntries []IngressEntry
 // IngressEntry describes the ingress for a single host, path, and service.
 type IngressEntry struct {
 	// The name of the feed-ingress instance that will manage the ingress resource.
-	IngressControllerName string
+	IngressClass string
 	// Namespace of the ingress.
 	Namespace string
 	// Name of the ingress.
