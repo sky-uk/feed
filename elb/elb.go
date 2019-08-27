@@ -42,14 +42,14 @@ func New(region string, frontendTagValue string, ingressClassTagValue string, ex
 	}
 
 	return &elb{
-		metadata:                      ec2metadata.New(session),
-		awsElb:                        aws_elb.New(session),
-		frontendTagValue:              frontendTagValue,
-		ingressControllerNameTagValue: ingressClassTagValue,
-		region:                        region,
-		expectedNumber:                expectedNumber,
-		initialised:                   initialised{},
-		drainDelay:                    drainDelay,
+		metadata:             ec2metadata.New(session),
+		awsElb:               aws_elb.New(session),
+		frontendTagValue:     frontendTagValue,
+		ingressClassTagValue: ingressClassTagValue,
+		region:               region,
+		expectedNumber:       expectedNumber,
+		initialised:          initialised{},
+		drainDelay:           drainDelay,
 	}, nil
 }
 
@@ -62,18 +62,18 @@ type LoadBalancerDetails struct {
 }
 
 type elb struct {
-	awsElb                        ELB
-	metadata                      EC2Metadata
-	frontendTagValue              string
-	ingressControllerNameTagValue string
-	region                        string
-	expectedNumber                int
-	instanceID                    string
-	elbs                          map[string]LoadBalancerDetails
-	registeredFrontends           util.SafeInt
-	initialised                   initialised
-	drainDelay                    time.Duration
-	readyForHealthCheck           util.SafeBool
+	awsElb               ELB
+	metadata             EC2Metadata
+	frontendTagValue     string
+	ingressClassTagValue string
+	region               string
+	expectedNumber       int
+	instanceID           string
+	elbs                 map[string]LoadBalancerDetails
+	registeredFrontends  util.SafeInt
+	initialised          initialised
+	drainDelay           time.Duration
+	readyForHealthCheck  util.SafeBool
 }
 
 type initialised struct {
@@ -109,7 +109,7 @@ func (e *elb) attachToFrontEnds() error {
 
 	instance := id.InstanceID
 	log.Infof("Attaching to ELBs from instance %s", instance)
-	clusterFrontEnds, err := FindFrontEndElbsWithIngressClassName(e.awsElb, e.frontendTagValue, e.ingressControllerNameTagValue)
+	clusterFrontEnds, err := FindFrontEndElbsWithIngressClassName(e.awsElb, e.frontendTagValue, e.ingressClassTagValue)
 
 	if err != nil {
 		return err
