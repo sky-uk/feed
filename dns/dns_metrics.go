@@ -13,34 +13,37 @@ var updateCount, failedCount, skippedCount prometheus.Counter
 
 func initMetrics() {
 	once.Do(func() {
-		recordsGauge = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+		recordsGauge = prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusDNSSubsystem,
 				Name:        "route53_records",
 				Help:        "The current number of records.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Gauge)
+			})
+		prometheus.MustRegister(recordsGauge)
 
-		updateCount = prometheus.MustRegisterOrGet(prometheus.NewCounter(
+		updateCount = prometheus.NewCounter(
 			prometheus.CounterOpts{
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusDNSSubsystem,
 				Name:        "route53_updates",
 				Help:        "The number of record updates to Route53.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Counter)
+			})
+		prometheus.MustRegister(updateCount)
 
-		failedCount = prometheus.MustRegisterOrGet(prometheus.NewCounter(
+		failedCount = prometheus.NewCounter(
 			prometheus.CounterOpts{
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusDNSSubsystem,
 				Name:        "route53_failures",
 				Help:        "The number of failed updates to route53.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Counter)
+			})
+		prometheus.MustRegister(failedCount)
 
-		skippedCount = prometheus.MustRegisterOrGet(prometheus.NewCounter(
+		skippedCount = prometheus.NewCounter(
 			prometheus.CounterOpts{
 				Namespace: metrics.PrometheusNamespace,
 				Subsystem: metrics.PrometheusDNSSubsystem,
@@ -48,7 +51,7 @@ func initMetrics() {
 				Help: "The number of ingress entries skipped by feed-dns, such as being outside of the" +
 					" Route53 hosted zone.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Counter)
-
+			})
+		prometheus.MustRegister(skippedCount)
 	})
 }

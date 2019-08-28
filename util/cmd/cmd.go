@@ -12,6 +12,9 @@ import (
 
 	"github.com/onrik/logrus/filename"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/client_golang/prometheus/push"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/util/metrics"
 )
@@ -27,7 +30,7 @@ type Pulse interface {
 // AddHealthPort is used to expose the health over http.
 func AddHealthPort(pulse Pulse, healthPort int) {
 	http.HandleFunc("/health", healthHandler(pulse))
-	http.Handle("/metrics", prometheus.Handler())
+	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/alive", okHandler)
 
 	go func() {
@@ -155,7 +158,7 @@ func addMetricsPusher(job, pushgatewayURL string, interval time.Duration) {
 				continue
 			}
 
-			if err := prometheus.Push(job, instance, pushgatewayURL); err != nil {
+			if err := push.New(pushgatewayURL, job).Grouping("instance", instance).Push(); err != nil {
 				log.Warnf("Unable to push metrics: %v", err)
 			}
 		}

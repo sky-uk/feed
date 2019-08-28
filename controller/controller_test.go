@@ -11,10 +11,10 @@ import (
 	fake "github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	v1 "k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/util/intstr"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const smallWaitTime = time.Millisecond * 50
@@ -1205,7 +1205,7 @@ func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
 func createIngressWithoutRules() []*v1beta1.Ingress {
 	return []*v1beta1.Ingress{
 		{
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      ingressName,
 				Namespace: ingressNamespace,
 				Annotations: map[string]string{
@@ -1283,7 +1283,7 @@ func createDefaultServices() []*v1.Service {
 func createServiceFixture(name string, namespace string, clusterIP string) []*v1.Service {
 	return []*v1.Service{
 		{
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: namespace,
 			},
@@ -1305,7 +1305,7 @@ func createNamespaceFixture(name string, labels map[string]string) []*v1.Namespa
 				Kind:       "Namespace",
 				APIVersion: "v1",
 			},
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:   name,
 				Labels: labels,
 			},

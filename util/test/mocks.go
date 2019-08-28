@@ -3,8 +3,8 @@ package test
 import (
 	"github.com/sky-uk/feed/k8s"
 	"github.com/stretchr/testify/mock"
-	v1 "k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
 )
 
 // FakeClient mocks out the Kubernetes client

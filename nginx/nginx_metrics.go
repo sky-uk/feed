@@ -17,8 +17,8 @@ const statusPath string = "status/format/json"
 
 var once sync.Once
 var connections, waitingConnections, writingConnections, readingConnections prometheus.Gauge
-var totalAccepts, totalHandled, totalRequests prometheus.Counter
-var ingressRequests, endpointRequests, ingressBytes, endpointBytes *prometheus.CounterVec
+var totalAccepts, totalHandled, totalRequests prometheus.Gauge
+var ingressRequests, endpointRequests, ingressBytes, endpointBytes *prometheus.GaugeVec
 var ingressRequestsLabelNames = []string{"host", "path", "code"}
 var endpointRequestsLabelNames = []string{"name", "endpoint", "code"}
 var ingressBytesLabelNames = []string{"host", "path", "direction"}
@@ -26,116 +26,132 @@ var endpointBytesLabelNames = []string{"name", "endpoint", "direction"}
 
 func initMetrics() {
 	once.Do(func() {
-		connections = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+		connections = prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusIngressSubsystem,
 				Name:        "nginx_connections",
 				Help:        "The active number of connections in use by nginx.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Gauge)
+			})
+		prometheus.MustRegister(connections)
 
-		waitingConnections = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+		waitingConnections = prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusIngressSubsystem,
 				Name:        "nginx_connections_waiting",
 				Help:        "The number of idle connections.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Gauge)
+			})
+		prometheus.MustRegister(waitingConnections)
 
-		writingConnections = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+		writingConnections = prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusIngressSubsystem,
 				Name:        "nginx_connections_writing",
 				Help:        "The number of connections writing data.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Gauge)
+			})
+		prometheus.MustRegister(writingConnections)
 
-		readingConnections = prometheus.MustRegisterOrGet(prometheus.NewGauge(
+		readingConnections = prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusIngressSubsystem,
 				Name:        "nginx_connections_reading",
 				Help:        "The number of connections reading data.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Gauge)
+			})
+		prometheus.MustRegister(readingConnections)
 
-		totalAccepts = prometheus.MustRegisterOrGet(prometheus.NewCounter(
-			prometheus.CounterOpts{
-				Namespace:   metrics.PrometheusNamespace,
-				Subsystem:   metrics.PrometheusIngressSubsystem,
-				Name:        "nginx_accepts",
-				Help:        "The number of client connections accepted by nginx.",
+		totalAccepts = prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: metrics.PrometheusNamespace,
+				Subsystem: metrics.PrometheusIngressSubsystem,
+				Name:      "nginx_accepts",
+				Help: "The number of client connections accepted by nginx. " +
+					"For implementation reasons, this counter is a gauge.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Gauge)
+			})
+		prometheus.MustRegister(totalAccepts)
 
-		totalHandled = prometheus.MustRegisterOrGet(prometheus.NewCounter(
-			prometheus.CounterOpts{
+		totalHandled = prometheus.NewGauge(
+			prometheus.GaugeOpts{
 				Namespace: metrics.PrometheusNamespace,
 				Subsystem: metrics.PrometheusIngressSubsystem,
 				Name:      "nginx_handled",
 				Help: "The number of client connections handled by nginx. Can be less than accepts if connection limit " +
-					"reached.",
+					"reached. For implementation reasons, this counter is a gauge.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Gauge)
+			})
+		prometheus.MustRegister(totalHandled)
 
-		totalRequests = prometheus.MustRegisterOrGet(prometheus.NewCounter(
-			prometheus.CounterOpts{
+		totalRequests = prometheus.NewGauge(
+			prometheus.GaugeOpts{
 				Namespace: metrics.PrometheusNamespace,
 				Subsystem: metrics.PrometheusIngressSubsystem,
 				Name:      "nginx_requests",
 				Help: "The number of client requests served by nginx. Will be larger than handled if using persistent " +
-					"connections.",
+					"connections. For implementation reasons, this counter is a gauge.",
 				ConstLabels: metrics.ConstLabels(),
-			})).(prometheus.Gauge)
+			})
+		prometheus.MustRegister(totalRequests)
 
-		ingressRequests = prometheus.MustRegisterOrGet(prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace:   metrics.PrometheusNamespace,
-				Subsystem:   metrics.PrometheusIngressSubsystem,
-				Name:        "ingress_requests",
-				Help:        "The number of requests proxied by nginx per ingress.",
+		ingressRequests = prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: metrics.PrometheusNamespace,
+				Subsystem: metrics.PrometheusIngressSubsystem,
+				Name:      "ingress_requests",
+				Help: "The number of requests proxied by nginx per ingress. " +
+					"For implementation reasons, this counter is a gauge.",
 				ConstLabels: metrics.ConstLabels(),
 			},
 			ingressRequestsLabelNames,
-		)).(*prometheus.CounterVec)
+		)
+		prometheus.MustRegister(ingressRequests)
 
-		endpointRequests = prometheus.MustRegisterOrGet(prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace:   metrics.PrometheusNamespace,
-				Subsystem:   metrics.PrometheusIngressSubsystem,
-				Name:        "endpoint_requests",
-				Help:        "The number of requests proxied by nginx per endpoint.",
+		endpointRequests = prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: metrics.PrometheusNamespace,
+				Subsystem: metrics.PrometheusIngressSubsystem,
+				Name:      "endpoint_requests",
+				Help: "The number of requests proxied by nginx per endpoint. " +
+					"For implementation reasons, this counter is a gauge.",
 				ConstLabels: metrics.ConstLabels(),
 			},
 			endpointRequestsLabelNames,
-		)).(*prometheus.CounterVec)
+		)
+		prometheus.MustRegister(endpointRequests)
 
-		ingressBytes = prometheus.MustRegisterOrGet(prometheus.NewCounterVec(
-			prometheus.CounterOpts{
+		ingressBytes = prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
 				Namespace: metrics.PrometheusNamespace,
 				Subsystem: metrics.PrometheusIngressSubsystem,
 				Name:      "ingress_bytes",
 				Help: "The number of bytes sent or received by a client to this ingress. Direction is " +
-					"'in' for bytes received from a client, 'out' for bytes sent to a client.",
+					"'in' for bytes received from a client, 'out' for bytes sent to a client. " +
+					"For implementation reasons, this counter is a gauge.",
 				ConstLabels: metrics.ConstLabels(),
 			},
 			ingressBytesLabelNames,
-		)).(*prometheus.CounterVec)
+		)
+		prometheus.MustRegister(ingressBytes)
 
-		endpointBytes = prometheus.MustRegisterOrGet(prometheus.NewCounterVec(
-			prometheus.CounterOpts{
+		endpointBytes = prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
 				Namespace: metrics.PrometheusNamespace,
 				Subsystem: metrics.PrometheusIngressSubsystem,
 				Name:      "endpoint_bytes",
 				Help: "The number of bytes sent or received by this endpoint. Direction is " +
-					"'in' for bytes received from the endpoint, 'out' for bytes sent to the endpoint.",
+					"'in' for bytes received from the endpoint, 'out' for bytes sent to the endpoint. " +
+					"For implementation reasons, this counter is a gauge.",
 				ConstLabels: metrics.ConstLabels(),
 			},
 			endpointBytesLabelNames,
-		)).(*prometheus.CounterVec)
+		)
+		prometheus.MustRegister(endpointBytes)
 	})
 }
 

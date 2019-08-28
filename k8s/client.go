@@ -11,11 +11,13 @@ import (
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
-	v1 "k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/pkg/fields"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -56,13 +58,13 @@ type client struct {
 	clientset           *kubernetes.Clientset
 	resyncPeriod        time.Duration
 	ingressStore        cache.Store
-	ingressController   *cache.Controller
+	ingressController   cache.Controller
 	ingressWatcher      *handlerWatcher
 	serviceStore        cache.Store
-	serviceController   *cache.Controller
+	serviceController   cache.Controller
 	serviceWatcher      *handlerWatcher
 	namespaceStore      cache.Store
-	namespaceController *cache.Controller
+	namespaceController cache.Controller
 	namespaceWatcher    *handlerWatcher
 }
 
@@ -233,7 +235,7 @@ func (c *client) createNamespaceSource() {
 func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
 	ingressClient := c.clientset.ExtensionsV1beta1().Ingresses(ingress.Namespace)
 
-	currentIng, err := ingressClient.Get(ingress.Name)
+	currentIng, err := ingressClient.Get(ingress.Name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
