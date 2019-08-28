@@ -53,7 +53,7 @@ lint :
 		golint -set_exit_status $$pkg || exit 1; \
 	done;
 
-test :
+test : build
 	@echo "== run tests"
 	@go test -race $(pkgs)
 
@@ -62,7 +62,7 @@ git_rev := $(shell git rev-parse --short HEAD)
 git_tag := $(shell git tag --points-at=$(git_rev))
 image_prefix := skycirrus/feed
 
-docker : build
+docker : test
 	@echo "== build docker images"
 	cp $(GOPATH)/bin/feed-dns docker/dns
 	cp $(GOPATH)/bin/feed-ingress docker/ingress
