@@ -1,5 +1,5 @@
 /*
-Package k8s implements a client for communicating with a Kubernetes apiserver. It is intended
+Package k8s implements a client for communicating with a Kubernetes API server. It is intended
 to support an ingress controller, so it is limited to the types needed.
 
 The types are copied from the stable api of the Kubernetes 1.3 release.
@@ -72,7 +72,7 @@ type NamespaceSelector struct {
 	LabelValue string
 }
 
-// New creates a client for the kubernetes apiserver.
+// New creates a client for the kubernetes API server.
 func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -96,7 +96,7 @@ func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, 
 		return nil, errors.New("namespaces haven't synced yet")
 	}
 
-	allIngresses := []*v1beta1.Ingress{}
+	var allIngresses []*v1beta1.Ingress
 	for _, obj := range c.ingressStore.List() {
 		allIngresses = append(allIngresses, obj.(*v1beta1.Ingress))
 	}
@@ -107,7 +107,7 @@ func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, 
 
 	supportedNamespaces := supportedNamespaces(selector, toNamespaces(c.namespaceStore.List()))
 
-	filteredIngresses := []*v1beta1.Ingress{}
+	var filteredIngresses []*v1beta1.Ingress
 	for _, ingress := range allIngresses {
 		if ingressInNamespace(ingress, supportedNamespaces) {
 			filteredIngresses = append(filteredIngresses, ingress)
@@ -129,7 +129,7 @@ func supportedNamespaces(selector *NamespaceSelector, namespaces []*v1.Namespace
 		return namespaces
 	}
 
-	filteredNamespaces := []*v1.Namespace{}
+	var filteredNamespaces []*v1.Namespace
 	for _, namespace := range namespaces {
 		if val, ok := namespace.Labels[selector.LabelName]; ok && val == selector.LabelValue {
 			filteredNamespaces = append(filteredNamespaces, namespace)
@@ -179,7 +179,7 @@ func (c *client) GetServices() ([]*v1.Service, error) {
 		return nil, errors.New("services haven't synced yet")
 	}
 
-	services := []*v1.Service{}
+	var services []*v1.Service
 	for _, obj := range c.serviceStore.List() {
 		services = append(services, obj.(*v1.Service))
 	}

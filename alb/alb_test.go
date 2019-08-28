@@ -61,10 +61,6 @@ func (m *mockMetadata) GetInstanceIdentityDocument() (ec2metadata.EC2InstanceIde
 	return args.Get(0).(ec2metadata.EC2InstanceIdentityDocument), args.Error(1)
 }
 
-type targetGroup struct {
-	name string
-}
-
 func (m *mockALB) mockDescribeTargetGroups(names []string, arns []string, reqMarker *string, nextMarker *string, err error) {
 	var awsNames []*string
 	var targetGroups []*awselb.TargetGroup
@@ -179,7 +175,7 @@ func TestErrorDescribingTargetGroups(t *testing.T) {
 	mockALB.mockDescribeTargetGroups([]string{"group"}, []string{"group-arn"}, nil, nil, errors.New("ba koom"))
 
 	//when
-	a.Start()
+	_ = a.Start()
 	updateErr := a.Update(controller.IngressEntries{})
 
 	//then
@@ -240,8 +236,8 @@ func TestDeregistersOnStop(t *testing.T) {
 	mockALB.mockDeregisterTargets("external-arn", instanceID, nil)
 
 	//when
-	a.Start()
-	a.Update(controller.IngressEntries{})
+	_ = a.Start()
+	_ = a.Update(controller.IngressEntries{})
 	stopErr := a.Stop()
 
 	//then
@@ -263,8 +259,8 @@ func TestDeregisterErrorIsHandledInStop(t *testing.T) {
 	mockALB.mockDeregisterTargets("external-arn", instanceID, nil)
 
 	//when
-	a.Start()
-	a.Update(controller.IngressEntries{})
+	_ = a.Start()
+	_ = a.Update(controller.IngressEntries{})
 	stopErr := a.Stop()
 
 	//then
@@ -287,10 +283,10 @@ func TestStopWaitsForDeregisterDelay(t *testing.T) {
 	a.(*alb).targetGroupDeregistrationDelay = time.Millisecond * 50
 
 	//when
-	a.Start()
-	a.Update(controller.IngressEntries{})
+	_ = a.Start()
+	_ = a.Update(controller.IngressEntries{})
 	beforeStop := time.Now()
-	a.Stop()
+	_ = a.Stop()
 	stopDuration := time.Now().Sub(beforeStop)
 
 	//then

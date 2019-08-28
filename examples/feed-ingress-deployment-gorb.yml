@@ -1,4 +1,4 @@
-# Example deployment for launching feed-ingress, the nginx ingress controller.
+# Example deployment for launching feed-ingress, the NGINX ingress controller.
 #
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -18,7 +18,7 @@ spec:
         app: feed-ingress
     spec:
 
-      # Listen directly on host interface, required so ELBs can contact nginx.
+      # Listen directly on host interface, required so ELBs can contact NGINX.
       hostNetwork: true
 
       # Time to wait for requests to gracefully terminate when updating the deployment.
@@ -67,10 +67,10 @@ spec:
         args:
         - gorb
 
-        # Ingress nginx port that ELBs will direct traffic towards.
+        # Ingress NGINX port that ELBs will direct traffic towards.
         - --ingress-port=80
 
-        # Health port on nginx, used by ELBs to determine health.
+        # Health port on NGINX, used by ELBs to determine health.
         - --ingress-health-port=8081
 
         # Default security whitelist for ingress. Can be overridden with the sky.uk/allow annotation.
@@ -79,10 +79,10 @@ spec:
         # Health port for the controller to respond on.
         - --health-port=12082
 
-        # Log level of nginx. Recommended to leave at error, or set to crit if too much spam.
+        # Log level of NGINX. Recommended to leave at error, or set to crit if too much spam.
         - --nginx-loglevel=error
 
-        # How often to reload nginx if needed. Setting too low can cause 504s from the ELB in the case of heavy
+        # How often to reload NGINX if needed. Setting too low can cause 504s from the ELB in the case of heavy
         # ingress updates.
         - --nginx-update-period=5m
 
@@ -120,7 +120,7 @@ spec:
         # gorb backend healthcheck type
         - --gorb-backend-healthcheck-type=http
 
-        # nginx host ip address to use when the ingress is not in AWS
+        # NGINX host ip address to use when the ingress is not in AWS
         - --gorb-ingress-instance-ip=$(INSTANCEIP)
 
         # LB drain time - time to wait while the load balancer drains requests from feed when stopping. Should be

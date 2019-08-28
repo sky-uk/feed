@@ -1,5 +1,5 @@
 /*
-Package elb provides an updater for an ELB frontend to attach nginx to.
+Package elb provides an updater for an ELB frontend to attach NGINX to.
 */
 package elb
 
@@ -18,8 +18,8 @@ import (
 	"github.com/sky-uk/feed/util"
 )
 
-// ElbTag is the tag key used for identifying ELBs to attach to for a cluster.
-const ElbTag = "sky.uk/KubernetesClusterFrontend"
+// FrontendTag is the tag key used for identifying ELBs to attach to for a cluster.
+const FrontendTag = "sky.uk/KubernetesClusterFrontend"
 
 // IngressClassTag is the tag key used for identifying ELBs to attach to for a given ingress controller.
 const IngressClassTag = "sky.uk/KubernetesClusterIngressClass"
@@ -27,7 +27,7 @@ const IngressClassTag = "sky.uk/KubernetesClusterIngressClass"
 // New creates a new ELB frontend
 func New(region string, frontendTagValue string, ingressClassTagValue string, expectedNumber int, drainDelay time.Duration) (controller.Updater, error) {
 	if frontendTagValue == "" {
-		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", ElbTag)
+		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", FrontendTag)
 	}
 	if ingressClassTagValue == "" {
 		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", IngressClassTag)
@@ -36,14 +36,14 @@ func New(region string, frontendTagValue string, ingressClassTagValue string, ex
 	initMetrics()
 	log.Infof("ELB Front end region: %s, cluster: %s, expected frontends: %d, ingress controller: %s", region, frontendTagValue, expectedNumber, ingressClassTagValue)
 
-	session, err := session.NewSession(&aws.Config{Region: &region})
+	awsSession, err := session.NewSession(&aws.Config{Region: &region})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create ELB updater: %v", err)
 	}
 
 	return &elb{
-		metadata:             ec2metadata.New(session),
-		awsElb:               awselb.New(session),
+		metadata:             ec2metadata.New(awsSession),
+		awsElb:               awselb.New(awsSession),
 		frontendTagValue:     frontendTagValue,
 		ingressClassTagValue: ingressClassTagValue,
 		region:               region,
@@ -193,7 +193,7 @@ func FindFrontEndElbsWithIngressClassName(awsElb ELB, frontendTagValue string, i
 
 	log.Debugf("Found %d loadbalancers.", len(lbArns))
 
-	requiredTags := map[string]string{ElbTag: frontendTagValue}
+	requiredTags := map[string]string{FrontendTag: frontendTagValue}
 
 	if ingressClassValue != "" {
 		requiredTags[IngressClassTag] = ingressClassValue

@@ -12,7 +12,7 @@ import (
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/k8s"
-	k8s_status "github.com/sky-uk/feed/k8s/status"
+	k8sStatus "github.com/sky-uk/feed/k8s/status"
 	v1 "k8s.io/client-go/pkg/api/v1"
 )
 
@@ -26,13 +26,13 @@ type Config struct {
 
 // New creates a new ELB frontend status updater.
 func New(conf Config) (controller.Updater, error) {
-	session, err := session.NewSession(&aws.Config{Region: &conf.Region})
+	awsSession, err := session.NewSession(&aws.Config{Region: &conf.Region})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create ELB status updater: %v", err)
 	}
 
 	return &status{
-		awsElb:              awselb.New(session),
+		awsElb:              awselb.New(awsSession),
 		frontendTagValue:    conf.FrontendTagValue,
 		ingressNameTagValue: conf.IngressNameTagValue,
 		loadBalancers:       make(map[string]v1.LoadBalancerStatus),
@@ -56,7 +56,7 @@ func (s *status) Start() error {
 	}
 
 	for lbLabel, clusterFrontEnd := range clusterFrontEnds {
-		s.loadBalancers[lbLabel] = k8s_status.GenerateLoadBalancerStatus([]string{clusterFrontEnd.DNSName})
+		s.loadBalancers[lbLabel] = k8sStatus.GenerateLoadBalancerStatus([]string{clusterFrontEnd.DNSName})
 	}
 	return nil
 }
@@ -70,5 +70,5 @@ func (s *status) Health() error {
 }
 
 func (s *status) Update(ingresses controller.IngressEntries) error {
-	return k8s_status.Update(ingresses, s.loadBalancers, s.kubernetesClient)
+	return k8sStatus.Update(ingresses, s.loadBalancers, s.kubernetesClient)
 }

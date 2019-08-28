@@ -15,7 +15,7 @@ RUN apt-get update \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* /tmp/*
 
-# Install nginx
+# Install NGINX
 
 ENV NGINX_VERSION 1.15.7
 ENV NGINX_SHA256 8f22ea2f6c0e0a221b6ddc02b6428a3ff708e2ad55f9361102b1c9f4142bdf93
@@ -31,7 +31,7 @@ ENV JAEGER_SHA256 21257af93a64fee42c04ca6262d292b2e4e0b7b0660c511db357b32fd42ef5
 COPY build-nginx.sh /tmp
 RUN chmod 755 /tmp/build-nginx.sh
 RUN /tmp/build-nginx.sh
-# For binding to privileged ports in nginx.
+# For binding to privileged ports in NGINX.
 RUN setcap "cap_net_bind_service=+ep" /usr/sbin/nginx
 
 # Setup feed controller

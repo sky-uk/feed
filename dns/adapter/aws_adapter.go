@@ -42,13 +42,13 @@ type awsAdapter struct {
 // NewAWSAdapter creates a FrontendAdapter which interacts with AWS ELBs or ALBs.
 func NewAWSAdapter(config *AWSAdapterConfig) (FrontendAdapter, error) {
 	if config.ALBClient == nil && config.ELBClient == nil {
-		session, err := session.NewSession(&aws.Config{Region: &config.Region})
+		awsSession, err := session.NewSession(&aws.Config{Region: &config.Region})
 		if err != nil {
 			return nil, fmt.Errorf("unable to open AWS session: %v", err)
 		}
 
-		config.ALBClient = awselb.New(session)
-		config.ELBClient = awselb.New(session)
+		config.ALBClient = awselb.New(awsSession)
+		config.ELBClient = awselb.New(awsSession)
 	}
 
 	if config.ELBFinder == nil {

@@ -23,23 +23,20 @@ type test struct {
 }
 
 var tests = []test{
-	test{
+	{
 		input: input{sliceLength: 2, size: 1},
-		result: []Range{Range{
-			Low: 0, High: 1,
-		}, Range{
-			Low: 1, High: 2,
-		}},
+		result: []Range{
+			{Low: 0, High: 1},
+			{Low: 1, High: 2},
+		},
 	},
-	test{
+	{
 		input: input{sliceLength: 5, size: 2},
-		result: []Range{Range{
-			Low: 0, High: 2,
-		}, Range{
-			Low: 2, High: 4,
-		}, Range{
-			Low: 4, High: 5,
-		}},
+		result: []Range{
+			{Low: 0, High: 2},
+			{Low: 2, High: 4},
+			{Low: 4, High: 5},
+		},
 	},
 }
 

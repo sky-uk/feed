@@ -31,7 +31,7 @@ func initMetrics() {
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusIngressSubsystem,
 				Name:        "nginx_connections",
-				Help:        "The active number of connections in use by nginx.",
+				Help:        "The active number of connections in use by NGINX.",
 				ConstLabels: metrics.ConstLabels(),
 			})).(prometheus.Gauge)
 
@@ -67,7 +67,7 @@ func initMetrics() {
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusIngressSubsystem,
 				Name:        "nginx_accepts",
-				Help:        "The number of client connections accepted by nginx.",
+				Help:        "The number of client connections accepted by NGINX.",
 				ConstLabels: metrics.ConstLabels(),
 			})).(prometheus.Gauge)
 
@@ -76,7 +76,7 @@ func initMetrics() {
 				Namespace: metrics.PrometheusNamespace,
 				Subsystem: metrics.PrometheusIngressSubsystem,
 				Name:      "nginx_handled",
-				Help: "The number of client connections handled by nginx. Can be less than accepts if connection limit " +
+				Help: "The number of client connections handled by NGINX. Can be less than accepts if connection limit " +
 					"reached.",
 				ConstLabels: metrics.ConstLabels(),
 			})).(prometheus.Gauge)
@@ -86,7 +86,7 @@ func initMetrics() {
 				Namespace: metrics.PrometheusNamespace,
 				Subsystem: metrics.PrometheusIngressSubsystem,
 				Name:      "nginx_requests",
-				Help: "The number of client requests served by nginx. Will be larger than handled if using persistent " +
+				Help: "The number of client requests served by NGINX. Will be larger than handled if using persistent " +
 					"connections.",
 				ConstLabels: metrics.ConstLabels(),
 			})).(prometheus.Gauge)
@@ -96,7 +96,7 @@ func initMetrics() {
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusIngressSubsystem,
 				Name:        "ingress_requests",
-				Help:        "The number of requests proxied by nginx per ingress.",
+				Help:        "The number of requests proxied by NGINX per ingress.",
 				ConstLabels: metrics.ConstLabels(),
 			},
 			ingressRequestsLabelNames,
@@ -107,7 +107,7 @@ func initMetrics() {
 				Namespace:   metrics.PrometheusNamespace,
 				Subsystem:   metrics.PrometheusIngressSubsystem,
 				Name:        "endpoint_requests",
-				Help:        "The number of requests proxied by nginx per endpoint.",
+				Help:        "The number of requests proxied by NGINX per endpoint.",
 				ConstLabels: metrics.ConstLabels(),
 			},
 			endpointRequestsLabelNames,
@@ -167,7 +167,7 @@ type VTSResponses struct {
 	FiveXX  float64 `json:"5xx"`
 }
 
-// VTSMetrics represents the json returned by the vts nginx plugin.
+// VTSMetrics represents the json returned by the VTS NGINX plugin.
 type VTSMetrics struct {
 	Connections   *VTSConnections                      `json:"connections"`
 	FilterZones   map[string]map[string]VTSRequestData `json:"filterZones"`
@@ -180,14 +180,14 @@ func parseAndSetNginxMetrics(statusPort int) error {
 		return err
 	}
 	defer resp.Body.Close()
-	metrics, err := parseStatusBody(resp.Body)
+	vtsMetrics, err := parseStatusBody(resp.Body)
 	if err != nil {
 		return err
 	}
 
-	updateNginxMetrics(metrics)
-	updateIngressMetrics(metrics)
-	updateEndpointMetrics(metrics)
+	updateNginxMetrics(vtsMetrics)
+	updateIngressMetrics(vtsMetrics)
+	updateEndpointMetrics(vtsMetrics)
 
 	return nil
 }
@@ -251,9 +251,9 @@ func updateEndpointMetrics(metrics VTSMetrics) {
 
 func parseStatusBody(body io.Reader) (VTSMetrics, error) {
 	dec := json.NewDecoder(body)
-	var metrics VTSMetrics
-	if err := dec.Decode(&metrics); err != nil {
+	var vtsMetrics VTSMetrics
+	if err := dec.Decode(&vtsMetrics); err != nil {
 		return VTSMetrics{}, err
 	}
-	return metrics, nil
+	return vtsMetrics, nil
 }

@@ -266,9 +266,7 @@ func TestRecordSetUpdates(t *testing.T) {
 	}{
 		{
 			"Empty update has no change",
-			controller.IngressEntries{},
-			[]*route53.ResourceRecordSet{},
-			[]*route53.Change{},
+			nil, nil, nil,
 		},
 		{
 			"Add new record",
@@ -326,7 +324,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Deleting existing record",
-			controller.IngressEntries{},
+			nil,
 			[]*route53.ResourceRecordSet{
 				{
 					Name: aws.String("foo.com."),
@@ -435,7 +433,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				},
 			},
 			nil,
-			[]*route53.Change{},
+			nil,
 		},
 		{
 			"Duplicate hosts are not duplicated in changeset",
@@ -526,7 +524,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					EvaluateTargetHealth: aws.Bool(false),
 				},
 			}},
-			[]*route53.Change{},
+			nil,
 		},
 	}
 
@@ -565,8 +563,8 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 			"Empty update has no change",
 			internalAndExternalFrontends,
 			controller.IngressEntries{},
-			[]*route53.ResourceRecordSet{},
-			[]*route53.Change{},
+			nil,
+			nil,
 		},
 		{
 			"Add new record",
@@ -748,7 +746,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 				},
 			},
 			nil,
-			[]*route53.Change{},
+			nil,
 		},
 		{
 			"Duplicate hosts are not duplicated in changeset",
@@ -845,7 +843,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 					},
 				},
 			}},
-			[]*route53.Change{},
+			nil,
 		},
 		{
 			"Updates TTL on a CNAME record when it has changed",
@@ -924,8 +922,8 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 				LbScheme:    externalScheme,
 				ServicePort: 80,
 			}},
-			[]*route53.ResourceRecordSet{},
-			[]*route53.Change{},
+			nil,
+			nil,
 		},
 	}
 

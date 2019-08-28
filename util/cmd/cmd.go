@@ -41,18 +41,18 @@ func healthHandler(pulse Pulse) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := pulse.Health(); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			io.WriteString(w, fmt.Sprintf("%v\n", err))
+			_, _ = io.WriteString(w, fmt.Sprintf("%v\n", err))
 			return
 		}
 
 		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, "ok\n")
+		_, _ = io.WriteString(w, "ok\n")
 	}
 }
 
 func okHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	io.WriteString(w, "ok\n")
+	_, _ = io.WriteString(w, "ok\n")
 }
 
 const pollInterval = time.Second

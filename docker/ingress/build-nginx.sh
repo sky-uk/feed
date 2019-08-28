@@ -12,7 +12,7 @@ apt-get install --no-install-suggests --no-install-recommends -y \
     libaio1 libaio-dev \
     sudo libssl-dev
 
-echo "--- Downloading nginx and modules"
+echo "--- Downloading NGINX and modules"
 mkdir /tmp/nginx
 cd /tmp/nginx
 curl -O http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
@@ -61,7 +61,7 @@ HUNTER_INSTALL_DIR=$(cat _3rdParty/Hunter/install-root-dir)
 
 cd /tmp/nginx/nginx-${NGINX_VERSION}
 
-echo "--- Configuring nginx"
+echo "--- Configuring NGINX"
 ./configure \
     --prefix=/nginx \
     --sbin-path=/usr/sbin/nginx \
@@ -87,7 +87,7 @@ echo "--- Configuring nginx"
     --add-module=/tmp/nginx/nginx-module-vts-${VTS_VERSION}\
     --with-http_ssl_module
 
-echo "--- Building nginx"
+echo "--- Building NGINX"
 make
 make install
 

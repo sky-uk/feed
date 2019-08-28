@@ -30,7 +30,7 @@ type Port struct {
 	Port int
 }
 
-// Conf configuration for nginx
+// Conf configuration for NGINX
 type Conf struct {
 	BinaryLocation               string
 	WorkingDir                   string
@@ -91,7 +91,7 @@ func (n *nginxUpdater) signalRequired() {
 func (n *nginxUpdater) signalIfRequired() {
 	if n.updateRequired.Get() {
 		log.Info("Signalling Nginx to reload configuration")
-		n.nginx.sighup()
+		_ = n.nginx.sighup()
 		n.updateRequired.Set(false)
 	}
 }
@@ -379,12 +379,12 @@ func (n *nginxUpdater) createConfig(entries controller.IngressEntries) ([]byte, 
 
 	n.AccessLogHeaders = n.getNginxLogHeaders()
 	var output bytes.Buffer
-	template := loadBalancerTemplate{
+	lbTemplate := loadBalancerTemplate{
 		Conf:      n.Conf,
 		Servers:   serverEntries,
 		Upstreams: upstreamEntries,
 	}
-	err = tmpl.Execute(&output, template)
+	err = tmpl.Execute(&output, lbTemplate)
 
 	if err != nil {
 		return []byte{}, fmt.Errorf("unable to create nginx config from template: %v", err)
@@ -444,8 +444,6 @@ type locations []*location
 func (l locations) Len() int           { return len(l) }
 func (l locations) Less(i, j int) bool { return l[i].Path < l[j].Path }
 func (l locations) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
-
-type pathSet map[string]bool
 
 func createServerEntries(entries controller.IngressEntries) []*server {
 	hostToNginxEntry := make(map[string]*server)
@@ -571,8 +569,8 @@ func diff(b1, b2 []byte) ([]byte, error) {
 	defer os.Remove(f2.Name())
 	defer f2.Close()
 
-	f1.Write(b1)
-	f2.Write(b2)
+	_, _ = f1.Write(b1)
+	_, _ = f2.Write(b2)
 
 	data, err := exec.Command("diff", "-u", f1.Name(), f2.Name()).CombinedOutput()
 	if len(data) > 0 {

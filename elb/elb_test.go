@@ -176,13 +176,13 @@ func TestAttachWithSingleMatchingLoadBalancer(t *testing.T) {
 			{Key: aws.String(frontendTag), Value: aws.String("different cluster")},
 			{Key: aws.String(ingressName), Value: aws.String("different cluster")},
 		}},
-		lbTags{arn: "other elb", tags: []*awselb.Tag{{Key: aws.String("Bannana"), Value: aws.String("Tasty")}}},
+		lbTags{arn: "other elb", tags: []*awselb.Tag{{Key: aws.String("Banana"), Value: aws.String("Tasty")}}},
 	)
 	mockRegisterTargets(mockElb, clusterFrontEnd, instanceID)
 	err := e.Start()
 
 	//when
-	e.Update(controller.IngressEntries{})
+	_ = e.Update(controller.IngressEntries{})
 
 	//then
 	assert.NoError(t, e.Health())
@@ -209,12 +209,12 @@ func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 			{Key: aws.String(frontendTag), Value: aws.String("different cluster")},
 			{Key: aws.String(ingressNameTag), Value: aws.String("different cluster")},
 		}},
-		lbTags{arn: "other elb", tags: []*awselb.Tag{{Key: aws.String("Bannana"), Value: aws.String("Tasty")}}},
+		lbTags{arn: "other elb", tags: []*awselb.Tag{{Key: aws.String("Banana"), Value: aws.String("Tasty")}}},
 	)
 	mockRegisterTargets(mockElb, clusterFrontEnd, instanceID)
 
 	//when
-	e.Start()
+	_ = e.Start()
 	err := e.Update(controller.IngressEntries{})
 
 	//then
@@ -281,7 +281,7 @@ func TestAttachWithInternalAndInternetFacing(t *testing.T) {
 
 	//when
 	err := e.Start()
-	e.Update(controller.IngressEntries{})
+	_ = e.Update(controller.IngressEntries{})
 
 	//then
 	mockElb.AssertExpectations(t)
@@ -291,11 +291,11 @@ func TestAttachWithInternalAndInternetFacing(t *testing.T) {
 
 func TestErrorGettingMetadata(t *testing.T) {
 	e, _, mockMetadata := setup()
-	mockMetadata.On("GetInstanceIdentityDocument").Return(ec2metadata.EC2InstanceIdentityDocument{}, fmt.Errorf("No metadata for you"))
+	mockMetadata.On("GetInstanceIdentityDocument").Return(ec2metadata.EC2InstanceIdentityDocument{}, fmt.Errorf("no metadata for you"))
 
 	err := e.Update(controller.IngressEntries{})
 
-	assert.EqualError(t, err, "unable to query ec2 metadata service for InstanceId: No metadata for you")
+	assert.EqualError(t, err, "unable to query ec2 metadata service for InstanceId: no metadata for you")
 }
 
 func TestErrorDescribingLoadBalancers(t *testing.T) {
@@ -304,7 +304,7 @@ func TestErrorDescribingLoadBalancers(t *testing.T) {
 	mockInstanceMetadata(mockMetadata, instanceID)
 	mockElb.On("DescribeLoadBalancers", mock.AnythingOfType("*elbv2.DescribeLoadBalancersInput")).Return(&awselb.DescribeLoadBalancersOutput{}, errors.New("oh dear oh dear"))
 
-	e.Start()
+	_ = e.Start()
 	err := e.Update(controller.IngressEntries{})
 
 	assert.EqualError(t, err, "unable to describe load balancers: oh dear oh dear")
@@ -317,7 +317,7 @@ func TestErrorDescribingTags(t *testing.T) {
 	mockLoadBalancers(mockElb, lb{arn: "one"})
 	mockElb.On("DescribeTags", mock.AnythingOfType("*elbv2.DescribeTagsInput")).Return(&awselb.DescribeTagsOutput{}, errors.New("oh dear oh dear"))
 
-	e.Start()
+	_ = e.Start()
 	err := e.Update(controller.IngressEntries{})
 
 	assert.EqualError(t, err, "unable to describe tags: oh dear oh dear")
@@ -334,7 +334,7 @@ func TestNoMatchingElbs(t *testing.T) {
 	mockClusterTags(mockElb, lbTags{arn: loadBalancerArn, tags: []*awselb.Tag{}})
 
 	// when
-	e.Start()
+	_ = e.Start()
 	err := e.Update(controller.IngressEntries{})
 
 	// then
@@ -354,7 +354,7 @@ func TestAttachingWithoutIngressNameTagElbs(t *testing.T) {
 	}})
 
 	// when
-	e.Start()
+	_ = e.Start()
 	err := e.Update(controller.IngressEntries{})
 
 	// then
@@ -374,7 +374,7 @@ func TestAttachingWithoutFrontendTagElbs(t *testing.T) {
 	}})
 
 	// when
-	e.Start()
+	_ = e.Start()
 	err := e.Update(controller.IngressEntries{})
 
 	// then
@@ -448,7 +448,7 @@ func TestDeregistersWithAttachedELBs(t *testing.T) {
 	mockClusterTags(mockElb,
 		lbTags{arn: clusterFrontEnd, tags: defaultTags},
 		lbTags{arn: clusterFrontEnd2, tags: defaultTags},
-		lbTags{arn: "other elb", tags: []*awselb.Tag{{Key: aws.String("Bannana"), Value: aws.String("Tasty")}}},
+		lbTags{arn: "other elb", tags: []*awselb.Tag{{Key: aws.String("Banana"), Value: aws.String("Tasty")}}},
 	)
 	mockRegisterTargets(mockElb, clusterFrontEnd, instanceID)
 	mockRegisterTargets(mockElb, clusterFrontEnd2, instanceID)
@@ -509,8 +509,8 @@ func TestDeRegisterInstanceError(t *testing.T) {
 	mockElb.On("DeregisterTargets", mock.Anything).Return(&awselb.DeregisterTargetsOutput{}, errors.New("no deregister for you"))
 
 	// when
-	e.Start()
-	e.Update(controller.IngressEntries{})
+	_ = e.Start()
+	_ = e.Update(controller.IngressEntries{})
 	err := e.Stop()
 
 	// then
@@ -533,7 +533,7 @@ func TestRetriesUpdateIfFirstAttemptFails(t *testing.T) {
 		&awselb.RegisterTargetsOutput{}, errors.New("no register for you"))
 
 	// when
-	e.Start()
+	_ = e.Start()
 	firstErr := e.Update(controller.IngressEntries{})
 	secondErr := e.Update(controller.IngressEntries{})
 

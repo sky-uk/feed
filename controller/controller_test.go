@@ -101,19 +101,19 @@ func newController(lb Updater, client k8s.Client) Controller {
 }
 
 func TestControllerCanBeStartedAndStopped(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 	updater, client := createDefaultStubs()
 	controller := newController(updater, client)
 
-	assert.NoError(controller.Start())
-	assert.NoError(controller.Stop())
+	asserter.NoError(controller.Start())
+	asserter.NoError(controller.Stop())
 	updater.AssertCalled(t, "Start")
 	updater.AssertCalled(t, "Stop")
 }
 
 func TestControllerStartsAndStopsUpdatersInCorrectOrder(t *testing.T) {
 	// given
-	assert := assert.New(t)
+	asserter := assert.New(t)
 	updater1 := new(fakeUpdater)
 	updater1.TestData().Set("name", "updater1")
 	updater1.On("Start").Return(nil)
@@ -135,17 +135,17 @@ func TestControllerStartsAndStopsUpdatersInCorrectOrder(t *testing.T) {
 	// when
 	started = nil
 	stopped = nil
-	assert.NoError(controller.Start())
-	assert.NoError(controller.Stop())
+	asserter.NoError(controller.Start())
+	asserter.NoError(controller.Stop())
 
 	// then
-	assert.Equal(started, []*fakeUpdater{updater1, updater2}, "should start in order")
-	assert.Equal(stopped, []*fakeUpdater{updater2, updater1}, "should stop in reverse order")
+	asserter.Equal(started, []*fakeUpdater{updater1, updater2}, "should start in order")
+	asserter.Equal(stopped, []*fakeUpdater{updater2, updater1}, "should stop in reverse order")
 }
 
 func TestControllerStopsAnyStartedUpdatersIfOneFailsToStart(t *testing.T) {
 	// given
-	assert := assert.New(t)
+	asserter := assert.New(t)
 	updater1 := new(fakeUpdater)
 	updater1.On("Start").Return(nil)
 	updater1.On("Stop").Return(nil)
@@ -163,7 +163,7 @@ func TestControllerStopsAnyStartedUpdatersIfOneFailsToStart(t *testing.T) {
 	})
 
 	// when
-	assert.Error(controller.Start())
+	asserter.Error(controller.Start())
 
 	// then
 	updater1.AssertExpectations(t)
@@ -172,46 +172,46 @@ func TestControllerStopsAnyStartedUpdatersIfOneFailsToStart(t *testing.T) {
 
 func TestControllerCannotBeRestarted(t *testing.T) {
 	// given
-	assert := assert.New(t)
+	asserter := assert.New(t)
 	controller := newController(createDefaultStubs())
 
 	// and
-	assert.NoError(controller.Start())
-	assert.NoError(controller.Stop())
+	asserter.NoError(controller.Start())
+	asserter.NoError(controller.Stop())
 
 	// then
-	assert.Error(controller.Start())
-	assert.Error(controller.Stop())
+	asserter.Error(controller.Start())
+	asserter.Error(controller.Stop())
 }
 
 func TestControllerStartCannotBeCalledTwice(t *testing.T) {
 	// given
-	assert := assert.New(t)
+	asserter := assert.New(t)
 	controller := newController(createDefaultStubs())
 
 	// expect
-	assert.NoError(controller.Start())
-	assert.Error(controller.Start())
-	assert.NoError(controller.Stop())
+	asserter.NoError(controller.Start())
+	asserter.Error(controller.Start())
+	asserter.NoError(controller.Stop())
 }
 
 func TestControllerIsUnhealthyUntilStarted(t *testing.T) {
 	// given
-	assert := assert.New(t)
+	asserter := assert.New(t)
 	controller := newController(createDefaultStubs())
 
 	// expect
-	assert.Error(controller.Health(), "should be unhealthy until started")
-	assert.NoError(controller.Start())
+	asserter.Error(controller.Health(), "should be unhealthy until started")
+	asserter.NoError(controller.Start())
 	time.Sleep(smallWaitTime)
-	assert.NoError(controller.Health(), "should be healthy after started")
-	assert.NoError(controller.Stop())
+	asserter.NoError(controller.Health(), "should be healthy after started")
+	asserter.NoError(controller.Stop())
 	time.Sleep(smallWaitTime)
-	assert.Error(controller.Health(), "should be unhealthy after stopped")
+	asserter.Error(controller.Health(), "should be unhealthy after stopped")
 }
 
 func TestControllerIsUnhealthyIfUpdaterIsUnhealthy(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 	_, client := createDefaultStubs()
 	updater := new(fakeUpdater)
 	controller := newController(updater, client)
@@ -224,9 +224,9 @@ func TestControllerIsUnhealthyIfUpdaterIsUnhealthy(t *testing.T) {
 	lbErr := fmt.Errorf("FakeUpdater: dead")
 	updater.On("Health").Return(fmt.Errorf("dead")).Once()
 
-	assert.NoError(controller.Start())
-	assert.NoError(controller.Health())
-	assert.Equal(lbErr, controller.Health())
+	asserter.NoError(controller.Start())
+	asserter.NoError(controller.Health())
+	asserter.Equal(lbErr, controller.Health())
 
 	_ = controller.Stop()
 }
@@ -245,7 +245,7 @@ func TestControllerReturnsErrorIfUpdaterFails(t *testing.T) {
 
 func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	// given
-	assert := assert.New(t)
+	asserter := assert.New(t)
 	updater := new(fakeUpdater)
 	client := new(fake.FakeClient)
 	controller := newController(updater, client)
@@ -265,16 +265,16 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	client.On("WatchIngresses").Return(ingressWatcher)
 	client.On("WatchServices").Return(serviceWatcher)
 	client.On("WatchNamespaces").Return(namespaceWatcher)
-	assert.NoError(controller.Start())
+	asserter.NoError(controller.Start())
 
 	// expect
 	updateCh <- struct{}{}
 	time.Sleep(smallWaitTime)
-	assert.NoError(controller.Health())
+	asserter.NoError(controller.Health())
 
 	updateCh <- struct{}{}
 	time.Sleep(smallWaitTime)
-	assert.Error(controller.Health())
+	asserter.Error(controller.Health())
 
 	// cleanup
 	_ = controller.Stop()
@@ -1096,7 +1096,7 @@ var expectGetIngresses = func(client *fake.FakeClient, ingresses []*v1beta1.Ingr
 
 func runAndAssertUpdates(t *testing.T, clientExpectation clientExpectation, test testSpec) {
 	//given
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	fmt.Printf("test: %s\n", test.description)
 	// add ingress pointers to entries
@@ -1129,14 +1129,14 @@ func runAndAssertUpdates(t *testing.T, clientExpectation clientExpectation, test
 	client.On("WatchNamespaces").Return(namespaceWatcher)
 
 	//when
-	assert.NoError(controller.Start())
+	asserter.NoError(controller.Start())
 	ingressCh <- struct{}{}
 	serviceCh <- struct{}{}
 	namespaceCh <- struct{}{}
 	time.Sleep(smallWaitTime)
 
 	//then
-	assert.NoError(controller.Stop())
+	asserter.NoError(controller.Stop())
 	time.Sleep(smallWaitTime)
 	updater.AssertExpectations(t)
 	client.AssertExpectations(t)
@@ -1254,7 +1254,7 @@ func createIngressesFixture(namespace string, host string, serviceName string, s
 	}
 
 	ingressDefinition := createIngressWithoutRules()
-	ingressRules := []v1beta1.IngressRule{}
+	var ingressRules []v1beta1.IngressRule
 
 	if host != "" {
 		ingressRuleValue := v1beta1.IngressRuleValue{}

@@ -29,7 +29,7 @@ http {
     # Track extended virtual host stats.
     vhost_traffic_status_zone shared:vhost_traffic_status:{{ .VhostStatsSharedMemory }}m;
 
-    # Server names hash bucket sizes. Set based on nginx log messages.
+    # Server names hash bucket sizes. Set based on NGINX log messages.
     {{ if gt .ServerNamesHashBucketSize 0 }}server_names_hash_bucket_size {{ .ServerNamesHashBucketSize }};{{ end }}
     {{ if gt .ServerNamesHashMaxSize 0 }}server_names_hash_max_size {{ .ServerNamesHashMaxSize }};{{ end }}
 
@@ -40,7 +40,7 @@ http {
     # Optimize for latency over throughput for persistent connections.
     tcp_nodelay on;
 
-    # Disable nginx version leakage to external clients.
+    # Disable NGINX version leakage to external clients.
     server_tokens off;
 
     {{ if .ClientHeaderBufferSize }}
@@ -108,7 +108,7 @@ http {
 
     # Disable buffering, as we'll be interacting with ELBs with http listeners, which we assume will
     # quickly consume and generate responses and requests.
-    # This should be enabled if nginx will directly serve traffic externally to unknown clients.
+    # This should be enabled if NGINX will directly serve traffic externally to unknown clients.
     proxy_buffering off;
 
     # Don't mess with redirects.
