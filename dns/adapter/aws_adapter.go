@@ -6,18 +6,17 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	aws_elb "github.com/aws/aws-sdk-go/service/elb"
-	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
+	awselb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/sky-uk/feed/elb"
 )
 
-// FindELBsFunc defines a function which find ELBs based on a label
-type FindELBsFunc func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error)
+// FindELBsFunc defines a function which find ELBs based on a tag value
+type FindELBsFunc func(elb elb.ELB, tagValue string) (map[string]elb.LoadBalancerDetails, error)
 
 // ALB represents the subset of AWS operations needed for dns_updater.go
 type ALB interface {
-	DescribeLoadBalancers(input *aws_alb.DescribeLoadBalancersInput) (*aws_alb.DescribeLoadBalancersOutput, error)
+	DescribeLoadBalancers(input *awselb.DescribeLoadBalancersInput) (*awselb.DescribeLoadBalancersOutput, error)
 }
 
 // AWSAdapterConfig describes the configuration of a FrontendAdapter which uses AWS ELBs and/or ALBs
@@ -48,8 +47,8 @@ func NewAWSAdapter(config *AWSAdapterConfig) (FrontendAdapter, error) {
 			return nil, fmt.Errorf("unable to open AWS session: %v", err)
 		}
 
-		config.ALBClient = aws_alb.New(session)
-		config.ELBClient = aws_elb.New(session)
+		config.ALBClient = awselb.New(session)
+		config.ELBClient = awselb.New(session)
 	}
 
 	if config.ELBFinder == nil {
@@ -110,7 +109,7 @@ func (a *awsAdapter) initALBs(schemeToFrontendMap map[string]DNSDetails) error {
 		return nil
 	}
 
-	req := &aws_alb.DescribeLoadBalancersInput{Names: aws.StringSlice(a.albNames)}
+	req := &awselb.DescribeLoadBalancersInput{Names: aws.StringSlice(a.albNames)}
 
 	for {
 		resp, err := a.alb.DescribeLoadBalancers(req)

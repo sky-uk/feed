@@ -8,7 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+	awselb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/k8s"
@@ -32,7 +32,7 @@ func New(conf Config) (controller.Updater, error) {
 	}
 
 	return &status{
-		awsElb:              aws_elb.New(session),
+		awsElb:              awselb.New(session),
 		frontendTagValue:    conf.FrontendTagValue,
 		ingressNameTagValue: conf.IngressNameTagValue,
 		loadBalancers:       make(map[string]v1.LoadBalancerStatus),
