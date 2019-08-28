@@ -16,28 +16,27 @@ import (
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util"
 	v1 "k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 const (
 	ingressAllowAnnotation   = "sky.uk/allow"
 	frontendSchemeAnnotation = "sky.uk/frontend-scheme"
 
-	// Deprecated: retained to maintain backwards compatibility.
-	frontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
-	stripPathAnnotation         = "sky.uk/strip-path"
-	exactPathAnnotation         = "sky.uk/exact-path"
+	stripPathAnnotation = "sky.uk/strip-path"
+	exactPathAnnotation = "sky.uk/exact-path"
 
-	// Old annotation - still supported to maintain backwards compatibility.
-	legacyBackendKeepAliveSeconds = "sky.uk/backend-keepalive-seconds"
-	backendTimeoutSeconds         = "sky.uk/backend-timeout-seconds"
-	proxyBufferSizeAnnotation     = "sky.uk/proxy-buffer-size-in-kb"
-	proxyBufferBlocksAnnotation   = "sky.uk/proxy-buffer-blocks"
+	backendTimeoutSeconds       = "sky.uk/backend-timeout-seconds"
+	proxyBufferSizeAnnotation   = "sky.uk/proxy-buffer-size-in-kb"
+	proxyBufferBlocksAnnotation = "sky.uk/proxy-buffer-blocks"
 
 	maxAllowedProxyBufferSize   = 32
 	maxAllowedProxyBufferBlocks = 8
 
 	// sets Nginx (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#max_conns)
 	backendMaxConnections = "sky.uk/backend-max-connections"
+
+	ingressClassAnnotation = "kubernetes.io/ingress.class"
 )
 
 // Controller operates on ingress resources, listening for updates and notifying its Updaters.
@@ -66,6 +65,9 @@ type controller struct {
 	started                      bool
 	updatesHealth                util.SafeError
 	sync.Mutex
+	name                      string
+	includeClasslessIngresses bool
+	namespaceSelector         *k8s.NamespaceSelector
 }
 
 // Config for creating a new ingress controller.
@@ -79,6 +81,9 @@ type Config struct {
 	DefaultBackendMaxConnections int
 	DefaultProxyBufferSize       int
 	DefaultProxyBufferBlocks     int
+	Name                         string
+	IncludeClasslessIngresses    bool
+	NamespaceSelector            *k8s.NamespaceSelector
 }
 
 // New creates an ingress controller.
@@ -94,6 +99,9 @@ func New(conf Config) Controller {
 		defaultProxyBufferSize:       conf.DefaultProxyBufferSize,
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
 		doneCh:                       make(chan struct{}),
+		name:                         conf.Name,
+		includeClasslessIngresses:    conf.IncludeClasslessIngresses,
+		namespaceSelector:            conf.NamespaceSelector,
 	}
 }
 
@@ -132,7 +140,8 @@ func (c *controller) Start() error {
 func (c *controller) watchForUpdates() {
 	ingressWatcher := c.client.WatchIngresses()
 	serviceWatcher := c.client.WatchServices()
-	c.watcher = k8s.CombineWatchers(ingressWatcher, serviceWatcher)
+	namespaceWatcher := c.client.WatchNamespaces()
+	c.watcher = k8s.CombineWatchers(ingressWatcher, serviceWatcher, namespaceWatcher)
 	c.watcherDone.Add(1)
 	go c.handleUpdates()
 }
@@ -162,7 +171,13 @@ func (c *controller) updateIngresses() (err error) {
 			err = fmt.Errorf("unexpected error: %v: %v", value, string(debug.Stack()))
 		}
 	}()
-	ingresses, err := c.client.GetIngresses()
+
+	var ingresses []*v1beta1.Ingress
+	if c.namespaceSelector == nil {
+		ingresses, err = c.client.GetAllIngresses()
+	} else {
+		ingresses, err = c.client.GetIngresses(c.namespaceSelector)
+	}
 	log.Infof("Found %d ingresses", len(ingresses))
 	if err != nil {
 		return err
@@ -184,31 +199,34 @@ func (c *controller) updateIngresses() (err error) {
 
 					serviceName := serviceName{namespace: ingress.Namespace, name: path.Backend.ServiceName}
 
-					if address := serviceMap[serviceName]; address != "" {
+					if address := serviceMap[serviceName]; address == "" {
+						skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
+					} else if !c.ingressClassSupported(ingress) {
+						skipped = append(skipped, fmt.Sprintf("%s/%s (ingress requests class [%s]; this instance is [%s])",
+							ingress.Namespace, ingress.Name, ingress.Annotations[ingressClassAnnotation], c.name))
+					} else {
 						entry := IngressEntry{
-							Namespace:             ingress.Namespace,
-							Name:                  ingress.Name,
-							Host:                  rule.Host,
-							Path:                  path.Path,
-							ServiceAddress:        address,
-							ServicePort:           int32(path.Backend.ServicePort.IntValue()),
-							Allow:                 c.defaultAllow,
-							StripPaths:            c.defaultStripPath,
-							ExactPath:             c.defaultExactPath,
-							BackendTimeoutSeconds: c.defaultBackendTimeout,
+							Namespace:      ingress.Namespace,
+							Name:           ingress.Name,
+							Host:           rule.Host,
+							Path:           path.Path,
+							ServiceAddress: address,
+							ServicePort:    int32(path.Backend.ServicePort.IntValue()),
+							Allow:          c.defaultAllow,
+							StripPaths:     c.defaultStripPath,
+							ExactPath:      c.defaultExactPath, BackendTimeoutSeconds: c.defaultBackendTimeout,
 							BackendMaxConnections: c.defaultBackendMaxConnections,
 							ProxyBufferSize:       c.defaultProxyBufferSize,
 							ProxyBufferBlocks:     c.defaultProxyBufferBlocks,
 							CreationTimestamp:     ingress.CreationTimestamp.Time,
 							Ingress:               ingress,
+							IngressClass:          ingress.Annotations[ingressClassAnnotation],
 						}
 
 						log.Debugf("Found ingress to update: %s", ingress.Name)
 
 						if lbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
 							entry.LbScheme = lbScheme
-						} else {
-							entry.LbScheme = ingress.Annotations[frontendElbSchemeAnnotation]
 						}
 
 						if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
@@ -225,7 +243,8 @@ func (c *controller) updateIngresses() (err error) {
 							} else if stripPath == "false" {
 								entry.StripPaths = false
 							} else {
-								log.Warnf("Ingress %s has an invalid strip path annotation: %s. Using default", ingress.Name, stripPath)
+								log.Warnf("Ingress %s/%s has an invalid strip path annotation [%s]. Using default",
+									ingress.Namespace, ingress.Name, stripPath)
 							}
 						}
 
@@ -235,13 +254,9 @@ func (c *controller) updateIngresses() (err error) {
 							} else if exactPath == "false" {
 								entry.ExactPath = false
 							} else {
-								log.Warnf("Ingress %s has an invalid exact path annotation: %s. Using default", ingress.Name, exactPath)
+								log.Warnf("Ingress %s/%s has an invalid exact path annotation [%s]. Using default",
+									ingress.Namespace, ingress.Name, exactPath)
 							}
-						}
-
-						if backendKeepAlive, ok := ingress.Annotations[legacyBackendKeepAliveSeconds]; ok {
-							tmp, _ := strconv.Atoi(backendKeepAlive)
-							entry.BackendTimeoutSeconds = tmp
 						}
 
 						if timeout, ok := ingress.Annotations[backendTimeoutSeconds]; ok {
@@ -277,8 +292,6 @@ func (c *controller) updateIngresses() (err error) {
 						} else {
 							skipped = append(skipped, fmt.Sprintf("%s (%v)", entry.NamespaceName(), err))
 						}
-					} else {
-						skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
 					}
 				}
 
@@ -300,6 +313,19 @@ func (c *controller) updateIngresses() (err error) {
 	}
 
 	return nil
+}
+
+func (c *controller) ingressClassSupported(ingress *v1beta1.Ingress) bool {
+
+	isValid := false
+
+	if ingressClass, ok := ingress.Annotations[ingressClassAnnotation]; ok {
+		isValid = ingressClass == c.name
+	} else {
+		isValid = c.includeClasslessIngresses
+	}
+
+	return isValid
 }
 
 type serviceName struct {

@@ -30,3 +30,8 @@ func (kv *KeyValues) Set(value string) error {
 
 	return nil
 }
+
+// Type returns the identifier for this type
+func (kv *KeyValues) Type() string {
+	return "keyvalues"
+}

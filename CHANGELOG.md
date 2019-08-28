@@ -1,3 +1,13 @@
+# v2.0.0
+* Added support for multiple feed-ingress controllers per cluster
+* Feed-ingress invocation split into subcommands, using double-dashed arguments
+* Remove support for deprecated ingress resource annotations:
+  `sky.uk/frontend-elb-scheme` (replacement `sky.uk/frontend-scheme`),
+  `sky.uk/backend-keepalive-seconds` (replacement `sky.uk/backend-timeout-seconds`)
+* Remove deprecated feed-ingress command-line argument `--nginx-default-backend-keepalive-seconds` (replacement `--nginx-default-backend-timeout-seconds`)
+
+This is a breaking change.  Follow the instructions to [upgrade from v1 to v2](https://github.com/sky-uk/feed#upgrade-from-v1-to-v2)
+
 # v1.14.2
 * Skip ingress when http and/or path are not defined
 

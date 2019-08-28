@@ -30,7 +30,7 @@ spec:
       restartPolicy: Always
 
       containers:
-      - image: skycirrus/feed-ingress:v1.3.0
+      - image: skycirrus/feed-ingress:v2.0.0
         name: feed-ingress
 
         resources:
@@ -55,73 +55,84 @@ spec:
           protocol: TCP
 
         args:
+        - elb
+
         # Ingress nginx port that ELBs will direct traffic towards.
-        - -ingress-port=8080
+        - --ingress-port=8080
 
         # Ingress nginx port for ssl traffic
-        - -ingress-https-port=8443
+        - --ingress-https-port=8443
 
         # Health port on nginx, used by ELBs to determine health.
-        - -ingress-health-port=8081
+        - --ingress-health-port=8081
 
         # Default security whitelist for ingress. Can be overridden with the sky.uk/allow annotation.
-        - -ingress-allow=10.0.0.0/8
+        - --ingress-allow=10.0.0.0/8
 
         # Set default ssl path + name file without extension - expected default-ssl.crt and default-ssl.key into /etc/ssl/default-ssl/
-        - -ssl-path=/etc/ssl/default-ssl/default-ssl
+        - --ssl-path=/etc/ssl/default-ssl/default-ssl
 
         # Health port for the controller to respond on.
-        - -health-port=12082
+        - --health-port=12082
 
         # Log level of nginx. Recommended to leave at error, or set to crit if too much spam.
-        - -nginx-loglevel=error
+        - --nginx-loglevel=error
 
         # How often to reload nginx if needed. Setting too low can cause 504s from the ELB in the case of heavy
         # ingress updates.
-        - -nginx-update-period=5m
+        - --nginx-update-period=5m
 
         # Use pushgateway for prometheus metrics. Optional - metrics available at /metrics on health port.
-        - -pushgateway=mypushgateway.com
-        - -pushgateway-interval=20
-        - -pushgateway-label=k8s_cluster=dev
-        - -pushgateway-label=environment=dev
-        - -pushgateway-label=version=v1.0.2
+        - --pushgateway=mypushgateway.com
+        - --pushgateway-interval=20
+        - --pushgateway-label=k8s_cluster=dev
+        - --pushgateway-label=environment=dev
+        - --pushgateway-label=version=v1.0.2
+
+        # Set status to unhealthy if fewer than this number of matching ELBs are found
+        - --elb-expected-number=2
 
         # Attach to the ELBs with label sky.uk/KubernetesClusterFrontend set to this value.
-        - -elb-expected-number=2
-        - -elb-label-value=dev
+        - --elb-frontend-tag-value=dev
+
+        # Attach to the ELBs with label sky.uk/KubernetesClusterIngressClass set to this value
+        # and adopt ingress resources with a matching kubernetes.io/ingress.class value
+        - --ingress-class=main
+
+        # Only consider ingresses in namespaces with this label. Optional.
+        - --ingress-controller-namespace-selector=app=myapp
 
         # ELB drain time - time to wait while ELB drains requests from feed when stopping. Should be
         # at least as long as the ELBs drain timeout.
-        - -drain-delay=30s
+        - --drain-delay=30s
 
         # Each worker uses a full cpu, so scale up vertically on a box by increasing this value.
-        - -nginx-workers=1
+        - --nginx-workers=1
 
         # Connections*workers needs to be less than available ephemeral ports. Linux default is 60999-32768=28231.
-        - -nginx-worker-connections=20000
+        - --nginx-worker-connections=20000
 
         # Needs to be greater than any frontend idle timeout.
-        - -nginx-keepalive-seconds=304
+        - --nginx-keepalive-seconds=304
 
         # CIDRs of the ELBs to trust X-Forwarded-For, for determining client IP allow/deny.
-        - -nginx-trusted-frontends=10.0.0.0/8
+        - --nginx-trusted-frontends=10.0.0.0/8
 
         # Max number of idle connections to a backend.
-        - -nginx-backend-keepalive-count=1024
+        - --nginx-backend-keepalive-count=1024
 
         # Default max time for a request to a backend. Can be overridden by an annotation on the ingress resource.
-        - -nginx-default-backend-timeout-seconds=5
+        - --nginx-default-backend-timeout-seconds=5
 
         # Needs to be greater than 64 to support very large domain names.
-        - -nginx-server-names-hash-bucket-size=128
+        - --nginx-server-names-hash-bucket-size=128
 
         # Access logs turned on - add or remove the "-access-log" flag to turn them on/off.
-        - -access-log
-        - -access-log-dir=/var/log/nginx
+        - --access-log
+        - --access-log-dir=/var/log/nginx
 
         # Add custom headers to the access logs.
-        - -nginx-log-headers=X-Amzn-Trace-Id
+        - --nginx-log-headers=X-Amzn-Trace-Id
 
         # Controller health determines readiness. This has no effect on ingress traffic from ELBs.
         readinessProbe:

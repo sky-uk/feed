@@ -8,6 +8,9 @@ metadata:
     # Set to internal or internet-facing, so feed-dns will point to the correct endpoint.
     sky.uk/frontend-scheme: internal
 
+    # Specify the feed-ingress controller that should adopt this ingress
+    kubernetes.io/ingress.class: main
+
     # nginx allow clause for this ingress.
     sky.uk/allow: 10.10.82.0/24
 

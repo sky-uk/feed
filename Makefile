@@ -1,5 +1,15 @@
+ifdef VERSION
+	version := $(VERSION)
+else
+	git_rev := $(shell git rev-parse --short HEAD)
+	git_tag := $(shell git tag --points-at=$(git_rev))
+	version := $(if $(git_tag),$(git_tag),dev-$(git_rev))
+endif
+
 pkgs := $(shell go list ./... | grep -v /vendor/)
 files := $(shell find . -path ./vendor -prune -o -name '*.go' -print)
+build_time := $(shell date -u)
+ldflags := -X "github.com/sky-uk/feed/feed-ingress/cmd.version=$(version)" -X "github.com/sky-uk/feed/feed-ingress/cmd.buildTime=$(build_time)"
 
 .PHONY: all format test build vet lint copy docker release checkformat check clean
 
@@ -9,9 +19,9 @@ travis : checkformat check docker
 
 setup:
 	@echo "== setup"
-	go get github.com/golang/lint/golint
-	go get golang.org/x/tools/cmd/goimports
-	go get github.com/golang/dep/cmd/dep
+	go get -u golang.org/x/lint/golint
+	go get -u golang.org/x/tools/cmd/goimports
+	go get -u github.com/golang/dep/cmd/dep
 	dep ensure
 
 format :
@@ -21,7 +31,7 @@ format :
 
 build :
 	@echo "== build"
-	@go install -v ./cmd/...
+	@go install -v ./feed-ingress/... ./feed-dns/...
 
 unformatted = $(shell goimports -l $(files))
 

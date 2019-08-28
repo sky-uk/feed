@@ -249,6 +249,14 @@
   revision = "50d4dbd4eb0e84778abe37cefef140271d96fade"
 
 [[projects]]
+  digest = "1:870d441fe217b8e689d7949fef6e43efbc787e50f200cb1e70dbca9204a1d6be"
+  name = "github.com/inconshreveable/mousetrap"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
+  version = "v1.0"
+
+[[projects]]
   digest = "1:e22af8c7518e1eab6f2eab2b7d7558927f816262586cd6ed9f349c97a6c285c4"
   name = "github.com/jmespath/go-jmespath"
   packages = ["."]
@@ -406,11 +414,20 @@
   version = "0.1.0"
 
 [[projects]]
-  digest = "1:ce8848a6fa8a2014d5fd57b5caa9c3c8000e29fb4cfe1b5e3c3d340ce766d56e"
+  digest = "1:e096613fb7cf34743d49af87d197663cfccd61876e2219853005a57baedfa562"
+  name = "github.com/spf13/cobra"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "f2b07da1e2c38d5f12845a4f607e2e1018cbb1f5"
+  version = "v0.0.5"
+
+[[projects]]
+  digest = "1:c1b1102241e7f645bc8e0c22ae352e8f0dc6484b6cb4d132fa9f24174e0119e2"
   name = "github.com/spf13/pflag"
   packages = ["."]
   pruneopts = "UT"
-  revision = "5ccb023bc27df288a957c5e994cd44fd19619465"
+  revision = "298182f68c66c05229eb03ac171abe6e309ee79a"
+  version = "v1.0.3"
 
 [[projects]]
   digest = "1:9bf0f8c6684cd6cb34d838c6f8a07043d6c48be79ffe271cae99633990f8d786"
@@ -757,6 +774,8 @@
     "github.com/sethgrid/pester",
     "github.com/sirupsen/logrus",
     "github.com/sky-uk/merlin/types",
+    "github.com/spf13/cobra",
+    "github.com/spf13/pflag",
     "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/mock",
     "github.com/vishvananda/netlink",
@@ -767,6 +786,7 @@
     "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/pkg/api/v1",
     "k8s.io/client-go/pkg/apis/extensions/v1beta1",
+    "k8s.io/client-go/pkg/apis/meta/v1",
     "k8s.io/client-go/pkg/fields",
     "k8s.io/client-go/pkg/util/intstr",
     "k8s.io/client-go/tools/cache",
