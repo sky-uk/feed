@@ -42,7 +42,7 @@ func init() {
 	elbCmd.Flags().StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
 	elbCmd.Flags().StringVar(&elbFrontendTagValue, "elb-frontend-tag-value", defaultElbFrontendTagValue,
-		"Attach to ELBs tagged with "+elb.ElbTag+"=value. Leave empty to not attach.")
+		"Attach to ELBs tagged with "+elb.FrontendTag+"=value. Leave empty to not attach.")
 	elbCmd.Flags().IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")

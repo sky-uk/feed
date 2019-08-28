@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	aws_elb "github.com/aws/aws-sdk-go/service/elb"
-	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
+	awselb "github.com/aws/aws-sdk-go/service/elb"
+	awsalb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
@@ -58,27 +58,27 @@ type mockALB struct {
 	mock.Mock
 }
 
-func (m *mockALB) DescribeLoadBalancers(input *aws_alb.DescribeLoadBalancersInput) (*aws_alb.DescribeLoadBalancersOutput, error) {
+func (m *mockALB) DescribeLoadBalancers(input *awsalb.DescribeLoadBalancersInput) (*awsalb.DescribeLoadBalancersOutput, error) {
 	args := m.Called(input)
-	return args.Get(0).(*aws_alb.DescribeLoadBalancersOutput), args.Error(1)
+	return args.Get(0).(*awsalb.DescribeLoadBalancersOutput), args.Error(1)
 }
 
 func (m *mockALB) mockDescribeLoadBalancers(names []string, lbDetails []lbDetail, err error) {
-	var lbs []*aws_alb.LoadBalancer
+	var lbs []*awsalb.LoadBalancer
 
 	for _, lb := range lbDetails {
-		lbs = append(lbs, &aws_alb.LoadBalancer{
+		lbs = append(lbs, &awsalb.LoadBalancer{
 			Scheme:                aws.String(lb.scheme),
 			DNSName:               aws.String(lb.dnsName),
 			CanonicalHostedZoneId: aws.String(lbHostedZoneID),
 		})
 	}
 
-	out := &aws_alb.DescribeLoadBalancersOutput{
+	out := &awsalb.DescribeLoadBalancersOutput{
 		LoadBalancers: lbs,
 	}
 
-	m.On("DescribeLoadBalancers", &aws_alb.DescribeLoadBalancersInput{
+	m.On("DescribeLoadBalancers", &awsalb.DescribeLoadBalancersInput{
 		Names: aws.StringSlice(names),
 	}).Return(out, err)
 }
@@ -106,19 +106,19 @@ func (m *mockELB) mockFindFrontEndElbs(labelValue string, lbDetails []lbDetail, 
 	m.On("FindFrontEndElbs", mock.Anything, labelValue).Return(lbs, err)
 }
 
-func (m *mockELB) DescribeLoadBalancers(input *aws_elb.DescribeLoadBalancersInput) (*aws_elb.DescribeLoadBalancersOutput, error) {
+func (m *mockELB) DescribeLoadBalancers(input *awselb.DescribeLoadBalancersInput) (*awselb.DescribeLoadBalancersOutput, error) {
 	return nil, nil
 }
 
-func (m *mockELB) DescribeTags(input *aws_elb.DescribeTagsInput) (*aws_elb.DescribeTagsOutput, error) {
+func (m *mockELB) DescribeTags(input *awselb.DescribeTagsInput) (*awselb.DescribeTagsOutput, error) {
 	return nil, nil
 }
 
-func (m *mockELB) RegisterInstancesWithLoadBalancer(input *aws_elb.RegisterInstancesWithLoadBalancerInput) (*aws_elb.RegisterInstancesWithLoadBalancerOutput, error) {
+func (m *mockELB) RegisterInstancesWithLoadBalancer(input *awselb.RegisterInstancesWithLoadBalancerInput) (*awselb.RegisterInstancesWithLoadBalancerOutput, error) {
 	return nil, nil
 }
 
-func (m *mockELB) DeregisterInstancesFromLoadBalancer(input *aws_elb.DeregisterInstancesFromLoadBalancerInput) (*aws_elb.DeregisterInstancesFromLoadBalancerOutput, error) {
+func (m *mockELB) DeregisterInstancesFromLoadBalancer(input *awselb.DeregisterInstancesFromLoadBalancerInput) (*awselb.DeregisterInstancesFromLoadBalancerOutput, error) {
 	return nil, nil
 }
 
@@ -267,9 +267,7 @@ func TestRecordSetUpdates(t *testing.T) {
 	}{
 		{
 			"Empty update has no change",
-			controller.IngressEntries{},
-			[]*route53.ResourceRecordSet{},
-			[]*route53.Change{},
+			nil, nil, nil,
 		},
 		{
 			"Add new record",
@@ -327,7 +325,7 @@ func TestRecordSetUpdates(t *testing.T) {
 		},
 		{
 			"Deleting existing record",
-			controller.IngressEntries{},
+			nil,
 			[]*route53.ResourceRecordSet{
 				{
 					Name: aws.String("foo.com."),
@@ -436,7 +434,7 @@ func TestRecordSetUpdates(t *testing.T) {
 				},
 			},
 			nil,
-			[]*route53.Change{},
+			nil,
 		},
 		{
 			"Duplicate hosts are not duplicated in changeset",
@@ -527,7 +525,7 @@ func TestRecordSetUpdates(t *testing.T) {
 					EvaluateTargetHealth: aws.Bool(false),
 				},
 			}},
-			[]*route53.Change{},
+			nil,
 		},
 	}
 
@@ -566,8 +564,8 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 			"Empty update has no change",
 			internalAndExternalFrontends,
 			controller.IngressEntries{},
-			[]*route53.ResourceRecordSet{},
-			[]*route53.Change{},
+			nil,
+			nil,
 		},
 		{
 			"Add new record",
@@ -749,7 +747,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 				},
 			},
 			nil,
-			[]*route53.Change{},
+			nil,
 		},
 		{
 			"Duplicate hosts are not duplicated in changeset",
@@ -846,7 +844,7 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 					},
 				},
 			}},
-			[]*route53.Change{},
+			nil,
 		},
 		{
 			"Updates TTL on a CNAME record when it has changed",
@@ -925,8 +923,8 @@ func TestRecordSetUpdatesWithAddressArguments(t *testing.T) {
 				LbScheme:    externalScheme,
 				ServicePort: 80,
 			}},
-			[]*route53.ResourceRecordSet{},
-			[]*route53.Change{},
+			nil,
+			nil,
 		},
 	}
 

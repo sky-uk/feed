@@ -7,19 +7,19 @@ import (
 )
 
 func TestSettingCSV(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	csv := CommaSeparatedValues{}
-	csv.Set("first,second,third")
+	_ = csv.Set("first,second,third")
 
-	assert.Equal(CommaSeparatedValues{"first", "second", "third"}, csv)
+	asserter.Equal(CommaSeparatedValues{"first", "second", "third"}, csv)
 }
 
 func TestSettingEmptyCSV(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	csv := CommaSeparatedValues{}
-	csv.Set("")
+	_ = csv.Set("")
 
-	assert.Equal(CommaSeparatedValues{}, csv)
+	asserter.Equal(CommaSeparatedValues{}, csv)
 }

@@ -35,8 +35,9 @@ type client struct {
 // New creates a route53 client used to interact with aws
 func New(hostedZone string, retries int) Route53Client {
 	config := aws.Config{MaxRetries: aws.Int(retries)}
+	awsSession, _ := session.NewSession()
 	return &client{
-		r53:              route53.New(session.New(), &config),
+		r53:              route53.New(awsSession, &config),
 		hostedZone:       hostedZone,
 		maxRecordChanges: maxRecordChanges,
 	}
@@ -76,7 +77,7 @@ func (dns *client) UpdateRecordSets(changes []*route53.Change) error {
 
 // GetRecords gets a list of DNS records from aws.
 func (dns *client) GetRecords() ([]*route53.ResourceRecordSet, error) {
-	records := []*route53.ResourceRecordSet{}
+	var records []*route53.ResourceRecordSet
 	request := &route53.ListResourceRecordSetsInput{
 		HostedZoneId: aws.String(dns.hostedZone),
 	}

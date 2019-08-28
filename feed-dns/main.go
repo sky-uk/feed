@@ -48,9 +48,9 @@ func init() {
 	flag.BoolVar(&debug, "debug", false,
 		"Enable debug logging.")
 	flag.StringVar(&kubeconfig, "kubeconfig", "",
-		"Path to kubeconfig for connecting to the apiserver. Leave blank to connect inside a cluster.")
+		"Path to kubeconfig for connecting to the API server. Leave blank to connect inside a cluster.")
 	flag.DurationVar(&resyncPeriod, "resync-period", defaultResyncPeriod,
-		"Resync with the apiserver periodically to handle missed updates.")
+		"Resync with the API server periodically to handle missed updates.")
 	flag.IntVar(&healthPort, "health-port", defaultHealthPort,
 		"Port for checking the health of the ingress controller.")
 	flag.Var(&albNames, "alb-names",
@@ -58,12 +58,12 @@ func init() {
 	flag.StringVar(&elbRegion, "elb-region", defaultElbRegion,
 		"AWS region for ELBs.")
 	flag.StringVar(&elbLabelValue, "elb-label-value", defaultElbLabelValue,
-		"Alias to ELBs tagged with "+elb.ElbTag+"=value. Route53 entries will be created to these,"+
+		"Alias to ELBs tagged with "+elb.FrontendTag+"=value. Route53 entries will be created to these,"+
 			"depending on the scheme.")
 	flag.StringVar(&r53HostedZone, "r53-hosted-zone", defaultHostedZone,
 		"Route53 hosted zone id to manage.")
 	flag.StringVar(&pushgatewayURL, "pushgateway", "",
-		"Prometheus pushgateway URL for pushing metrics. Leave blank to not push metrics.")
+		"Prometheus Pushgateway URL for pushing metrics. Leave blank to not push metrics.")
 	flag.IntVar(&pushgatewayIntervalSeconds, "pushgateway-interval", defaultPushgatewayIntervalSeconds,
 		"Interval in seconds for pushing metrics.")
 	flag.Var(&pushgatewayLabels, "pushgateway-label",
@@ -96,16 +96,16 @@ func main() {
 	}
 	dnsUpdater := dns.New(r53HostedZone, lbAdapter, awsAPIRetries)
 
-	controller := controller.New(controller.Config{
+	feedController := controller.New(controller.Config{
 		KubernetesClient: client,
 		Updaters:         []controller.Updater{dnsUpdater},
 	})
 
-	cmd.AddHealthMetrics(controller, metrics.PrometheusDNSSubsystem)
-	cmd.AddHealthPort(controller, healthPort)
-	cmd.AddSignalHandler(controller)
+	cmd.AddHealthMetrics(feedController, metrics.PrometheusDNSSubsystem)
+	cmd.AddHealthPort(feedController, healthPort)
+	cmd.AddSignalHandler(feedController)
 
-	if err := controller.Start(); err != nil {
+	if err := feedController.Start(); err != nil {
 		log.Fatal("Error while starting controller: ", err)
 	}
 

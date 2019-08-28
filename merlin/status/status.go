@@ -6,7 +6,7 @@ package status
 import (
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/k8s"
-	k8s_status "github.com/sky-uk/feed/k8s/status"
+	k8sStatus "github.com/sky-uk/feed/k8s/status"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -44,7 +44,7 @@ type status struct {
 func (s *status) Start() error {
 	for lbLabel, cname := range s.cnames {
 		if cname != "" {
-			s.loadBalancers[lbLabel] = k8s_status.GenerateLoadBalancerStatus([]string{cname})
+			s.loadBalancers[lbLabel] = k8sStatus.GenerateLoadBalancerStatus([]string{cname})
 		}
 	}
 	return nil
@@ -59,5 +59,5 @@ func (s *status) Health() error {
 }
 
 func (s *status) Update(ingresses controller.IngressEntries) error {
-	return k8s_status.Update(ingresses, s.loadBalancers, s.kubernetesClient)
+	return k8sStatus.Update(ingresses, s.loadBalancers, s.kubernetesClient)
 }
