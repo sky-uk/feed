@@ -187,7 +187,7 @@ func (c *controller) updateIngresses() (err error) {
 		return err
 	}
 
-	serviceMap := mapNamesToAddresses(services)
+	serviceMap := serviceNamesToClusterIPs(services)
 
 	var skipped []string
 	var entries []IngressEntry
@@ -223,7 +223,7 @@ func (c *controller) updateIngresses() (err error) {
 							IngressClass:          ingress.Annotations[ingressClassAnnotation],
 						}
 
-						log.Debugf("Found ingress to update: %s", ingress.Name)
+						log.Debugf("Found ingress to update: %s/%s", ingress.Namespace, ingress.Name)
 
 						if lbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
 							entry.LbScheme = lbScheme
@@ -301,12 +301,15 @@ func (c *controller) updateIngresses() (err error) {
 		}
 	}
 
-	log.Infof("Updating with %d entries", len(entries))
+	log.Infof("Updating with %d entries from %d total ingresses (skipped %d)", len(entries), len(ingresses), len(skipped))
 	if len(skipped) > 0 {
-		log.Infof("Skipped %d invalid: %s", len(skipped), strings.Join(skipped, ", "))
+		for _, msg := range skipped {
+			log.Infof("Skipped %s", msg)
+		}
 	}
 
 	for _, u := range c.updaters {
+		log.Debugf("Calling updater %v", u)
 		if err := u.Update(entries); err != nil {
 			return err
 		}
@@ -333,7 +336,7 @@ type serviceName struct {
 	name      string
 }
 
-func mapNamesToAddresses(services []*v1.Service) map[serviceName]string {
+func serviceNamesToClusterIPs(services []*v1.Service) map[serviceName]string {
 	m := make(map[serviceName]string)
 
 	for _, svc := range services {

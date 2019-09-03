@@ -4,15 +4,16 @@ import (
 	"time"
 
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/k8s"
-
 	"github.com/sky-uk/feed/elb"
 	elbstatus "github.com/sky-uk/feed/elb/status"
+	"github.com/sky-uk/feed/k8s"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var (
 	region                         string
+	loadBalancerType               loadBalancerTypeValue
 	elbFrontendTagValue            string
 	elbExpectedNumber              int
 	drainDelay                     time.Duration
@@ -21,11 +22,12 @@ var (
 )
 
 const (
+	defaultRegion                         = "eu-west-1"
+	defaultLoadBalancerType               = elb.Classic
 	defaultElbFrontendTagValue            = ""
+	defaultElbExpectedNumber              = 0
 	defaultDrainDelay                     = time.Second * 60
 	defaultTargetGroupDeregistrationDelay = time.Second * 300
-	defaultRegion                         = "eu-west-1"
-	defaultElbExpectedNumber              = 0
 )
 
 var elbCmd = &cobra.Command{
@@ -36,11 +38,40 @@ var elbCmd = &cobra.Command{
 	},
 }
 
+type loadBalancerTypeValue struct {
+	pflag.Value
+	value elb.LoadBalancerType
+}
+
+func (t *loadBalancerTypeValue) Set(s string) error {
+	if s == "standard" {
+		t.value = elb.Standard
+	} else {
+		t.value = defaultLoadBalancerType
+	}
+	return nil
+}
+
+func (t *loadBalancerTypeValue) Get() string {
+	if t.value == elb.Classic {
+		return "classic"
+	} else if t.value == elb.Standard {
+		return "standard"
+	} else {
+		return "unsupported"
+	}
+}
+
+func (t *loadBalancerTypeValue) String() string {
+	return t.Get()
+}
+
 func init() {
 	rootCmd.AddCommand(elbCmd)
 
 	elbCmd.Flags().StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
+	elbCmd.Flags().Var(&loadBalancerType, "lb-type", "Type of load balancer: classic or standard (default classic)")
 	elbCmd.Flags().StringVar(&elbFrontendTagValue, "elb-frontend-tag-value", defaultElbFrontendTagValue,
 		"Attach to ELBs tagged with "+elb.FrontendTag+"=value. Leave empty to not attach.")
 	elbCmd.Flags().IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
@@ -51,7 +82,7 @@ func init() {
 }
 
 func appendElbIngressUpdaters(kubernetesClient k8s.Client, updaters []controller.Updater) ([]controller.Updater, error) {
-	elbUpdater, err := elb.New(region, elbFrontendTagValue, ingressClassName, elbExpectedNumber, drainDelay)
+	elbUpdater, err := elb.New(loadBalancerType.value, region, elbFrontendTagValue, ingressClassName, elbExpectedNumber, drainDelay)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +93,7 @@ func appendElbIngressUpdaters(kubernetesClient k8s.Client, updaters []controller
 		FrontendTagValue:    elbFrontendTagValue,
 		IngressNameTagValue: ingressClassName,
 		KubernetesClient:    kubernetesClient,
+		LoadBalancerType:    loadBalancerType.value,
 	}
 	elbStatusUpdater, err := elbstatus.New(statusConfig)
 	if err != nil {

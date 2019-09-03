@@ -90,7 +90,7 @@ ELBs which are intended to be the frontend for all traffic.
 
 See the command line options with:
 
-    docker run skycirrus/feed-ingress:v2.0.0 -h
+    docker run --privileged skycirrus/feed-ingress:v2.0.0 -h
 
 ### SSL termination on ELB
 

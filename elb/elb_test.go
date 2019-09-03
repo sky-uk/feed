@@ -136,17 +136,17 @@ func mockInstanceMetadata(mockMd *fakeMetadata, instanceID string) {
 }
 
 func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
-	e, _ := New(region, clusterName, ingressName, 1, 0)
+	e, _ := New(Classic, region, clusterName, ingressName, 1, 0)
 	mockElb := &fakeElb{}
 	mockMetadata := &fakeMetadata{}
-	e.(*elb).awsElb = mockElb
+	e.(*elb).awsElbV1 = mockElb
 	e.(*elb).metadata = mockMetadata
 	return e, mockElb, mockMetadata
 }
 
 func TestCanNotCreateUpdaterWithoutFrontEndTagValue(t *testing.T) {
 	//when
-	_, err := New(region, "", ingressName, 1, 0)
+	_, err := New(Classic, region, "", ingressName, 1, 0)
 
 	//then
 	assert.Error(t, err)
@@ -154,7 +154,7 @@ func TestCanNotCreateUpdaterWithoutFrontEndTagValue(t *testing.T) {
 
 func TestCanNotCreateUpdaterWithoutIngressNameTagValue(t *testing.T) {
 	//when
-	_, err := New(region, clusterName, "", 1, 0)
+	_, err := New(Classic, region, clusterName, "", 1, 0)
 
 	//then
 	assert.Error(t, err)
@@ -233,7 +233,7 @@ func TestNameAndDNSNameAndHostedZoneIDLoadBalancerDetailsAreExtracted(t *testing
 	)
 
 	//when
-	frontends, _ := FindFrontEndElbsWithIngressClassName(mockElb, clusterName, ingressName)
+	frontends, _ := FindFrontEndElbsWithIngressClassName(Classic, mockElb, nil, clusterName, ingressName)
 
 	//then
 	assert.Equal(t, "cluster-frontend", frontends[elbInternalScheme].Name)
@@ -254,7 +254,7 @@ func TestFindElbWithoutIngressName(t *testing.T) {
 	)
 
 	//when
-	frontends, _ := FindFrontEndElbs(mockElb, clusterName)
+	frontends, _ := FindFrontEndElbsV1(mockElb, clusterName)
 
 	//then
 	assert.Equal(t, "cluster-frontend", frontends[elbInternalScheme].Name)

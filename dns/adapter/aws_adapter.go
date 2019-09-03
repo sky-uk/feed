@@ -12,8 +12,8 @@ import (
 	"github.com/sky-uk/feed/elb"
 )
 
-// FindELBsFunc defines a function which find ELBs based on a label
-type FindELBsFunc func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error)
+// FindELBsFunc defines a function which find ELBs based on a tag value
+type FindELBsFunc func(elb elb.V1ELB, tagValue string) (map[string]elb.LoadBalancerDetails, error)
 
 // ALB represents the subset of AWS operations needed for dns_updater.go
 type ALB interface {
@@ -27,7 +27,7 @@ type AWSAdapterConfig struct {
 	ELBLabelValue string
 	ALBNames      []string
 	ALBClient     ALB
-	ELBClient     elb.ELB
+	ELBClient     elb.V1ELB
 	ELBFinder     FindELBsFunc
 }
 
@@ -35,7 +35,7 @@ type awsAdapter struct {
 	hostedZoneID     *string
 	elbLabelValue    string
 	albNames         []string
-	elb              elb.ELB
+	elb              elb.V1ELB
 	alb              ALB
 	findFrontEndElbs FindELBsFunc
 }
@@ -53,7 +53,7 @@ func NewAWSAdapter(config *AWSAdapterConfig) (FrontendAdapter, error) {
 	}
 
 	if config.ELBFinder == nil {
-		config.ELBFinder = elb.FindFrontEndElbs
+		config.ELBFinder = elb.FindFrontEndElbsV1
 	}
 
 	return &awsAdapter{

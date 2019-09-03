@@ -87,7 +87,7 @@ type mockELB struct {
 	mock.Mock
 }
 
-func (m *mockELB) FindFrontEndElbs(e elb.ELB, labelValue string) (map[string]elb.LoadBalancerDetails, error) {
+func (m *mockELB) FindFrontEndElbsV1(e elb.V1ELB, labelValue string) (map[string]elb.LoadBalancerDetails, error) {
 	args := m.Called(e, labelValue)
 	return args.Get(0).(map[string]elb.LoadBalancerDetails), args.Error(1)
 }
@@ -103,7 +103,7 @@ func (m *mockELB) mockFindFrontEndElbs(labelValue string, lbDetails []lbDetail, 
 		}
 	}
 
-	m.On("FindFrontEndElbs", mock.Anything, labelValue).Return(lbs, err)
+	m.On("FindFrontEndElbsV1", mock.Anything, labelValue).Return(lbs, err)
 }
 
 func (m *mockELB) DescribeLoadBalancers(input *awselb.DescribeLoadBalancersInput) (*awselb.DescribeLoadBalancersOutput, error) {
@@ -163,7 +163,7 @@ func setupForELB(albNames []string, elbLabelValue string) (*updater, *mockR53Cli
 		ALBNames:      albNames,
 		ELBClient:     mockELB,
 		ALBClient:     mockALB,
-		ELBFinder:     mockELB.FindFrontEndElbs,
+		ELBFinder:     mockELB.FindFrontEndElbsV1,
 	}
 	lbAdapter, _ := adapter.NewAWSAdapter(&config)
 	dnsUpdater := New(hostedZoneID, lbAdapter, 1).(*updater)

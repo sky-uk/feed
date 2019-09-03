@@ -8,7 +8,8 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	awselb "github.com/aws/aws-sdk-go/service/elb"
+	awselbv1 "github.com/aws/aws-sdk-go/service/elb"
+	awselbv2 "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/k8s"
@@ -22,6 +23,7 @@ type Config struct {
 	FrontendTagValue    string
 	IngressNameTagValue string
 	KubernetesClient    k8s.Client
+	LoadBalancerType    elb.LoadBalancerType
 }
 
 // New creates a new ELB frontend status updater.
@@ -32,7 +34,9 @@ func New(conf Config) (controller.Updater, error) {
 	}
 
 	return &status{
-		awsElb:              awselb.New(awsSession),
+		awsElbV1:            awselbv1.New(awsSession),
+		awsElbV2:            awselbv2.New(awsSession),
+		loadBalancerType:    conf.LoadBalancerType,
 		frontendTagValue:    conf.FrontendTagValue,
 		ingressNameTagValue: conf.IngressNameTagValue,
 		loadBalancers:       make(map[string]v1.LoadBalancerStatus),
@@ -41,7 +45,9 @@ func New(conf Config) (controller.Updater, error) {
 }
 
 type status struct {
-	awsElb              elb.ELB
+	awsElbV1            elb.V1ELB
+	awsElbV2            elb.V2ELB
+	loadBalancerType    elb.LoadBalancerType
 	frontendTagValue    string
 	ingressNameTagValue string
 	loadBalancers       map[string]v1.LoadBalancerStatus
@@ -50,7 +56,7 @@ type status struct {
 
 // Start discovers the elbs and generates loadBalancer statuses.
 func (s *status) Start() error {
-	clusterFrontEnds, err := elb.FindFrontEndElbsWithIngressClassName(s.awsElb, s.frontendTagValue, s.ingressNameTagValue)
+	clusterFrontEnds, err := elb.FindFrontEndElbsWithIngressClassName(s.loadBalancerType, s.awsElbV1, s.awsElbV2, s.frontendTagValue, s.ingressNameTagValue)
 	if err != nil {
 		return err
 	}
