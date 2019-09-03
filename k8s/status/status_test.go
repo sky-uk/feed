@@ -8,8 +8,8 @@ import (
 	"github.com/sky-uk/feed/controller"
 	fake "github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
 )
 
 const (
@@ -61,7 +61,7 @@ func createIngresses(name, lbScheme string, lbStatus v1.LoadBalancerStatus) cont
 }
 
 func TestGenerateLoadBalancerStatus(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	var tests = []struct {
 		description string
@@ -99,12 +99,12 @@ func TestGenerateLoadBalancerStatus(t *testing.T) {
 	}
 	for _, test := range tests {
 		fmt.Printf("test: %s\n", test.description)
-		assert.Equal(test.expected, GenerateLoadBalancerStatus(test.endpoints))
+		asserter.Equal(test.expected, GenerateLoadBalancerStatus(test.endpoints))
 	}
 }
 
 func TestStatusUnchanged(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	var tests = []struct {
 		description           string
@@ -139,12 +139,12 @@ func TestStatusUnchanged(t *testing.T) {
 	}
 	for _, test := range tests {
 		fmt.Printf("test: %s\n", test.description)
-		assert.Equal(test.expected, statusUnchanged(test.existingIngressStatus, test.newIngressStatus))
+		asserter.Equal(test.expected, statusUnchanged(test.existingIngressStatus, test.newIngressStatus))
 	}
 }
 
 func TestSortLoadBalancerStatus(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	var tests = []struct {
 		description string
@@ -192,12 +192,12 @@ func TestSortLoadBalancerStatus(t *testing.T) {
 	for _, test := range tests {
 		fmt.Printf("test: %s\n", test.description)
 		sortLoadBalancerStatus(test.lbi)
-		assert.Equal(test.expected, test.lbi)
+		asserter.Equal(test.expected, test.lbi)
 	}
 }
 
 func TestUpdate(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	lbs := createDefaultLBs()
 	ingresses := createIngresses(defaultIngressName, defaultLBLabel, v1.LoadBalancerStatus{})
@@ -207,11 +207,11 @@ func TestUpdate(t *testing.T) {
 
 	err := Update(ingresses, lbs, client)
 
-	assert.NoError(err)
+	asserter.NoError(err)
 }
 
 func TestUpdateFails(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	lbs := createDefaultLBs()
 	ingresses := createIngresses(defaultIngressName, defaultLBLabel, v1.LoadBalancerStatus{})
@@ -221,11 +221,11 @@ func TestUpdateFails(t *testing.T) {
 
 	err := Update(ingresses, lbs, client)
 
-	assert.Error(err)
+	asserter.Error(err)
 }
 
 func TestUpdateDoesNotRunWithNoChange(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	lbs := createDefaultLBs()
 	ingresses := createDefaultIngresses()
@@ -233,5 +233,5 @@ func TestUpdateDoesNotRunWithNoChange(t *testing.T) {
 	client := new(fake.FakeClient)
 	client.On("UpdateIngressStatus").Return(errors.New("failed"))
 
-	assert.NoError(Update(ingresses, lbs, client))
+	asserter.NoError(Update(ingresses, lbs, client))
 }

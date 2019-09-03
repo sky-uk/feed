@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/api/extensions/v1beta1"
 )
 
 // IngressEntries type
@@ -28,7 +28,7 @@ type IngressEntry struct {
 	ServiceAddress string
 	// ServicePort is the port to proxy traffic to. Must be non-zero.
 	ServicePort int32
-	// Allow are the ips or cidrs that are allowed to access the service.
+	// Allow are the ips or CIDRs that are allowed to access the service.
 	Allow []string
 	// LbScheme internet-facing or internal will dictate which kind of load balancer to attach to.
 	LbScheme string

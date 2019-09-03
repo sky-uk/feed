@@ -1,20 +1,25 @@
 language: go
 
 go:
-  - 1.11.12
+- 1.12
 
-before_install:
-  - sudo add-apt-repository -y ppa:jonathonf/python-3.6
-  - sudo apt-get -y update
-  - sudo apt-get -y install python3.6
-  - python3.6 -V
-
-install: make setup
+env:
+- GO111MODULE=on
 
 services:
-  - docker
+- docker
 
-script: make travis
+before_install:
+- sudo add-apt-repository -y ppa:jonathonf/python-3.6
+- sudo apt-get -y update
+- sudo apt-get -y install python3.6
+- python3.6 -V
+
+install:
+- make setup
+
+script:
+- make travis
 
 deploy:
 - provider: script

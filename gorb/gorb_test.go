@@ -140,7 +140,7 @@ func (h *gorbHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.responsePrimers[h.requestCounter].response != "" {
 		data, _ := json.Marshal(h.responsePrimers[h.requestCounter].response)
-		w.Write(data)
+		_, _ = w.Write(data)
 	}
 	h.requestCounter++
 }

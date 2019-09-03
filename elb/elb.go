@@ -1,5 +1,5 @@
 /*
-Package elb provides an updater for an ELB frontend to attach nginx to.
+Package elb provides an updater for an ELB frontend to attach NGINX to.
 */
 package elb
 
@@ -12,14 +12,14 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
-	aws_elb "github.com/aws/aws-sdk-go/service/elb"
+	awselb "github.com/aws/aws-sdk-go/service/elb"
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
 )
 
-// ElbTag is the tag key used for identifying ELBs to attach to for a cluster.
-const ElbTag = "sky.uk/KubernetesClusterFrontend"
+// FrontendTag is the tag key used for identifying ELBs to attach to for a cluster.
+const FrontendTag = "sky.uk/KubernetesClusterFrontend"
 
 // IngressClassTag is the tag key used for identifying ELBs to attach to for a given ingress controller.
 const IngressClassTag = "sky.uk/KubernetesClusterIngressClass"
@@ -27,7 +27,7 @@ const IngressClassTag = "sky.uk/KubernetesClusterIngressClass"
 // New creates a new ELB frontend
 func New(region string, frontendTagValue string, ingressClassTagValue string, expectedNumber int, drainDelay time.Duration) (controller.Updater, error) {
 	if frontendTagValue == "" {
-		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", ElbTag)
+		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", FrontendTag)
 	}
 	if ingressClassTagValue == "" {
 		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", IngressClassTag)
@@ -36,14 +36,14 @@ func New(region string, frontendTagValue string, ingressClassTagValue string, ex
 	initMetrics()
 	log.Infof("ELB Front end region: %s, cluster: %s, expected frontends: %d, ingress controller: %s", region, frontendTagValue, expectedNumber, ingressClassTagValue)
 
-	session, err := session.NewSession(&aws.Config{Region: &region})
+	awsSession, err := session.NewSession(&aws.Config{Region: &region})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create ELB updater: %v", err)
 	}
 
 	return &elb{
-		metadata:             ec2metadata.New(session),
-		awsElb:               aws_elb.New(session),
+		metadata:             ec2metadata.New(awsSession),
+		awsElb:               awselb.New(awsSession),
 		frontendTagValue:     frontendTagValue,
 		ingressClassTagValue: ingressClassTagValue,
 		region:               region,
@@ -84,10 +84,10 @@ type initialised struct {
 // ELB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
 // interface to only the ones we use
 type ELB interface {
-	DescribeLoadBalancers(input *aws_elb.DescribeLoadBalancersInput) (*aws_elb.DescribeLoadBalancersOutput, error)
-	DescribeTags(input *aws_elb.DescribeTagsInput) (*aws_elb.DescribeTagsOutput, error)
-	RegisterInstancesWithLoadBalancer(input *aws_elb.RegisterInstancesWithLoadBalancerInput) (*aws_elb.RegisterInstancesWithLoadBalancerOutput, error)
-	DeregisterInstancesFromLoadBalancer(input *aws_elb.DeregisterInstancesFromLoadBalancerInput) (*aws_elb.DeregisterInstancesFromLoadBalancerOutput, error)
+	DescribeLoadBalancers(input *awselb.DescribeLoadBalancersInput) (*awselb.DescribeLoadBalancersOutput, error)
+	DescribeTags(input *awselb.DescribeTagsInput) (*awselb.DescribeTagsOutput, error)
+	RegisterInstancesWithLoadBalancer(input *awselb.RegisterInstancesWithLoadBalancerInput) (*awselb.RegisterInstancesWithLoadBalancerOutput, error)
+	DeregisterInstancesFromLoadBalancer(input *awselb.DeregisterInstancesFromLoadBalancerInput) (*awselb.DeregisterInstancesFromLoadBalancerOutput, error)
 }
 
 // EC2Metadata interface to allow mocking of the real calls to AWS
@@ -125,8 +125,8 @@ func (e *elb) attachToFrontEnds() error {
 
 	for _, frontend := range clusterFrontEnds {
 		log.Infof("Registering instance %s with elb %s", instance, frontend.Name)
-		_, err = e.awsElb.RegisterInstancesWithLoadBalancer(&aws_elb.RegisterInstancesWithLoadBalancerInput{
-			Instances: []*aws_elb.Instance{
+		_, err = e.awsElb.RegisterInstancesWithLoadBalancer(&awselb.RegisterInstancesWithLoadBalancerInput{
+			Instances: []*awselb.Instance{
 				{
 					InstanceId: aws.String(instance),
 				}},
@@ -160,7 +160,7 @@ func FindFrontEndElbs(awsElb ELB, frontendTagValue string) (map[string]LoadBalan
 func FindFrontEndElbsWithIngressClassName(awsElb ELB, frontendTagValue string, ingressClassValue string) (map[string]LoadBalancerDetails, error) {
 	maxTagQuery := 20
 	// Find the load balancers that are tagged with this cluster name
-	request := &aws_elb.DescribeLoadBalancersInput{}
+	request := &awselb.DescribeLoadBalancersInput{}
 	var lbNames []*string
 	allLbs := make(map[string]LoadBalancerDetails)
 
@@ -186,14 +186,14 @@ func FindFrontEndElbsWithIngressClassName(awsElb ELB, frontendTagValue string, i
 		}
 
 		// Set the next marker
-		request = &aws_elb.DescribeLoadBalancersInput{
+		request = &awselb.DescribeLoadBalancersInput{
 			Marker: resp.NextMarker,
 		}
 	}
 
 	log.Debugf("Found %d loadbalancers.", len(lbNames))
 
-	requiredTags := map[string]string{ElbTag: frontendTagValue}
+	requiredTags := map[string]string{FrontendTag: frontendTagValue}
 
 	if ingressClassValue != "" {
 		requiredTags[IngressClassTag] = ingressClassValue
@@ -203,7 +203,7 @@ func FindFrontEndElbsWithIngressClassName(awsElb ELB, frontendTagValue string, i
 	partitions := util.Partition(len(lbNames), maxTagQuery)
 	for _, partition := range partitions {
 		names := lbNames[partition.Low:partition.High]
-		output, err := awsElb.DescribeTags(&aws_elb.DescribeTagsInput{
+		output, err := awsElb.DescribeTags(&awselb.DescribeTagsInput{
 			LoadBalancerNames: names,
 		})
 
@@ -223,7 +223,7 @@ func FindFrontEndElbsWithIngressClassName(awsElb ELB, frontendTagValue string, i
 	return clusterFrontEnds, nil
 }
 
-func tagsDoMatch(elbTags []*aws_elb.Tag, tagsToMatch map[string]string) bool {
+func tagsDoMatch(elbTags []*awselb.Tag, tagsToMatch map[string]string) bool {
 	matches := 0
 	for name, value := range tagsToMatch {
 		log.Debugf("Checking for %s tag set to %s", name, value)
@@ -242,8 +242,8 @@ func (e *elb) Stop() error {
 	var failed = false
 	for _, elb := range e.elbs {
 		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb.Name)
-		_, err := e.awsElb.DeregisterInstancesFromLoadBalancer(&aws_elb.DeregisterInstancesFromLoadBalancerInput{
-			Instances:        []*aws_elb.Instance{{InstanceId: aws.String(e.instanceID)}},
+		_, err := e.awsElb.DeregisterInstancesFromLoadBalancer(&awselb.DeregisterInstancesFromLoadBalancerInput{
+			Instances:        []*awselb.Instance{{InstanceId: aws.String(e.instanceID)}},
 			LoadBalancerName: aws.String(elb.Name),
 		})
 

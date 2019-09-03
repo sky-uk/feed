@@ -179,7 +179,7 @@ func (u *updater) createChanges(hostToIngress hostToIngress,
 	originalRecords []adapter.ConsolidatedRecord) ([]*route53.Change, []string) {
 
 	type recordKey struct{ host, elbDNSName string }
-	changes := []*route53.Change{}
+	var changes []*route53.Change
 	indexedRecords := make(map[recordKey]adapter.ConsolidatedRecord)
 	for _, rec := range originalRecords {
 		indexedRecords[recordKey{rec.Name, rec.PointsTo}] = rec

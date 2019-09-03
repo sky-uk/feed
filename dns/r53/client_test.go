@@ -71,11 +71,11 @@ func TestGetRecords(t *testing.T) {
 	// given
 	client, fake53 := createClient()
 	expectedRecords := []*route53.ResourceRecordSet{
-		&route53.ResourceRecordSet{
+		{
 			Name: aws.String("james.com"),
 			Type: aws.String("A"),
 		},
-		&route53.ResourceRecordSet{
+		{
 			Name: aws.String("james2.com"),
 			Type: aws.String("CNAME"),
 		},

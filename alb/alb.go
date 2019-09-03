@@ -1,5 +1,5 @@
 /*
-Package alb provides an updater for an ALB frontend to attach nginx to.
+Package alb provides an updater for an ALB frontend to attach NGINX to.
 */
 package alb
 
@@ -25,15 +25,15 @@ func New(region string, targetGroupNames []string, targetGroupDeregistrationDela
 	}
 	initMetrics()
 	log.Infof("ALB frontend region: %s target groups: %v", region, targetGroupNames)
-	session, err := session.NewSession(&aws.Config{Region: &region})
+	awsSession, err := session.NewSession(&aws.Config{Region: &region})
 
 	if err != nil {
 		return nil, fmt.Errorf("unable to create ALB updater: %v", err)
 	}
 
 	return &alb{
-		metadata:                       ec2metadata.New(session),
-		awsALB:                         aws_alb.New(session),
+		metadata:                       ec2metadata.New(awsSession),
+		awsALB:                         aws_alb.New(awsSession),
 		targetGroupNames:               targetGroupNames,
 		targetGroupDeregistrationDelay: targetGroupDeregistrationDelay,
 		region:                         region,

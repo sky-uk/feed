@@ -1,7 +1,7 @@
-.idea
+.idea/
 *.iml
 *.swp
 *.ipr
 *.iws
-build
-vendor
+build/
+vendor/

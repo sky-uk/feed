@@ -11,7 +11,7 @@ import (
 const smallWaitTime = time.Millisecond * 50
 
 func TestWatcherUpdates(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	w := newWatcher()
 	defer close(w.updates)
@@ -25,11 +25,11 @@ func TestWatcherUpdates(t *testing.T) {
 	w.updates <- struct{}{}
 	time.Sleep(smallWaitTime)
 
-	assert.Equal(1, called.Get())
+	asserter.Equal(1, called.Get())
 }
 
 func TestBufferedWatcherBuffersUpdates(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	b := newBufferedWatcher(smallWaitTime)
 	defer close(b.updates)
@@ -45,11 +45,11 @@ func TestBufferedWatcherBuffersUpdates(t *testing.T) {
 	}
 	time.Sleep(smallWaitTime * 2)
 
-	assert.Equal(1, timesCalled.Get())
+	asserter.Equal(1, timesCalled.Get())
 }
 
 func TestCombinedWatcherUpdates(t *testing.T) {
-	assert := assert.New(t)
+	asserter := assert.New(t)
 
 	w1 := newWatcher()
 	w2 := newWatcher()
@@ -66,5 +66,5 @@ func TestCombinedWatcherUpdates(t *testing.T) {
 	w2.updates <- struct{}{}
 	time.Sleep(smallWaitTime)
 
-	assert.Equal(3, called.Get())
+	asserter.Equal(3, called.Get())
 }
