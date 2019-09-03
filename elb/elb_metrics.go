@@ -13,14 +13,8 @@ var attachedFrontendGauge prometheus.Gauge
 
 func initMetrics() {
 	once.Do(func() {
-		attachedFrontendGauge = prometheus.NewGauge(
-			prometheus.GaugeOpts{
-				Namespace:   metrics.PrometheusNamespace,
-				Subsystem:   metrics.PrometheusIngressSubsystem,
-				Name:        "frontends_attached",
-				Help:        "The total number of frontends attached",
-				ConstLabels: metrics.ConstLabels(),
-			})
+		attachedFrontendGauge = metrics.NewDefaultGauge("frontends_attached",
+			"The total number of frontends attached")
 		prometheus.MustRegister(attachedFrontendGauge)
 	})
 }

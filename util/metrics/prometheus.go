@@ -43,3 +43,38 @@ func SetConstLabels(l prometheus.Labels) {
 	}
 	constLabels = l
 }
+
+func newGaugeOpts(name string, help string) prometheus.GaugeOpts {
+	return prometheus.GaugeOpts{
+		Namespace:   PrometheusNamespace,
+		Subsystem:   PrometheusDNSSubsystem,
+		Name:        name,
+		Help:        help,
+		ConstLabels: ConstLabels(),
+	}
+}
+
+func newCounterOpts(name string, help string) prometheus.CounterOpts {
+	return prometheus.CounterOpts{
+		Namespace:   PrometheusNamespace,
+		Subsystem:   PrometheusDNSSubsystem,
+		Name:        name,
+		Help:        help,
+		ConstLabels: ConstLabels(),
+	}
+}
+
+// NewDefaultGauge creates a named Gauge with default options
+func NewDefaultGauge(name string, help string) prometheus.Gauge {
+	return prometheus.NewGauge(newGaugeOpts(name, help))
+}
+
+// NewDefaultGaugeVec creates a named GaugeVec with default options
+func NewDefaultGaugeVec(name string, help string, labelNames []string) *prometheus.GaugeVec {
+	return prometheus.NewGaugeVec(newGaugeOpts(name, help), labelNames)
+}
+
+// NewDefaultCounter creates a named Counter with default options
+func NewDefaultCounter(name string, help string) prometheus.Counter {
+	return prometheus.NewCounter(newCounterOpts(name, help))
+}

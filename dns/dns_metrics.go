@@ -13,45 +13,20 @@ var updateCount, failedCount, skippedCount prometheus.Counter
 
 func initMetrics() {
 	once.Do(func() {
-		recordsGauge = prometheus.NewGauge(
-			prometheus.GaugeOpts{
-				Namespace:   metrics.PrometheusNamespace,
-				Subsystem:   metrics.PrometheusDNSSubsystem,
-				Name:        "route53_records",
-				Help:        "The current number of records.",
-				ConstLabels: metrics.ConstLabels(),
-			})
+		recordsGauge = metrics.NewDefaultGauge("route53_records",
+			"The current number of records.")
 		prometheus.MustRegister(recordsGauge)
 
-		updateCount = prometheus.NewCounter(
-			prometheus.CounterOpts{
-				Namespace:   metrics.PrometheusNamespace,
-				Subsystem:   metrics.PrometheusDNSSubsystem,
-				Name:        "route53_updates",
-				Help:        "The number of record updates to Route53.",
-				ConstLabels: metrics.ConstLabels(),
-			})
+		updateCount = metrics.NewDefaultCounter("route53_updates",
+			"The number of record updates to Route53.")
 		prometheus.MustRegister(updateCount)
 
-		failedCount = prometheus.NewCounter(
-			prometheus.CounterOpts{
-				Namespace:   metrics.PrometheusNamespace,
-				Subsystem:   metrics.PrometheusDNSSubsystem,
-				Name:        "route53_failures",
-				Help:        "The number of failed updates to route53.",
-				ConstLabels: metrics.ConstLabels(),
-			})
+		failedCount = metrics.NewDefaultCounter("route53_failures",
+			"The number of failed updates to route53.")
 		prometheus.MustRegister(failedCount)
 
-		skippedCount = prometheus.NewCounter(
-			prometheus.CounterOpts{
-				Namespace: metrics.PrometheusNamespace,
-				Subsystem: metrics.PrometheusDNSSubsystem,
-				Name:      "skipped_ingress_entries",
-				Help: "The number of ingress entries skipped by feed-dns, such as being outside of the" +
-					" Route53 hosted zone.",
-				ConstLabels: metrics.ConstLabels(),
-			})
+		skippedCount = metrics.NewDefaultCounter("skipped_ingress_entries",
+			"The number of ingress entries skipped by feed-dns, such as being outside of the Route53 hosted zone.")
 		prometheus.MustRegister(skippedCount)
 	})
 }
