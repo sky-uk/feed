@@ -26,64 +26,43 @@ var endpointBytesLabelNames = []string{"name", "endpoint", "direction"}
 
 func initMetrics() {
 	once.Do(func() {
-		connections = metrics.NewDefaultGauge("nginx_connections",
+		connections = metrics.RegisterNewDefaultGauge("nginx_connections",
 			"The active number of connections in use by NGINX.")
-		prometheus.MustRegister(connections)
-
-		waitingConnections = metrics.NewDefaultGauge("nginx_connections_waiting",
+		waitingConnections = metrics.RegisterNewDefaultGauge("nginx_connections_waiting",
 			"The number of idle connections.")
-		prometheus.MustRegister(waitingConnections)
-
-		writingConnections = metrics.NewDefaultGauge("nginx_connections_writing",
+		writingConnections = metrics.RegisterNewDefaultGauge("nginx_connections_writing",
 			"The number of connections writing data.")
-		prometheus.MustRegister(writingConnections)
-
-		readingConnections = metrics.NewDefaultGauge("nginx_connections_reading",
+		readingConnections = metrics.RegisterNewDefaultGauge("nginx_connections_reading",
 			"The number of connections reading data.")
-		prometheus.MustRegister(readingConnections)
-
-		totalAccepts = metrics.NewDefaultGauge("nginx_accepts",
+		totalAccepts = metrics.RegisterNewDefaultGauge("nginx_accepts",
 			"The number of client connections accepted by NGINX. "+
 				"For implementation reasons, this counter is a gauge.")
-		prometheus.MustRegister(totalAccepts)
-
-		totalHandled = metrics.NewDefaultGauge("nginx_handled",
+		totalHandled = metrics.RegisterNewDefaultGauge("nginx_handled",
 			"The number of client connections handled by NGINX. "+
 				"Can be less than accepts if connection limit reached. "+
 				"For implementation reasons, this counter is a gauge.")
-		prometheus.MustRegister(totalHandled)
-
-		totalRequests = metrics.NewDefaultGauge("nginx_requests",
+		totalRequests = metrics.RegisterNewDefaultGauge("nginx_requests",
 			"The number of client requests served by NGINX. "+
 				"Will be larger than handled if using persistent connections. "+
 				"For implementation reasons, this counter is a gauge.")
-		prometheus.MustRegister(totalRequests)
-
-		ingressRequests = metrics.NewDefaultGaugeVec("ingress_requests",
+		ingressRequests = metrics.RegisterNewDefaultGaugeVec("ingress_requests",
 			"The number of requests proxied by NGINX per ingress. "+
 				"For implementation reasons, this counter is a gauge.",
 			ingressRequestsLabelNames)
-		prometheus.MustRegister(ingressRequests)
-
-		endpointRequests = metrics.NewDefaultGaugeVec("endpoint_requests",
+		endpointRequests = metrics.RegisterNewDefaultGaugeVec("endpoint_requests",
 			"The number of requests proxied by NGINX per endpoint. "+
 				"For implementation reasons, this counter is a gauge.",
 			endpointRequestsLabelNames)
-		prometheus.MustRegister(endpointRequests)
-
-		ingressBytes = metrics.NewDefaultGaugeVec("ingress_bytes",
+		ingressBytes = metrics.RegisterNewDefaultGaugeVec("ingress_bytes",
 			"The number of bytes sent or received by a client to this ingress. "+
 				"Direction is 'in' for bytes received from a client, 'out' for bytes sent to a client. "+
 				"For implementation reasons, this counter is a gauge.",
 			ingressBytesLabelNames)
-		prometheus.MustRegister(ingressBytes)
-
-		endpointBytes = metrics.NewDefaultGaugeVec("endpoint_bytes",
+		endpointBytes = metrics.RegisterNewDefaultGaugeVec("endpoint_bytes",
 			"The number of bytes sent or received by this endpoint. "+
 				"Direction is 'in' for bytes received from the endpoint, 'out' for bytes sent to the endpoint. "+
 				"For implementation reasons, this counter is a gauge.",
 			endpointBytesLabelNames)
-		prometheus.MustRegister(endpointBytes)
 	})
 }
 

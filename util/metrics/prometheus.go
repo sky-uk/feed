@@ -44,7 +44,7 @@ func SetConstLabels(l prometheus.Labels) {
 	constLabels = l
 }
 
-func newGaugeOpts(name string, help string) prometheus.GaugeOpts {
+func gaugeOpts(name string, help string) prometheus.GaugeOpts {
 	return prometheus.GaugeOpts{
 		Namespace:   PrometheusNamespace,
 		Subsystem:   PrometheusDNSSubsystem,
@@ -54,7 +54,7 @@ func newGaugeOpts(name string, help string) prometheus.GaugeOpts {
 	}
 }
 
-func newCounterOpts(name string, help string) prometheus.CounterOpts {
+func counterOpts(name string, help string) prometheus.CounterOpts {
 	return prometheus.CounterOpts{
 		Namespace:   PrometheusNamespace,
 		Subsystem:   PrometheusDNSSubsystem,
@@ -64,17 +64,25 @@ func newCounterOpts(name string, help string) prometheus.CounterOpts {
 	}
 }
 
-// NewDefaultGauge creates a named Gauge with default options
-func NewDefaultGauge(name string, help string) prometheus.Gauge {
-	return prometheus.NewGauge(newGaugeOpts(name, help))
+func register(collector prometheus.Collector, name string) prometheus.Collector {
+	err := prometheus.Register(collector)
+	if err != nil {
+		log.Fatalf("Could not register collector %s: %v", name, err)
+	}
+	return collector
 }
 
-// NewDefaultGaugeVec creates a named GaugeVec with default options
-func NewDefaultGaugeVec(name string, help string, labelNames []string) *prometheus.GaugeVec {
-	return prometheus.NewGaugeVec(newGaugeOpts(name, help), labelNames)
+// RegisterNewDefaultGauge creates and registers a named Gauge with default options
+func RegisterNewDefaultGauge(name string, help string) prometheus.Gauge {
+	return register(prometheus.NewGauge(gaugeOpts(name, help)), name).(prometheus.Gauge)
 }
 
-// NewDefaultCounter creates a named Counter with default options
-func NewDefaultCounter(name string, help string) prometheus.Counter {
-	return prometheus.NewCounter(newCounterOpts(name, help))
+// RegisterNewDefaultGaugeVec creates and registers a named GaugeVec with default options
+func RegisterNewDefaultGaugeVec(name string, help string, labelNames []string) *prometheus.GaugeVec {
+	return register(prometheus.NewGaugeVec(gaugeOpts(name, help), labelNames), name).(*prometheus.GaugeVec)
+}
+
+// RegisterNewDefaultCounter creates and registers a named Counter with default options
+func RegisterNewDefaultCounter(name string, help string) prometheus.Counter {
+	return register(prometheus.NewCounter(counterOpts(name, help)), name).(prometheus.Counter)
 }
