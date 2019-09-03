@@ -299,10 +299,10 @@ func (n *nginxUpdater) Update(entries controller.IngressEntries) error {
 		return fmt.Errorf("unable to update nginx: %v", err)
 	}
 
+	if nginxStartErr := n.ensureNginxRunning(); nginxStartErr != nil {
+		return nginxStartErr
+	}
 	if updated {
-		if nginxStartErr := n.ensureNginxRunning(); nginxStartErr != nil {
-			return nginxStartErr
-		}
 		if n.initialUpdateAttempted.Get() {
 			n.signalRequired()
 		}
