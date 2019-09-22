@@ -89,6 +89,7 @@ func registerWithLoadBalancerV2(awsElb V2ELB, instanceID string, lb LoadBalancer
 	var failedArns []string
 
 	for _, arn := range lb.TargetGroupArns {
+		log.Infof("Registering instance %s with Target Group %s", instanceID, arn)
 		_, err := awsElb.RegisterTargets(&awselbv2.RegisterTargetsInput{
 			Targets:        []*awselbv2.TargetDescription{{Id: aws.String(instanceID)}},
 			TargetGroupArn: aws.String(arn),

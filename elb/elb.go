@@ -153,11 +153,11 @@ func (e *elb) attachToFrontEnds() error {
 	registered := 0
 
 	for _, frontend := range clusterFrontEnds {
-		log.Infof("Registering instance %s with elb %s", instance, frontend.Name)
-
 		if e.lbType == Classic {
+			log.Infof("Registering instance %s with classic (v1) elb %s", instance, frontend.Name)
 			err = registerWithLoadBalancerV1(e.awsElbV1, instance, frontend)
 		} else {
+			log.Infof("Registering instance %s with standard (v2) elb %s", instance, frontend.Name)
 			err = registerWithLoadBalancerV2(e.awsElbV2, instance, frontend)
 		}
 
