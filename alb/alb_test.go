@@ -7,7 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	awselb "github.com/aws/aws-sdk-go/service/elbv2"
+	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util/metrics"
@@ -27,19 +27,19 @@ type mockALB struct {
 	mock.Mock
 }
 
-func (m *mockALB) DescribeTargetGroups(input *awselb.DescribeTargetGroupsInput) (*awselb.DescribeTargetGroupsOutput, error) {
+func (m *mockALB) DescribeTargetGroups(input *aws_alb.DescribeTargetGroupsInput) (*aws_alb.DescribeTargetGroupsOutput, error) {
 	args := m.Called(input)
-	return args.Get(0).(*awselb.DescribeTargetGroupsOutput), args.Error(1)
+	return args.Get(0).(*aws_alb.DescribeTargetGroupsOutput), args.Error(1)
 }
 
-func (m *mockALB) RegisterTargets(input *awselb.RegisterTargetsInput) (*awselb.RegisterTargetsOutput, error) {
+func (m *mockALB) RegisterTargets(input *aws_alb.RegisterTargetsInput) (*aws_alb.RegisterTargetsOutput, error) {
 	args := m.Called(input)
-	return args.Get(0).(*awselb.RegisterTargetsOutput), args.Error(1)
+	return args.Get(0).(*aws_alb.RegisterTargetsOutput), args.Error(1)
 }
 
-func (m *mockALB) DeregisterTargets(input *awselb.DeregisterTargetsInput) (*awselb.DeregisterTargetsOutput, error) {
+func (m *mockALB) DeregisterTargets(input *aws_alb.DeregisterTargetsInput) (*aws_alb.DeregisterTargetsOutput, error) {
 	args := m.Called(input)
-	return args.Get(0).(*awselb.DeregisterTargetsOutput), args.Error(1)
+	return args.Get(0).(*aws_alb.DeregisterTargetsOutput), args.Error(1)
 }
 
 type mockMetadata struct {
@@ -63,36 +63,36 @@ func (m *mockMetadata) GetInstanceIdentityDocument() (ec2metadata.EC2InstanceIde
 
 func (m *mockALB) mockDescribeTargetGroups(names []string, arns []string, reqMarker *string, nextMarker *string, err error) {
 	var awsNames []*string
-	var targetGroups []*awselb.TargetGroup
+	var targetGroups []*aws_alb.TargetGroup
 	for i := range names {
 		awsNames = append(awsNames, aws.String(names[i]))
 		arn := arns[i]
 		if arn != "" {
-			targetGroups = append(targetGroups, &awselb.TargetGroup{
+			targetGroups = append(targetGroups, &aws_alb.TargetGroup{
 				TargetGroupArn: aws.String(arn),
 			})
 		}
 	}
 
 	m.On("DescribeTargetGroups",
-		&awselb.DescribeTargetGroupsInput{
+		&aws_alb.DescribeTargetGroupsInput{
 			Names:  awsNames,
 			Marker: reqMarker,
-		}).Return(&awselb.DescribeTargetGroupsOutput{NextMarker: nextMarker, TargetGroups: targetGroups}, err).Once()
+		}).Return(&aws_alb.DescribeTargetGroupsOutput{NextMarker: nextMarker, TargetGroups: targetGroups}, err).Once()
 }
 
 func (m *mockALB) mockRegisterTargets(targetGroupARN, instanceID string, err error) {
-	m.On("RegisterTargets", &awselb.RegisterTargetsInput{
+	m.On("RegisterTargets", &aws_alb.RegisterTargetsInput{
 		TargetGroupArn: aws.String(targetGroupARN),
-		Targets:        []*awselb.TargetDescription{{Id: aws.String(instanceID)}},
-	}).Return(&awselb.RegisterTargetsOutput{}, err)
+		Targets:        []*aws_alb.TargetDescription{{Id: aws.String(instanceID)}},
+	}).Return(&aws_alb.RegisterTargetsOutput{}, err)
 }
 
 func (m *mockALB) mockDeregisterTargets(targetGroupARN, instanceID string, err error) {
-	m.On("DeregisterTargets", &awselb.DeregisterTargetsInput{
+	m.On("DeregisterTargets", &aws_alb.DeregisterTargetsInput{
 		TargetGroupArn: aws.String(targetGroupARN),
-		Targets:        []*awselb.TargetDescription{{Id: aws.String(instanceID)}},
-	}).Return(&awselb.DeregisterTargetsOutput{}, err)
+		Targets:        []*aws_alb.TargetDescription{{Id: aws.String(instanceID)}},
+	}).Return(&aws_alb.DeregisterTargetsOutput{}, err)
 }
 
 func (m *mockMetadata) mockInstanceMetadata(instanceID string) {

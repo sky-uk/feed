@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
-	awselb "github.com/aws/aws-sdk-go/service/elbv2"
+	aws_alb "github.com/aws/aws-sdk-go/service/elbv2"
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
@@ -33,7 +33,7 @@ func New(region string, targetGroupNames []string, targetGroupDeregistrationDela
 
 	return &alb{
 		metadata:                       ec2metadata.New(awsSession),
-		awsALB:                         awselb.New(awsSession),
+		awsALB:                         aws_alb.New(awsSession),
 		targetGroupNames:               targetGroupNames,
 		targetGroupDeregistrationDelay: targetGroupDeregistrationDelay,
 		region:                         region,
@@ -62,9 +62,9 @@ type initialised struct {
 // ALB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
 // interface to only the ones we use
 type ALB interface {
-	DescribeTargetGroups(input *awselb.DescribeTargetGroupsInput) (*awselb.DescribeTargetGroupsOutput, error)
-	RegisterTargets(input *awselb.RegisterTargetsInput) (*awselb.RegisterTargetsOutput, error)
-	DeregisterTargets(input *awselb.DeregisterTargetsInput) (*awselb.DeregisterTargetsOutput, error)
+	DescribeTargetGroups(input *aws_alb.DescribeTargetGroupsInput) (*aws_alb.DescribeTargetGroupsOutput, error)
+	RegisterTargets(input *aws_alb.RegisterTargetsInput) (*aws_alb.RegisterTargetsOutput, error)
+	DeregisterTargets(input *aws_alb.DeregisterTargetsInput) (*aws_alb.DeregisterTargetsOutput, error)
 }
 
 // EC2Metadata interface to allow mocking of the real calls to AWS
@@ -98,9 +98,9 @@ func (a *alb) Stop() error {
 	for _, arn := range a.albARNs {
 		log.Infof("Deregistering instance %s with ALB target group %s", a.instanceID, *arn)
 
-		_, err := a.awsALB.DeregisterTargets(&awselb.DeregisterTargetsInput{
+		_, err := a.awsALB.DeregisterTargets(&aws_alb.DeregisterTargetsInput{
 			TargetGroupArn: arn,
-			Targets: []*awselb.TargetDescription{
+			Targets: []*aws_alb.TargetDescription{
 				{Id: aws.String(a.instanceID)},
 			},
 		})
@@ -151,9 +151,9 @@ func (a *alb) attachToFrontEnds() error {
 	for _, arn := range arns {
 		log.Infof("Registering instance %s with alb %s", instanceID, *arn)
 
-		_, err = a.awsALB.RegisterTargets(&awselb.RegisterTargetsInput{
+		_, err = a.awsALB.RegisterTargets(&aws_alb.RegisterTargetsInput{
 			TargetGroupArn: arn,
-			Targets: []*awselb.TargetDescription{
+			Targets: []*aws_alb.TargetDescription{
 				{Id: aws.String(instanceID)},
 			},
 		})
@@ -175,7 +175,7 @@ func (a *alb) attachToFrontEnds() error {
 }
 
 func (a *alb) findTargetGroupARNs(names []string) ([]*string, error) {
-	req := &awselb.DescribeTargetGroupsInput{Names: aws.StringSlice(names)}
+	req := &aws_alb.DescribeTargetGroupsInput{Names: aws.StringSlice(names)}
 	var arns []*string
 
 	for {
