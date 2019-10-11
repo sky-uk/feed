@@ -304,7 +304,7 @@ func (c *controller) updateIngresses() (err error) {
 	log.Infof("Updating with %d entries from %d total ingresses (skipped %d)", len(entries), len(ingresses), len(skipped))
 	if len(skipped) > 0 {
 		for _, msg := range skipped {
-			log.Infof("Skipped %s", msg)
+			log.Debugf("Skipped %s", msg)
 		}
 	}
 
