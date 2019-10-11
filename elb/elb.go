@@ -12,8 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
-	awselbv1 "github.com/aws/aws-sdk-go/service/elb"
-	awselbv2 "github.com/aws/aws-sdk-go/service/elbv2"
+	awselb "github.com/aws/aws-sdk-go/service/elb"
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util"
@@ -25,20 +24,8 @@ const FrontendTag = "sky.uk/KubernetesClusterFrontend"
 // IngressClassTag is the tag key used for identifying ELBs to attach to for a given ingress controller.
 const IngressClassTag = "sky.uk/KubernetesClusterIngressClass"
 
-// LoadBalancerType defines which type of AWS load balancer is being used for the frontend
-// https://docs.aws.amazon.com/AmazonECS/latest/developerguide/load-balancer-types.html
-type LoadBalancerType int
-
-const (
-	// Classic represents the first generation of AWS ELB (Classic Load Balancer)
-	Classic LoadBalancerType = iota
-	// Standard represents the current generation of AWS ELB (Network or Application Load Balancer)
-	Standard
-)
-
 // New creates a new ELB frontend
-func New(lbType LoadBalancerType, region string, frontendTagValue string, ingressClassTagValue string,
-	expectedNumber int, drainDelay time.Duration) (controller.Updater, error) {
+func New(region string, frontendTagValue string, ingressClassTagValue string, expectedNumber int, drainDelay time.Duration) (controller.Updater, error) {
 	if frontendTagValue == "" {
 		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", FrontendTag)
 	}
@@ -47,8 +34,7 @@ func New(lbType LoadBalancerType, region string, frontendTagValue string, ingres
 	}
 
 	initMetrics()
-	log.Infof("ELB Front end region: %s, cluster: %s, expected frontends: %d, ingress controller: %s",
-		region, frontendTagValue, expectedNumber, ingressClassTagValue)
+	log.Infof("ELB Front end region: %s, cluster: %s, expected frontends: %d, ingress controller: %s", region, frontendTagValue, expectedNumber, ingressClassTagValue)
 
 	awsSession, err := session.NewSession(&aws.Config{Region: &region})
 	if err != nil {
@@ -57,9 +43,7 @@ func New(lbType LoadBalancerType, region string, frontendTagValue string, ingres
 
 	return &elb{
 		metadata:             ec2metadata.New(awsSession),
-		awsElbV1:             awselbv1.New(awsSession),
-		awsElbV2:             awselbv2.New(awsSession),
-		lbType:               lbType,
+		awsElb:               awselb.New(awsSession),
 		frontendTagValue:     frontendTagValue,
 		ingressClassTagValue: ingressClassTagValue,
 		region:               region,
@@ -71,17 +55,14 @@ func New(lbType LoadBalancerType, region string, frontendTagValue string, ingres
 
 // LoadBalancerDetails stores all the elb information we use.
 type LoadBalancerDetails struct {
-	Name            string
-	TargetGroupArns []string
-	DNSName         string
-	HostedZoneID    string
-	Scheme          string
+	Name         string
+	DNSName      string
+	HostedZoneID string
+	Scheme       string
 }
 
 type elb struct {
-	awsElbV1             V1ELB
-	awsElbV2             V2ELB
-	lbType               LoadBalancerType
+	awsElb               ELB
 	metadata             EC2Metadata
 	frontendTagValue     string
 	ingressClassTagValue string
@@ -100,23 +81,13 @@ type initialised struct {
 	done bool
 }
 
-// V1ELB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
-// interface to only the ones we use. V1 for Classic Load Balancers.
-type V1ELB interface {
-	DescribeLoadBalancers(input *awselbv1.DescribeLoadBalancersInput) (*awselbv1.DescribeLoadBalancersOutput, error)
-	DescribeTags(input *awselbv1.DescribeTagsInput) (*awselbv1.DescribeTagsOutput, error)
-	RegisterInstancesWithLoadBalancer(input *awselbv1.RegisterInstancesWithLoadBalancerInput) (*awselbv1.RegisterInstancesWithLoadBalancerOutput, error)
-	DeregisterInstancesFromLoadBalancer(input *awselbv1.DeregisterInstancesFromLoadBalancerInput) (*awselbv1.DeregisterInstancesFromLoadBalancerOutput, error)
-}
-
-// V2ELB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
-// interface to only the ones we use. V2 for NLBs and ALBs.
-type V2ELB interface {
-	DescribeLoadBalancers(input *awselbv2.DescribeLoadBalancersInput) (*awselbv2.DescribeLoadBalancersOutput, error)
-	DescribeTargetGroups(input *awselbv2.DescribeTargetGroupsInput) (*awselbv2.DescribeTargetGroupsOutput, error)
-	DescribeTags(input *awselbv2.DescribeTagsInput) (*awselbv2.DescribeTagsOutput, error)
-	RegisterTargets(input *awselbv2.RegisterTargetsInput) (*awselbv2.RegisterTargetsOutput, error)
-	DeregisterTargets(input *awselbv2.DeregisterTargetsInput) (*awselbv2.DeregisterTargetsOutput, error)
+// ELB interface to allow mocking of real calls to AWS as well as cutting down the methods from the real
+// interface to only the ones we use
+type ELB interface {
+	DescribeLoadBalancers(input *awselb.DescribeLoadBalancersInput) (*awselb.DescribeLoadBalancersOutput, error)
+	DescribeTags(input *awselb.DescribeTagsInput) (*awselb.DescribeTagsOutput, error)
+	RegisterInstancesWithLoadBalancer(input *awselb.RegisterInstancesWithLoadBalancerInput) (*awselb.RegisterInstancesWithLoadBalancerOutput, error)
+	DeregisterInstancesFromLoadBalancer(input *awselb.DeregisterInstancesFromLoadBalancerInput) (*awselb.DeregisterInstancesFromLoadBalancerOutput, error)
 }
 
 // EC2Metadata interface to allow mocking of the real calls to AWS
@@ -138,7 +109,7 @@ func (e *elb) attachToFrontEnds() error {
 
 	instance := id.InstanceID
 	log.Infof("Attaching to ELBs from instance %s", instance)
-	clusterFrontEnds, err := FindFrontEndElbsWithIngressClassName(e.lbType, e.awsElbV1, e.awsElbV2, e.frontendTagValue, e.ingressClassTagValue)
+	clusterFrontEnds, err := FindFrontEndElbsWithIngressClassName(e.awsElb, e.frontendTagValue, e.ingressClassTagValue)
 
 	if err != nil {
 		return err
@@ -153,18 +124,20 @@ func (e *elb) attachToFrontEnds() error {
 	registered := 0
 
 	for _, frontend := range clusterFrontEnds {
-		if e.lbType == Classic {
-			log.Infof("Registering instance %s with classic (v1) elb %s", instance, frontend.Name)
-			err = registerWithLoadBalancerV1(e.awsElbV1, instance, frontend)
-		} else {
-			log.Infof("Registering instance %s with standard (v2) elb %s", instance, frontend.Name)
-			err = registerWithLoadBalancerV2(e.awsElbV2, instance, frontend)
-		}
+		log.Infof("Registering instance %s with elb %s", instance, frontend.Name)
+		_, err = e.awsElb.RegisterInstancesWithLoadBalancer(&awselb.RegisterInstancesWithLoadBalancerInput{
+			Instances: []*awselb.Instance{
+				{
+					InstanceId: aws.String(instance),
+				}},
+			LoadBalancerName: aws.String(frontend.Name),
+		})
 
 		if err != nil {
 			return fmt.Errorf("unable to register instance %s with elb %s: %v", instance, frontend.Name, err)
 		}
 		registered++
+
 	}
 
 	attachedFrontendGauge.Set(float64(registered))
@@ -177,27 +150,45 @@ func (e *elb) attachToFrontEnds() error {
 	return nil
 }
 
-// FindFrontEndElbsV1 supports finding ELBs without ingress class for backwards compatibility
+// FindFrontEndElbs supports finding ELBs without ingress class for backwards compatibility
 // with feed-dns, which does not support multiple ingress controllers
-func FindFrontEndElbsV1(awsElb V1ELB, frontendTagValue string) (map[string]LoadBalancerDetails, error) {
-	return FindFrontEndElbsWithIngressClassName(Classic, awsElb, nil, frontendTagValue, "")
+func FindFrontEndElbs(awsElb ELB, frontendTagValue string) (map[string]LoadBalancerDetails, error) {
+	return FindFrontEndElbsWithIngressClassName(awsElb, frontendTagValue, "")
 }
 
 // FindFrontEndElbsWithIngressClassName finds all ELBs tagged with frontendTagValue and ingressClassValue
-func FindFrontEndElbsWithIngressClassName(lbType LoadBalancerType, awsElbV1 V1ELB, awsElbV2 V2ELB,
-	frontendTagValue string, ingressClassValue string) (map[string]LoadBalancerDetails, error) {
+func FindFrontEndElbsWithIngressClassName(awsElb ELB, frontendTagValue string, ingressClassValue string) (map[string]LoadBalancerDetails, error) {
 	maxTagQuery := 20
-	var allLbs map[string]LoadBalancerDetails
+	// Find the load balancers that are tagged with this cluster name
+	request := &awselb.DescribeLoadBalancersInput{}
 	var lbNames []*string
-	var err error
+	allLbs := make(map[string]LoadBalancerDetails)
 
-	if lbType == Classic {
-		allLbs, lbNames, err = findFrontendElbsV1(awsElbV1)
-	} else {
-		allLbs, lbNames, err = findFrontendElbsV2(awsElbV2)
-	}
-	if err != nil {
-		return nil, err
+	for {
+		resp, err := awsElb.DescribeLoadBalancers(request)
+
+		if err != nil {
+			return nil, fmt.Errorf("unable to describe load balancers: %v", err)
+		}
+
+		for _, entry := range resp.LoadBalancerDescriptions {
+			allLbs[*entry.LoadBalancerName] = LoadBalancerDetails{
+				Name:         aws.StringValue(entry.LoadBalancerName),
+				DNSName:      aws.StringValue(entry.DNSName),
+				HostedZoneID: aws.StringValue(entry.CanonicalHostedZoneNameID),
+				Scheme:       aws.StringValue(entry.Scheme),
+			}
+			lbNames = append(lbNames, entry.LoadBalancerName)
+		}
+
+		if resp.NextMarker == nil {
+			break
+		}
+
+		// Set the next marker
+		request = &awselb.DescribeLoadBalancersInput{
+			Marker: resp.NextMarker,
+		}
 	}
 
 	log.Debugf("Found %d loadbalancers.", len(lbNames))
@@ -212,22 +203,19 @@ func FindFrontEndElbsWithIngressClassName(lbType LoadBalancerType, awsElbV1 V1EL
 	partitions := util.Partition(len(lbNames), maxTagQuery)
 	for _, partition := range partitions {
 		names := lbNames[partition.Low:partition.High]
-		var tagsByLbName map[string][]tag
-		if lbType == Classic {
-			tagsByLbName, err = findTagsV1(awsElbV1, names)
-		} else {
-			tagsByLbName, err = findTagsV2(awsElbV2, names)
-		}
+		output, err := awsElb.DescribeTags(&awselb.DescribeTagsInput{
+			LoadBalancerNames: names,
+		})
 
 		if err != nil {
 			return nil, fmt.Errorf("unable to describe tags: %v", err)
 		}
 
 		// todo cb error out if we already have an internal or public facing elb
-		for lbName, tags := range tagsByLbName {
-			if tagsDoMatch(tags, requiredTags) {
-				log.Infof("Found frontend elb %s", lbName)
-				lb := allLbs[lbName]
+		for _, elbDescription := range output.TagDescriptions {
+			if tagsDoMatch(elbDescription.Tags, requiredTags) {
+				log.Infof("Found frontend elb %s", *elbDescription.LoadBalancerName)
+				lb := allLbs[*elbDescription.LoadBalancerName]
 				clusterFrontEnds[lb.Scheme] = lb
 			}
 		}
@@ -235,17 +223,12 @@ func FindFrontEndElbsWithIngressClassName(lbType LoadBalancerType, awsElbV1 V1EL
 	return clusterFrontEnds, nil
 }
 
-type tag struct {
-	Key   string
-	Value string
-}
-
-func tagsDoMatch(elbTags []tag, tagsToMatch map[string]string) bool {
+func tagsDoMatch(elbTags []*awselb.Tag, tagsToMatch map[string]string) bool {
 	matches := 0
 	for name, value := range tagsToMatch {
 		log.Debugf("Checking for %s tag set to %s", name, value)
-		for _, tag := range elbTags {
-			if name == tag.Key && value == tag.Value {
+		for _, elb := range elbTags {
+			if name == *elb.Key && value == *elb.Value {
 				matches++
 			}
 		}
@@ -259,12 +242,10 @@ func (e *elb) Stop() error {
 	var failed = false
 	for _, elb := range e.elbs {
 		log.Infof("Deregistering instance %s with elb %s", e.instanceID, elb.Name)
-		var err error
-		if e.lbType == Classic {
-			err = deregisterFromLoadBalancerV1(e.awsElbV1, e.instanceID, elb)
-		} else {
-			err = deregisterFromLoadBalancerV2(e.awsElbV2, e.instanceID, elb)
-		}
+		_, err := e.awsElb.DeregisterInstancesFromLoadBalancer(&awselb.DeregisterInstancesFromLoadBalancerInput{
+			Instances:        []*awselb.Instance{{InstanceId: aws.String(e.instanceID)}},
+			LoadBalancerName: aws.String(elb.Name),
+		})
 
 		if err != nil {
 			log.Warnf("unable to deregister instance %s with elb %s: %v", e.instanceID, elb.Name, err)

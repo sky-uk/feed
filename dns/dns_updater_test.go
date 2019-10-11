@@ -87,7 +87,7 @@ type mockELB struct {
 	mock.Mock
 }
 
-func (m *mockELB) FindFrontEndElbsV1(e elb.V1ELB, labelValue string) (map[string]elb.LoadBalancerDetails, error) {
+func (m *mockELB) FindFrontEndElbsV1(e elb.ELB, labelValue string) (map[string]elb.LoadBalancerDetails, error) {
 	args := m.Called(e, labelValue)
 	return args.Get(0).(map[string]elb.LoadBalancerDetails), args.Error(1)
 }

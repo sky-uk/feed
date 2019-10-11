@@ -294,5 +294,4 @@ Tag the commit in master and push it to release it. Only maintainers can do this
 
 ## Dependencies
 
-Dependencies are managed with [dep](https://golang.github.io/dep/). Run `dep ensure` to keep your vendor folder up
-to date after a pull.
+Dependencies are managed with [Go Modules](https://github.com/golang/go/wiki/Modules).
