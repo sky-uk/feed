@@ -1,8 +1,8 @@
 ![travis](https://travis-ci.org/sky-uk/feed.svg?branch=master)
 
 # Feed
-
-This project contains Kubernetes controllers for managing external ingress with AWS or [IPVS](https://github.com/sky-uk/merlin). 
+This project contains Kubernetes controllers for managing external ingress with
+AWS or [IPVS](https://github.com/sky-uk/merlin) load balancers.
 
 There are two controllers provided, `feed-ingress` which runs an NGINX instance, and `feed-dns` which manages Amazon Route 53 entries. 
 They can be run independently as needed, or together to provide a full ingress solution. `feed-ingress` can be arbitrarily scaled up to support any traffic load.
@@ -10,21 +10,28 @@ They can be run independently as needed, or together to provide a full ingress s
 Feed is actively used in production and should be stable enough for general usage. We can scale to many thousands of
 requests per second with only a handful of replicas.
 
+## Comparison to official NGINX ingress controller
+Feed was started before the [official NGINX ingress controller](https://github.com/kubernetes/ingress-nginx)
+became production ready.
+The main differences that exist now are:
+* Feed has fewer features, as we only built it for our needs.
+* Feed pods attach directly to AWS load balancers or IPVS nodes. The official controller relies on the
+  `LoadBalancer` service type, which generally forwards traffic to every node in your cluster (`service.spec.externalTrafficPolicy` can be set in some providers to mitigate this). We found this problematic:
+  * It increases the amount of traffic flowing through your cluster, as traffic is routed through every node unnecessarily.
+  * ELB health checks don't work  - the ELBs will disable arbitrary nodes, rather than a broken ingress pod.
+* Feed uses services, while the official controller uses endpoints:
+  * Primarily to reduce the number of NGINX reloads that occur, which are problematic in busy environments.
+    It may be possible to mitigate this though with a dynamic update of NGINX (via plugin), and is something
+    we've discussed doing for service updates.
+  * It's debatable whether using endpoints directly is a good idea conceptually, as it bypasses kube-proxy
+    and any service mesh in place.
+
 # Using
+Docker images for `feed-ingress` and `feed-dns` are released using semantic versioning.
+See the [examples](examples/) for deployment YAML files that can be applied to a cluster.
 
-Docker images are released using semantic versioning. See the [examples](examples/) for deployment YAML files that
-can be applied to a cluster.
-
-## Requirements
-
-* An internal and internet-facing ELB exists which can reach your Kubernetes cluster.
-The ELBs should be tagged with `sky.uk/KubernetesClusterFrontend=<name>` which is used by feed to discover them.
-If you are using v2 of `feed-ingress` the ELBs should also be tagged with `sky.uk/KubernetesClusterIngressClass=<name>`.
-See [upgrade from v1 to v2](#upgrade-from-v1-to-v2) for more information.
-* A Route 53 hosted zone has been created to match your ingress resources.
-
+# Requirements
 ## RBAC permissions
-
 The following RBAC permissions are required by the service account under which feed runs:
 
 ```yaml
@@ -48,20 +55,30 @@ rules:
   - update
 ```
 
-## Known Limitations
+## AWS components
+When running `feed-dns` or `feed-ingress` with AWS load balancers, the following are required:
+* An internal and internet-facing load balancer which can reach your Kubernetes cluster.
+The load balancers should be tagged with `sky.uk/KubernetesClusterFrontend=<name>` which is used by feed to discover them.
+If you are using v2 of `feed-ingress` they should also be tagged with `sky.uk/KubernetesClusterIngressClass=<name>`.
+See [upgrading from v1 to v2](#upgrade-from-v1-to-v2) for more information.
+* For `feed-dns`, a Route 53 hosted zone to match your ingress resources.
 
+# feed-ingress
+`feed-ingress` manages an NGINX instance, updating its configuration dynamically for ingress resources. It attaches to
+ELBs which are intended to be the frontend for all traffic.
+
+See the command line options with:
+
+    docker run --rm skycirrus/feed-ingress:v2.0.0 -h
+
+## Known limitations
 * NGINX reloads can be disruptive. On reload, NGINX will finish in-flight requests, then abruptly
   close all server connections. This is a limitation of NGINX, and affects all NGINX solutions. We mitigate this by:
     * Rate limiting reloads. This is user configurable.
     * Using service IPs, which are stable. Reloads will only happen if an ingress or service changes, which is rare
       compared to pod changes.
-* feed-dns only supports a single hosted zone at this time, but this should be straightforward to add support for.
-PRs are welcome.
 
-# Upgrading
-
-## Upgrade from v1 to v2
-
+## Upgrading from v1 to v2
 This is a breaking change to support [multiple ingress controllers per cluster](#multiple-ingress-controllers-per-cluster).
 The feed-ingress command-line structure has also changed. There are subcommands for the various load balancer types and
 arguments use double dashes to be POSIX-compliant.
@@ -81,26 +98,14 @@ To upgrade, follow these steps:
 1. Rename the argument `-elb-label-value` to `--elb-frontend-tag-value`
 1. Rename the argument `-nginx-default-backend-keepalive-seconds` to `--nginx-default-backend-timeout-seconds`
 
-# Overview
-
-## feed-ingress
-
-`feed-ingress` manages an NGINX instance, updating its configuration dynamically for ingress resources. It attaches to
-ELBs which are intended to be the frontend for all traffic.
-
-See the command line options with:
-
-    docker run --privileged skycirrus/feed-ingress:v2.0.0 -h
-
-### SSL termination on ELB
-
+## SSL termination
+### SSL termination on load balancer
 SSL termination could be done on ELBs, and we believe that this is the safest and best performing
 approach for production usage. Unfortunately, ELBs don't support SNI at this time, so this limits SSL usage to
 a single domain. One workaround is to use a wildcard certificate for the entire zone that `feed-dns` manages.
 Another is to place an SSL termination EC2 instance in front of the ELBs.
 
 ### SSL termination on feed-ingress
-
 SSL termination can be done on feed-ingress. This approach still requires a layer 4 load balancer, eg. ELB or IPVS, in front.
 
 For the moment you can setup a default wildcard SSL:
@@ -113,19 +118,17 @@ For the moment you can setup a default wildcard SSL:
 
 You can mount the `.key` and `.crt` though a Kubernetes Secret see [feed-ingress-deployment-ssl](examples/feed-ingress-deployment-ssl.yml).
 
-### Merlin support
-
+## Merlin support
 Merlin is a distributed load balancer based on IPVS, with a gRPC based API. Feed supports attaching to merlin
 as a frontend for ingress.
 
 See the [example](examples/feed-ingress-deployment-merlin.yml) for details.
 
-### Gorb / IPVS Support
+## GORB / IPVS Support
+_GORB support is deprecated, and will be removed at some point. Use merlin instead._
 
-_Gorb support is deprecated, and will be removed at some point. Use merlin instead._
-
-Feed has support for configuring IPVS via [gorb](https://github.com/sky-uk/gorb).
-Gorb exposes a REST api to interrogate and modify the IPVS configuration such as virtual services and backends.
+Feed has support for configuring IPVS via [GORB](https://github.com/sky-uk/gorb).
+GORB exposes a REST api to interrogate and modify the IPVS configuration such as virtual services and backends.
 The configuration can be stored in a distributed key/value store.
 
 Although IPVS supports multiple packet-forwarding methods, feed currently only supports 'DR' aka Direct Server Return.
@@ -139,10 +142,22 @@ securityContext:
     - NET_ADMIN
 ```
 
-See the [example ingress for gorb](examples/feed-ingress-deployment-gorb.yml)
+See the [example deployment for GORB](examples/feed-ingress-deployment-gorb.yml)
 
-### OpenTracing
+## AWS load balancer support
+Feed supports the three types of load balancer offered by AWS.
 
+### Classic Load Balancers (ELBs)
+See the [example deployment for ELB](examples/feed-ingress-deployment-elb.yml)
+
+### Network Load Balancers (NLBs)
+See the [example deployment for NLB](examples/feed-ingress-deployment-nlb.yml)
+
+### Application Load Balancers (ALBs)
+Feed has support for ALBs. Unfortunately, ALBs have a bug that prevents non-disruptive deployments of feed (specifically,
+they don't respect the deregistration delay). As a result, we don't recommend using ALBs at this time.
+
+## OpenTracing
 The build now includes support for OpenTracing, and the default Docker image includes the Jaeger tracing vendor
 implementation.
 
@@ -157,8 +172,7 @@ To enable OpenTracing, you will need to provide the following options:
 
 Note that the status and metrics endpoints will *not* have OpenTracing applied.
 
-### Handling large client requests
-
+## Handling large client requests
 `feed-ingress` now supports handling of large client requests (header and body). The following are the default values for the same. 
 
 ```
@@ -178,19 +192,16 @@ They can be overridden by passing the following arguments during startup.
 --nginx-large-client-header-buffer-blocks=4
 ```
 
-### Ingress status
-
-When using either the [elb](#elb) or [Merlin](#merlin) updater, the ingress status will be updated with relevant
-load balancer information. This can then be used with other controllers such a `external-dns` which can set DNS for any
+## Ingress status
+When using the [ELB](#elb), [NLB](#nlb) or [Merlin](#merlin) updaters, the ingress status will be updated with relevant
+load balancer information. This can then be used with other controllers such as `external-dns` which can set DNS for any
 given ingress using the ingress status.
 
-#### ELB
+### AWS load balancers
+Feed will automatically discover all of your load balancers and then use the `sky.uk/frontend-scheme` annotation to
+match a load balancer label to an ingress. The updater will then set the ingress status to the load balancer's DNS name. 
 
-Feed will automatically discover all of your ELBs and then use the `sky.uk/frontend-scheme` annotation to match an ELB
-label to an ingress. The updater will then set the ingress status to the ELBs DNS name. 
-
-#### Merlin
-
+### Merlin
 The Merlin updater is currently unable to auto-discover all hosted load balancers on a Merlin server; instead the status
 updater supports two different types: `internal` and `internet-facing`. These two load balancers are set using the
 `merlin-internal-hostname` and `merlin-internet-facing-hostname` flags respectively.
@@ -198,8 +209,7 @@ updater supports two different types: `internal` and `internet-facing`. These tw
 An ingress can select which load balancer it wants to be associated with by setting the `sky.uk/frontend-scheme`
 annotation to either `internal` or `internet-facing`.
 
-### Running feed-ingress on privileged ports
-
+## Running feed-ingress on privileged ports
 feed-ingress can be run on privileged ports by defining  the `NET_BIND_SERVICE` Linux capability.
 
 ```yaml
@@ -209,10 +219,10 @@ securityContext:
     - NET_BIND_SERVICE
 ```
 
-### Multiple ingress controllers per cluster
-
-Multiple feed-ingress controllers can be created per cluster. ELBs should be tagged with `sky.uk/KubernetesClusterIngressClass=<name>`
-and feed instances started with `--ingress-class=<name>`. Feed instances will attach to ELBs with matching ingress class names.
+## Multiple ingress controllers per cluster
+Multiple feed-ingress controllers can be created per cluster. Load balancers should be tagged with
+`sky.uk/KubernetesClusterIngressClass=<name>` and feed instances started with `--ingress-class=<name>`.
+Feed instances will attach to load balancers with matching ingress class names.
 
 A feed ingress controller will adopt ingress resources with a matching `kubernetes.io/ingress.class=<value>` annotation.
 Ingress resources with no annotation will normally not be adopted and will have no traffic sent to their associated services.
@@ -221,13 +231,10 @@ ingress resources with no `kubernetes.io/ingress.class` annotation.
 
 Use the script `classless-ingresses.sh` to find ingresses without this annotation.
 
-#### Support
+This feature is supported by `feed-ingress` and the `elb` and `nlb` load balancer.  It is currently not supported by `feed-dns` 
+or any other load balancer type. PRs are welcome.
 
-This feature is supported by `feed-ingress` and the `elb` load balancer.  It is currently not supported by `feed-dns` 
-or any other load balancer type.  PRs are welcome.
-
-## feed-dns
-
+# feed-dns
 `feed-dns` manages a Route 53 hosted zone, updating entries to point to ELBs or arbitrary hostnames. It is designed to
 be run as a single instance per zone in your cluster.
 
@@ -235,8 +242,7 @@ See the command line options with:
 
     docker run skycirrus/feed-dns:v2.0.0 -h
    
-### DNS records
-
+## DNS records
 The feed-dns controller assumes that it can overwrite any entry in the supplied DNS zone and manages ALIAS and CNAME
 records per ingress.
 
@@ -252,34 +258,11 @@ so the record can be set to the correct endpoint.
 If you're using ELBs then ALIAS (A) records will be created. If you've explicitly provided CNAMEs of your
 load balancers then CNAMEs will be created.
 
-## Ingress annotations
+## Known limitations
+* `feed-dns` only supports a single hosted zone at this time, but this should be straightforward to add support for.
+PRs are welcome.
 
-The controllers support several annotations on ingress resources. See the [example ingress](examples/ingress.yml) for details.
-
-## ALB Support
-
-Feed has support for ALBs. Unfortunately, ALBs have a bug that prevents non-disruptive deployments of feed (specifically,
-they don't respect the deregistration delay). As a result, we don't recommend using ALBs at this time.
-
-# Comparison to official NGINX ingress controller
-
-Feed was started before the [official NGINX ingress controller](https://github.com/kubernetes/ingress-nginx) became production ready.
-The main differences that exist now are:
-* Feed has fewer features, as we only built it for our needs.
-* Feed pods attach directly to ELB/ALBs or IPVS nodes. The official controller relies on the `LoadBalancer` service type,
-  which generally forwards traffic to every node in your cluster (`service.spec.externalTrafficPolicy` can be set in
-  some providers to mitigate this). We found this problematic:
-  * It increases the amount of traffic flowing through your cluster, as traffic is routed through every node unnecessarily.
-  * ELB health checks don't work  - the ELBs will disable arbitrary nodes, rather than a broken ingress pod.
-* Feed uses services, while the official controller uses endpoints:
-  * Primarily to reduce the number of NGINX reloads that occur, which are problematic in busy environments.
-    It may be possible to mitigate this though with a dynamic update of NGINX (via plugin), and is something
-    we've discussed doing for service updates.
-  * It's debatable whether using endpoints directly is a good idea conceptually, as it bypasses kube-proxy
-    and any service mesh in place.
-  
 # Development
-
 Install the required tools and setup dependencies:
 
     make setup
@@ -289,9 +272,7 @@ Build and test with:
     make
     
 ## Releasing
-
 Tag the commit in master and push it to release it. Only maintainers can do this.
 
 ## Dependencies
-
 Dependencies are managed with [Go Modules](https://github.com/golang/go/wiki/Modules).
