@@ -321,11 +321,25 @@ func (e *nlb) Stop() error {
 }
 
 func deregisterFromLoadBalancer(awsElb ELBV2, instanceID string, lb LoadBalancerDetails) error {
-	_, err := awsElb.DeregisterTargets(&elbv2.DeregisterTargetsInput{
-		Targets:        []*elbv2.TargetDescription{{Id: aws.String(instanceID)}},
-		TargetGroupArn: aws.String(lb.Name),
-	})
-	return err
+	var failedArns []string
+
+	for _, arn := range lb.TargetGroupArns {
+		log.Infof("Deregistering instance %s from Target Group %s", instanceID, arn)
+		_, err := awsElb.DeregisterTargets(&elbv2.DeregisterTargetsInput{
+			Targets:        []*elbv2.TargetDescription{{Id: aws.String(instanceID)}},
+			TargetGroupArn: aws.String(arn),
+		})
+		if err != nil {
+			log.Errorf("Could not deregister instance %s from Target Group %s: %v", instanceID, arn, err)
+			failedArns = append(failedArns, arn)
+		}
+	}
+
+	if failedArns != nil {
+		return fmt.Errorf("could not deregister Target Group(s) from Instance %s: %v", instanceID, failedArns)
+	}
+
+	return nil
 }
 
 func (e *nlb) Health() error {

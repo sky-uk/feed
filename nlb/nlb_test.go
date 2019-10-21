@@ -492,11 +492,11 @@ func TestDeregistersWithAttachedELBsV2(t *testing.T) {
 
 	mockElbV2.On("DeregisterTargets", &elbv2.DeregisterTargetsInput{
 		Targets:        []*elbv2.TargetDescription{{Id: aws.String(instanceID)}},
-		TargetGroupArn: aws.String(clusterFrontEnd),
+		TargetGroupArn: aws.String(clusterFrontEndTargetGroupArn),
 	}).Return(&elbv2.DeregisterTargetsOutput{}, nil)
 	mockElbV2.On("DeregisterTargets", &elbv2.DeregisterTargetsInput{
 		Targets:        []*elbv2.TargetDescription{{Id: aws.String(instanceID)}},
-		TargetGroupArn: aws.String(clusterFrontEnd2),
+		TargetGroupArn: aws.String(clusterFrontEnd2TargetGroupArn),
 	}).Return(&elbv2.DeregisterTargetsOutput{}, nil)
 
 	//when

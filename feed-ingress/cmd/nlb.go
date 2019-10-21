@@ -3,9 +3,9 @@ package cmd
 import (
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/elb"
-	elbstatus "github.com/sky-uk/feed/elb/elbstatus"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/nlb"
+	"github.com/sky-uk/feed/nlb/nlbstatus"
 	"github.com/spf13/cobra"
 )
 
@@ -38,13 +38,13 @@ func appendNlbIngressUpdaters(kubernetesClient k8s.Client, updaters []controller
 	}
 	updaters = append(updaters, updater)
 
-	statusConfig := elbstatus.Config{
+	statusConfig := nlbstatus.Config{
 		Region:              region,
 		FrontendTagValue:    elbFrontendTagValue,
 		IngressNameTagValue: ingressClassName,
 		KubernetesClient:    kubernetesClient,
 	}
-	statusUpdater, err := elbstatus.New(statusConfig)
+	statusUpdater, err := nlbstatus.New(statusConfig)
 	if err != nil {
 		return nil, err
 	}
