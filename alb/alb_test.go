@@ -81,14 +81,14 @@ func (m *mockALB) mockDescribeTargetGroups(names []string, arns []string, reqMar
 		}).Return(&aws_alb.DescribeTargetGroupsOutput{NextMarker: nextMarker, TargetGroups: targetGroups}, err).Once()
 }
 
-func (m *mockALB) mockRegisterInstances(targetGroupARN, instanceID string, err error) {
+func (m *mockALB) mockRegisterTargets(targetGroupARN, instanceID string, err error) {
 	m.On("RegisterTargets", &aws_alb.RegisterTargetsInput{
 		TargetGroupArn: aws.String(targetGroupARN),
 		Targets:        []*aws_alb.TargetDescription{{Id: aws.String(instanceID)}},
 	}).Return(&aws_alb.RegisterTargetsOutput{}, err)
 }
 
-func (m *mockALB) mockDeregisterInstances(targetGroupARN, instanceID string, err error) {
+func (m *mockALB) mockDeregisterTargets(targetGroupARN, instanceID string, err error) {
 	m.On("DeregisterTargets", &aws_alb.DeregisterTargetsInput{
 		TargetGroupArn: aws.String(targetGroupARN),
 		Targets:        []*aws_alb.TargetDescription{{Id: aws.String(instanceID)}},
@@ -123,8 +123,8 @@ func TestRegisterInstance(t *testing.T) {
 	mockMetadata.mockInstanceMetadata(instanceID)
 	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"internal-arn", "external-arn"},
 		nil, nil, nil)
-	mockALB.mockRegisterInstances("internal-arn", instanceID, nil)
-	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("internal-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("external-arn", instanceID, nil)
 
 	//when
 	err := a.Start()
@@ -145,8 +145,8 @@ func TestReportsErrorIfDidntRegisterAllTargetGroups(t *testing.T) {
 	mockMetadata.mockInstanceMetadata(instanceID)
 	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"internal-arn", "external-arn"},
 		nil, nil, nil)
-	mockALB.mockRegisterInstances("internal-arn", instanceID, nil)
-	mockALB.mockRegisterInstances("external-arn", instanceID, errors.New("ka boom"))
+	mockALB.mockRegisterTargets("internal-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("external-arn", instanceID, errors.New("ka boom"))
 
 	//when
 	err := a.Start()
@@ -189,7 +189,7 @@ func TestMissingTargetGroups(t *testing.T) {
 	mockMetadata.mockInstanceMetadata(instanceID)
 	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"", "external-arn"},
 		nil, nil, nil)
-	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("external-arn", instanceID, nil)
 
 	//when
 	err := a.Start()
@@ -209,8 +209,8 @@ func TestDescribeTargetGroupPages(t *testing.T) {
 		nil, aws.String("do-next"), nil)
 	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"", "external-arn"},
 		aws.String("do-next"), nil, nil)
-	mockALB.mockRegisterInstances("internal-arn", instanceID, nil)
-	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("internal-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("external-arn", instanceID, nil)
 
 	//when
 	err := a.Start()
@@ -230,10 +230,10 @@ func TestDeregistersOnStop(t *testing.T) {
 	mockMetadata.mockInstanceMetadata(instanceID)
 	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"internal-arn", "external-arn"},
 		nil, nil, nil)
-	mockALB.mockRegisterInstances("internal-arn", instanceID, nil)
-	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
-	mockALB.mockDeregisterInstances("internal-arn", instanceID, nil)
-	mockALB.mockDeregisterInstances("external-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("internal-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("external-arn", instanceID, nil)
+	mockALB.mockDeregisterTargets("internal-arn", instanceID, nil)
+	mockALB.mockDeregisterTargets("external-arn", instanceID, nil)
 
 	//when
 	_ = a.Start()
@@ -253,10 +253,10 @@ func TestDeregisterErrorIsHandledInStop(t *testing.T) {
 	mockMetadata.mockInstanceMetadata(instanceID)
 	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"internal-arn", "external-arn"},
 		nil, nil, nil)
-	mockALB.mockRegisterInstances("internal-arn", instanceID, nil)
-	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
-	mockALB.mockDeregisterInstances("internal-arn", instanceID, errors.New("ba boom"))
-	mockALB.mockDeregisterInstances("external-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("internal-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("external-arn", instanceID, nil)
+	mockALB.mockDeregisterTargets("internal-arn", instanceID, errors.New("ba boom"))
+	mockALB.mockDeregisterTargets("external-arn", instanceID, nil)
 
 	//when
 	_ = a.Start()
@@ -276,10 +276,10 @@ func TestStopWaitsForDeregisterDelay(t *testing.T) {
 	mockMetadata.mockInstanceMetadata(instanceID)
 	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"internal-arn", "external-arn"},
 		nil, nil, nil)
-	mockALB.mockRegisterInstances("internal-arn", instanceID, nil)
-	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
-	mockALB.mockDeregisterInstances("internal-arn", instanceID, nil)
-	mockALB.mockDeregisterInstances("external-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("internal-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("external-arn", instanceID, nil)
+	mockALB.mockDeregisterTargets("internal-arn", instanceID, nil)
+	mockALB.mockDeregisterTargets("external-arn", instanceID, nil)
 	a.(*alb).targetGroupDeregistrationDelay = time.Millisecond * 50
 
 	//when
@@ -313,7 +313,7 @@ func TestHealthReportsUnhealthyAfterUnsuccessfulFirstUpdate(t *testing.T) {
 	mockMetadata.mockInstanceMetadata(instanceID)
 	mockALB.mockDescribeTargetGroups([]string{"internal", "external"}, []string{"", "external-arn"},
 		nil, nil, nil)
-	mockALB.mockRegisterInstances("external-arn", instanceID, nil)
+	mockALB.mockRegisterTargets("external-arn", instanceID, nil)
 
 	//when
 	err := a.Start()

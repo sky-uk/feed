@@ -1,3 +1,7 @@
+# v2.1.0
+* Added support for AWS Network Load Balancers
+  with the `nlb` subcommand
+
 # v2.0.0
 * Added support for multiple feed-ingress controllers per cluster
 * Feed-ingress invocation split into subcommands, using double-dashed arguments

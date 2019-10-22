@@ -1,22 +1,23 @@
 /*
-Package status provides an updater for an ELB frontend to update ingress statuses.
+Package nlbstatus provides an updater for an NLB frontend to update ingress statuses.
 */
-package status
+package nlbstatus
 
 import (
 	"fmt"
 
+	"github.com/sky-uk/feed/nlb"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	awselb "github.com/aws/aws-sdk-go/service/elb"
+	"github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/elb"
 	"github.com/sky-uk/feed/k8s"
 	k8sStatus "github.com/sky-uk/feed/k8s/status"
 	v1 "k8s.io/api/core/v1"
 )
 
-// Config for creating a new ELB status updater.
+// Config for creating a new NLB status updater.
 type Config struct {
 	Region              string
 	FrontendTagValue    string
@@ -24,15 +25,15 @@ type Config struct {
 	KubernetesClient    k8s.Client
 }
 
-// New creates a new ELB frontend status updater.
+// New creates a new NLB frontend status updater.
 func New(conf Config) (controller.Updater, error) {
 	awsSession, err := session.NewSession(&aws.Config{Region: &conf.Region})
 	if err != nil {
-		return nil, fmt.Errorf("unable to create ELB status updater: %v", err)
+		return nil, fmt.Errorf("unable to create NLB status updater: %v", err)
 	}
 
 	return &status{
-		awsElb:              awselb.New(awsSession),
+		awsElb:              elbv2.New(awsSession),
 		frontendTagValue:    conf.FrontendTagValue,
 		ingressNameTagValue: conf.IngressNameTagValue,
 		loadBalancers:       make(map[string]v1.LoadBalancerStatus),
@@ -41,16 +42,16 @@ func New(conf Config) (controller.Updater, error) {
 }
 
 type status struct {
-	awsElb              elb.ELB
+	awsElb              nlb.ELBV2
 	frontendTagValue    string
 	ingressNameTagValue string
 	loadBalancers       map[string]v1.LoadBalancerStatus
 	kubernetesClient    k8s.Client
 }
 
-// Start discovers the elbs and generates loadBalancer statuses.
+// Start discovers the NLBs and generates loadBalancer statuses.
 func (s *status) Start() error {
-	clusterFrontEnds, err := elb.FindFrontEndElbsWithIngressClassName(s.awsElb, s.frontendTagValue, s.ingressNameTagValue)
+	clusterFrontEnds, err := nlb.FindFrontEndLoadBalancersWithIngressClassName(s.awsElb, s.frontendTagValue, s.ingressNameTagValue)
 	if err != nil {
 		return err
 	}

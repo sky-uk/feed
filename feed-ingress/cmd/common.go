@@ -20,6 +20,7 @@ func runCmd(appender appendIngressUpdaters) {
 		log.Fatalf("The argument --%s is required", ingressClassFlag)
 	}
 	controllerConfig.Name = ingressClassName
+	controllerConfig.IncludeClasslessIngresses = includeUnnamedIngresses
 
 	cmdutil.ConfigureLogging(debug)
 	cmdutil.ConfigureMetrics("feed-ingress", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)

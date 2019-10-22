@@ -4,10 +4,9 @@ import (
 	"time"
 
 	"github.com/sky-uk/feed/controller"
-	"github.com/sky-uk/feed/k8s"
-
 	"github.com/sky-uk/feed/elb"
-	elbstatus "github.com/sky-uk/feed/elb/status"
+	elbstatus "github.com/sky-uk/feed/elb/elbstatus"
+	"github.com/sky-uk/feed/k8s"
 	"github.com/spf13/cobra"
 )
 
@@ -21,16 +20,16 @@ var (
 )
 
 const (
-	defaultElbFrontendTagValue            = ""
+	defaultRegion                         = "eu-west-1"
+	defaultLbFrontendTagValue             = ""
+	defaultLbExpectedNumber               = 0
 	defaultDrainDelay                     = time.Second * 60
 	defaultTargetGroupDeregistrationDelay = time.Second * 300
-	defaultRegion                         = "eu-west-1"
-	defaultElbExpectedNumber              = 0
 )
 
 var elbCmd = &cobra.Command{
 	Use:   "elb",
-	Short: "Attach to AWS Elastic Load Balancers",
+	Short: "Attach to AWS Classic Load Balancers",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCmd(appendElbIngressUpdaters)
 	},
@@ -41,9 +40,9 @@ func init() {
 
 	elbCmd.Flags().StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
-	elbCmd.Flags().StringVar(&elbFrontendTagValue, "elb-frontend-tag-value", defaultElbFrontendTagValue,
+	elbCmd.Flags().StringVar(&elbFrontendTagValue, "elb-frontend-tag-value", defaultLbFrontendTagValue,
 		"Attach to ELBs tagged with "+elb.FrontendTag+"=value. Leave empty to not attach.")
-	elbCmd.Flags().IntVar(&elbExpectedNumber, "elb-expected-number", defaultElbExpectedNumber,
+	elbCmd.Flags().IntVar(&elbExpectedNumber, "elb-expected-number", defaultLbExpectedNumber,
 		"Expected number of ELBs to attach to. If 0 the controller will not check,"+
 			" otherwise it fails to start if it can't attach to this number.")
 	elbCmd.Flags().DurationVar(&drainDelay, "drain-delay", defaultDrainDelay, "Delay to wait"+

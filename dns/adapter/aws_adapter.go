@@ -12,8 +12,8 @@ import (
 	"github.com/sky-uk/feed/elb"
 )
 
-// FindELBsFunc defines a function which find ELBs based on a label
-type FindELBsFunc func(elb.ELB, string) (map[string]elb.LoadBalancerDetails, error)
+// FindELBsFunc defines a function which find ELBs based on a tag value
+type FindELBsFunc func(elb elb.ELB, tagValue string) (map[string]elb.LoadBalancerDetails, error)
 
 // ALB represents the subset of AWS operations needed for dns_updater.go
 type ALB interface {
