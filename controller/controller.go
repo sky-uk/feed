@@ -23,12 +23,16 @@ const (
 	ingressAllowAnnotation   = "sky.uk/allow"
 	frontendSchemeAnnotation = "sky.uk/frontend-scheme"
 
-	stripPathAnnotation = "sky.uk/strip-path"
-	exactPathAnnotation = "sky.uk/exact-path"
+	// Deprecated: retained to maintain backwards compatibility.
+	legacyFrontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
+	stripPathAnnotation               = "sky.uk/strip-path"
+	exactPathAnnotation               = "sky.uk/exact-path"
 
-	backendTimeoutSeconds       = "sky.uk/backend-timeout-seconds"
-	proxyBufferSizeAnnotation   = "sky.uk/proxy-buffer-size-in-kb"
-	proxyBufferBlocksAnnotation = "sky.uk/proxy-buffer-blocks"
+	// Deprecated: retained to maintain backwards compatibility.
+	legacyBackendKeepaliveSeconds = "sky.uk/backend-keepalive-seconds"
+	backendTimeoutSeconds         = "sky.uk/backend-timeout-seconds"
+	proxyBufferSizeAnnotation     = "sky.uk/proxy-buffer-size-in-kb"
+	proxyBufferBlocksAnnotation   = "sky.uk/proxy-buffer-blocks"
 
 	maxAllowedProxyBufferSize   = 32
 	maxAllowedProxyBufferBlocks = 8
@@ -227,6 +231,8 @@ func (c *controller) updateIngresses() (err error) {
 
 						if lbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
 							entry.LbScheme = lbScheme
+						} else {
+							entry.LbScheme = ingress.Annotations[legacyFrontendElbSchemeAnnotation]
 						}
 
 						if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
@@ -257,6 +263,11 @@ func (c *controller) updateIngresses() (err error) {
 								log.Warnf("Ingress %s/%s has an invalid exact path annotation [%s]. Using default",
 									ingress.Namespace, ingress.Name, exactPath)
 							}
+						}
+
+						if backendKeepAlive, ok := ingress.Annotations[legacyBackendKeepaliveSeconds]; ok {
+							tmp, _ := strconv.Atoi(backendKeepAlive)
+							entry.BackendTimeoutSeconds = tmp
 						}
 
 						if timeout, ok := ingress.Annotations[backendTimeoutSeconds]; ok {

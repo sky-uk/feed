@@ -300,7 +300,18 @@ type testSpec struct {
 func TestUpdaterIsUpdatedForIngressTaggedWithSkyFrontendScheme(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress tagged with sky.uk/frontend-scheme",
-		createIngressesFromNonELBAnnotation(),
+		createIngressesFromNonELBAnnotation(false),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		createLbEntriesFixture(),
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressTaggedWithLegacySkyFrontendScheme(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress tagged with legacy sky.uk/frontend-elb-scheme",
+		createIngressesFromNonELBAnnotation(true),
 		createDefaultServices(),
 		createDefaultNamespaces(),
 		createLbEntriesFixture(),
@@ -610,6 +621,35 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendTimeout(t *testing.T) {
 			backendTimeoutSeconds:    "20",
 			frontendSchemeAnnotation: "internal",
 			ingressClassAnnotation:   defaultIngressClass,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressClass:          defaultIngressClass,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: 20,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithOverriddenLegacyBackendTimeout(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with overridden backend timeout",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:        "",
+			stripPathAnnotation:           "false",
+			legacyBackendKeepaliveSeconds: "20",
+			frontendSchemeAnnotation:      "internal",
+			ingressClassAnnotation:        defaultIngressClass,
 		}, ingressPath),
 		createDefaultServices(),
 		createDefaultNamespaces(),
@@ -1193,12 +1233,21 @@ func createDefaultIngresses() []*v1beta1.Ingress {
 	}, ingressPath)
 }
 
-func createIngressesFromNonELBAnnotation() []*v1beta1.Ingress {
+func createIngressesFromNonELBAnnotation(legacyAnnotations bool) []*v1beta1.Ingress {
+	var timeoutAnnotation, schemeAnnotation string
+	if legacyAnnotations {
+		timeoutAnnotation = legacyBackendKeepaliveSeconds
+		schemeAnnotation = legacyFrontendElbSchemeAnnotation
+	} else {
+		timeoutAnnotation = backendTimeoutSeconds
+		schemeAnnotation = frontendSchemeAnnotation
+	}
+
 	return createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-		ingressAllowAnnotation:   ingressAllow,
-		backendTimeoutSeconds:    "10",
-		frontendSchemeAnnotation: "internal",
-		ingressClassAnnotation:   defaultIngressClass,
+		ingressAllowAnnotation: ingressAllow,
+		timeoutAnnotation:      "10",
+		schemeAnnotation:       "internal",
+		ingressClassAnnotation: defaultIngressClass,
 	}, ingressPath)
 }
 
@@ -1238,8 +1287,12 @@ func createIngressesFixture(namespace string, host string, serviceName string, s
 			annotations[stripPathAnnotation] = annotationVal
 		case exactPathAnnotation:
 			annotations[exactPathAnnotation] = annotationVal
+		case legacyFrontendElbSchemeAnnotation:
+			annotations[legacyFrontendElbSchemeAnnotation] = annotationVal
 		case frontendSchemeAnnotation:
 			annotations[frontendSchemeAnnotation] = annotationVal
+		case legacyBackendKeepaliveSeconds:
+			annotations[legacyBackendKeepaliveSeconds] = annotationVal
 		case backendTimeoutSeconds:
 			annotations[backendTimeoutSeconds] = annotationVal
 		case backendMaxConnections:
