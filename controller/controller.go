@@ -231,8 +231,8 @@ func (c *controller) updateIngresses() (err error) {
 
 						if lbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
 							entry.LbScheme = lbScheme
-						} else {
-							entry.LbScheme = ingress.Annotations[legacyFrontendElbSchemeAnnotation]
+						} else if legacyElbScheme, ok := ingress.Annotations[legacyFrontendElbSchemeAnnotation]; ok {
+							entry.LbScheme = legacyElbScheme
 						}
 
 						if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
