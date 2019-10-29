@@ -19,20 +19,21 @@ import (
 	"k8s.io/api/extensions/v1beta1"
 )
 
+// Deprecated: retained to maintain backwards compatibility.
+const (
+	legacyFrontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
+	legacyBackendKeepaliveSeconds     = "sky.uk/backend-keepalive-seconds"
+)
 const (
 	ingressAllowAnnotation   = "sky.uk/allow"
 	frontendSchemeAnnotation = "sky.uk/frontend-scheme"
 
-	// Deprecated: retained to maintain backwards compatibility.
-	legacyFrontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
-	stripPathAnnotation               = "sky.uk/strip-path"
-	exactPathAnnotation               = "sky.uk/exact-path"
+	stripPathAnnotation = "sky.uk/strip-path"
+	exactPathAnnotation = "sky.uk/exact-path"
 
-	// Deprecated: retained to maintain backwards compatibility.
-	legacyBackendKeepaliveSeconds = "sky.uk/backend-keepalive-seconds"
-	backendTimeoutSeconds         = "sky.uk/backend-timeout-seconds"
-	proxyBufferSizeAnnotation     = "sky.uk/proxy-buffer-size-in-kb"
-	proxyBufferBlocksAnnotation   = "sky.uk/proxy-buffer-blocks"
+	backendTimeoutSeconds       = "sky.uk/backend-timeout-seconds"
+	proxyBufferSizeAnnotation   = "sky.uk/proxy-buffer-size-in-kb"
+	proxyBufferBlocksAnnotation = "sky.uk/proxy-buffer-blocks"
 
 	maxAllowedProxyBufferSize   = 32
 	maxAllowedProxyBufferBlocks = 8
