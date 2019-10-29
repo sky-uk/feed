@@ -1,3 +1,7 @@
+# v2.2.0
+* Reintroduce support for deprecated ingress resource annotations
+  `sky.uk/frontend-elb-scheme` and `sky.uk/backend-keepalive-seconds`
+
 # v2.1.0
 * Added support for AWS Network Load Balancers
   with the `nlb` subcommand

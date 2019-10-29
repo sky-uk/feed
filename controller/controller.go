@@ -19,6 +19,11 @@ import (
 	"k8s.io/api/extensions/v1beta1"
 )
 
+// Deprecated: retained to maintain backwards compatibility.
+const (
+	legacyFrontendElbSchemeAnnotation = "sky.uk/frontend-elb-scheme"
+	legacyBackendKeepaliveSeconds     = "sky.uk/backend-keepalive-seconds"
+)
 const (
 	ingressAllowAnnotation   = "sky.uk/allow"
 	frontendSchemeAnnotation = "sky.uk/frontend-scheme"
@@ -227,6 +232,8 @@ func (c *controller) updateIngresses() (err error) {
 
 						if lbScheme, ok := ingress.Annotations[frontendSchemeAnnotation]; ok {
 							entry.LbScheme = lbScheme
+						} else if legacyElbScheme, ok := ingress.Annotations[legacyFrontendElbSchemeAnnotation]; ok {
+							entry.LbScheme = legacyElbScheme
 						}
 
 						if allow, ok := ingress.Annotations[ingressAllowAnnotation]; ok {
@@ -257,6 +264,11 @@ func (c *controller) updateIngresses() (err error) {
 								log.Warnf("Ingress %s/%s has an invalid exact path annotation [%s]. Using default",
 									ingress.Namespace, ingress.Name, exactPath)
 							}
+						}
+
+						if backendKeepAlive, ok := ingress.Annotations[legacyBackendKeepaliveSeconds]; ok {
+							tmp, _ := strconv.Atoi(backendKeepAlive)
+							entry.BackendTimeoutSeconds = tmp
 						}
 
 						if timeout, ok := ingress.Annotations[backendTimeoutSeconds]; ok {
