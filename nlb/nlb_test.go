@@ -145,15 +145,15 @@ func mockClusterTags(m *fakeElb, lbs ...lbTags) {
 	}, nil)
 }
 
-func mockRegisterTargets(mockElb *fakeElb, targetGroupArn, instanceID string) {
+func mockRegisterTargets(mockElb *fakeElb, targetGroupArn, privateIP string) {
 	mockElb.On("RegisterTargets", &elbv2.RegisterTargetsInput{
 		TargetGroupArn: aws.String(targetGroupArn),
-		Targets:        []*elbv2.TargetDescription{{Id: aws.String(instanceID)}},
+		Targets:        []*elbv2.TargetDescription{{Id: aws.String(privateIP)}},
 	}).Return(&elbv2.RegisterTargetsOutput{}, nil)
 }
 
-func mockInstanceMetadata(mockMd *fakeMetadata, instanceID string) {
-	mockMd.On("GetInstanceIdentityDocument").Return(ec2metadata.EC2InstanceIdentityDocument{InstanceID: instanceID}, nil)
+func mockInstanceMetadata(mockMd *fakeMetadata, privateIP string) {
+	mockMd.On("GetInstanceIdentityDocument").Return(ec2metadata.EC2InstanceIdentityDocument{PrivateIP: privateIP}, nil)
 }
 
 func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
@@ -186,8 +186,8 @@ func TestCannotCreateUpdaterWithoutIngressClassTagValue(t *testing.T) {
 func TestAttachWithSingleMatchingLoadBalancer(t *testing.T) {
 	// given
 	elbUpdater, mockElb, mockMetadata := setup()
-	instanceID := "cow"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	privateIP := "192.168.0.1"
+	mockInstanceMetadata(mockMetadata, privateIP)
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndTargetGroup := "cluster-frontend-tg"
 	clusterFrontEndDifferentCluster := "cluster-frontend-different-cluster"
@@ -207,7 +207,7 @@ func TestAttachWithSingleMatchingLoadBalancer(t *testing.T) {
 		}},
 		lbTags{name: "other nlb", tags: []*elbv2.Tag{{Key: aws.String("Banana"), Value: aws.String("Tasty")}}},
 	)
-	mockRegisterTargets(mockElb, clusterFrontEndTargetGroup, instanceID)
+	mockRegisterTargets(mockElb, clusterFrontEndTargetGroup, privateIP)
 	err := elbUpdater.Start()
 
 	//when
@@ -224,8 +224,8 @@ func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 	// given
 	elbUpdater, mockElb, mockMetadata := setup()
 	elbUpdater.(*nlb).expectedNumber = 2
-	instanceID := "cow"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	privateIP := "192.168.0.1"
+	mockInstanceMetadata(mockMetadata, privateIP)
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndTargetGroup := "cluster-frontend-tg"
 	clusterFrontEndDifferentCluster := "cluster-frontend-different-cluster"
@@ -242,7 +242,7 @@ func TestReportsErrorIfExpectedNotMatched(t *testing.T) {
 		}},
 		lbTags{name: "other nlb", tags: []*elbv2.Tag{{Key: aws.String("Banana"), Value: aws.String("Tasty")}}},
 	)
-	mockRegisterTargets(mockElb, clusterFrontEndTargetGroup, instanceID)
+	mockRegisterTargets(mockElb, clusterFrontEndTargetGroup, privateIP)
 
 	//when
 	_ = elbUpdater.Start()
@@ -277,12 +277,12 @@ func TestAttachWithInternalAndInternetFacing(t *testing.T) {
 	// given
 	elbUpdater, mockElb, mockMetadata := setup()
 	elbUpdater.(*nlb).expectedNumber = 2
-	instanceID := "cow"
+	privateIP := "192.168.0.1"
 	privateFrontend := "cluster-frontend"
 	privateFrontendTargetGroup := "cluster-frontend-tg"
 	publicFrontend := "cluster-frontend2"
 	publicFrontendTargetGroup := "cluster-frontend2-tg"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	mockInstanceMetadata(mockMetadata, privateIP)
 	mockLoadBalancers(mockElb,
 		lb{name: privateFrontend, scheme: elbInternalScheme},
 		lb{name: publicFrontend, scheme: elbInternetFacingScheme})
@@ -291,8 +291,8 @@ func TestAttachWithInternalAndInternetFacing(t *testing.T) {
 		lbTags{name: privateFrontend, tags: defaultTags},
 		lbTags{name: publicFrontend, tags: defaultTags},
 	)
-	mockRegisterTargets(mockElb, privateFrontendTargetGroup, instanceID)
-	mockRegisterTargets(mockElb, publicFrontendTargetGroup, instanceID)
+	mockRegisterTargets(mockElb, privateFrontendTargetGroup, privateIP)
+	mockRegisterTargets(mockElb, publicFrontendTargetGroup, privateIP)
 
 	//when
 	err := elbUpdater.Start()
@@ -317,8 +317,8 @@ func TestErrorGettingMetadata(t *testing.T) {
 
 func TestErrorDescribingInstances(t *testing.T) {
 	elbUpdater, mockElb, mockMetadata := setup()
-	instanceID := "cow"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	privateIP := "192.168.0.1"
+	mockInstanceMetadata(mockMetadata, privateIP)
 	mockElb.
 		On("DescribeLoadBalancers", mock.AnythingOfType("*elbv2.DescribeLoadBalancersInput")).
 		Return(&elbv2.DescribeLoadBalancersOutput{}, errors.New("oh dear oh dear"))
@@ -331,8 +331,8 @@ func TestErrorDescribingInstances(t *testing.T) {
 
 func TestErrorDescribingTags(t *testing.T) {
 	elbUpdater, mockElb, mockMetadata := setup()
-	instanceID := "cow"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	privateIP := "192.168.0.1"
+	mockInstanceMetadata(mockMetadata, privateIP)
 	mockLoadBalancers(mockElb, lb{name: "one"})
 	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn"})
 	mockElb.
@@ -348,9 +348,9 @@ func TestErrorDescribingTags(t *testing.T) {
 func TestNoMatchingElbs(t *testing.T) {
 	// given
 	elbUpdater, mockElb, mockMetadata := setup()
-	instanceID := "cow"
+	privateIP := "192.168.0.1"
 	loadBalancerArn := "i am not the loadbalancer you are looking for"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	mockInstanceMetadata(mockMetadata, privateIP)
 	mockLoadBalancers(mockElb, lb{name: loadBalancerArn, scheme: elbInternalScheme})
 	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn"})
 	// No cluster tags
@@ -367,9 +367,9 @@ func TestNoMatchingElbs(t *testing.T) {
 func TestAttachingWithoutIngressClassTagElbs(t *testing.T) {
 	// given
 	elbUpdater, mockElb, mockMetadata := setup()
-	instanceID := "cow"
+	privateIP := "192.168.0.1"
 	loadBalancerArn := "i am not the loadbalancer you are looking for"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	mockInstanceMetadata(mockMetadata, privateIP)
 	mockLoadBalancers(mockElb, lb{name: loadBalancerArn, scheme: elbInternalScheme})
 	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn"})
 	// No cluster tags
@@ -388,9 +388,9 @@ func TestAttachingWithoutIngressClassTagElbs(t *testing.T) {
 func TestAttachingWithoutFrontendTagElbs(t *testing.T) {
 	// given
 	elbUpdater, mockElb, mockMetadata := setup()
-	instanceID := "cow"
+	privateIP := "192.168.0.1"
 	loadBalancerArn := "i am not the loadbalancer you are looking for"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	mockInstanceMetadata(mockMetadata, privateIP)
 	mockLoadBalancers(mockElb, lb{name: loadBalancerArn, scheme: elbInternalScheme})
 	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn"})
 	// No cluster tags
@@ -409,7 +409,7 @@ func TestAttachingWithoutFrontendTagElbs(t *testing.T) {
 func TestGetLoadBalancerPages(t *testing.T) {
 	// given
 	elbUpdater, mockElb, mockMetadata := setup()
-	instanceID := "cow"
+	privateIP := "192.168.0.1"
 	loadBalancerArn := "lb1"
 	loadBalancerTargetGroupArn := "lb1-tg"
 	mockElb.
@@ -425,9 +425,9 @@ func TestGetLoadBalancerPages(t *testing.T) {
 			}},
 		}, nil)
 	mockDescribeTargetGroups(mockElb, tg{loadBalancerTargetGroupArn})
-	mockInstanceMetadata(mockMetadata, instanceID)
+	mockInstanceMetadata(mockMetadata, privateIP)
 	mockClusterTags(mockElb, lbTags{name: loadBalancerArn, tags: defaultTags})
-	mockRegisterTargets(mockElb, loadBalancerTargetGroupArn, instanceID)
+	mockRegisterTargets(mockElb, loadBalancerTargetGroupArn, privateIP)
 
 	// when
 	err := elbUpdater.Update(controller.IngressEntries{})
@@ -441,12 +441,12 @@ func TestTagCallsPageV2(t *testing.T) {
 	// given
 	elbUpdaterV2, mockElbV2, mockMetadata := setup()
 	elbUpdaterV2.(*nlb).expectedNumber = 2
-	instanceID := "cow"
+	privateIP := "192.168.0.1"
 	loadBalancerArn := "lb1"
 	loadBalancerTargetGroupArn := "lb1-tg"
 	loadBalancer2Arn := "lb2"
 	loadBalancer2TargetGroupArn := "lb2-tg"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	mockInstanceMetadata(mockMetadata, privateIP)
 	mockLoadBalancers(mockElbV2,
 		lb{name: loadBalancerArn, scheme: elbInternalScheme},
 		lb{name: loadBalancer2Arn, scheme: elbInternetFacingScheme})
@@ -454,8 +454,8 @@ func TestTagCallsPageV2(t *testing.T) {
 	mockClusterTags(mockElbV2,
 		lbTags{name: loadBalancerArn, tags: defaultTags},
 		lbTags{name: loadBalancer2Arn, tags: defaultTags})
-	mockRegisterTargets(mockElbV2, loadBalancerTargetGroupArn, instanceID)
-	mockRegisterTargets(mockElbV2, loadBalancer2TargetGroupArn, instanceID)
+	mockRegisterTargets(mockElbV2, loadBalancerTargetGroupArn, privateIP)
+	mockRegisterTargets(mockElbV2, loadBalancer2TargetGroupArn, privateIP)
 
 	// when
 	err := elbUpdaterV2.Update(controller.IngressEntries{})
@@ -471,8 +471,8 @@ func TestDeregistersWithAttachedELBsV2(t *testing.T) {
 	elbUpdaterV2.(*nlb).expectedNumber = 2
 	elbUpdaterV2.(*nlb).drainDelay = time.Millisecond * 100
 
-	instanceID := "cow"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	privateIP := "192.168.0.1"
+	mockInstanceMetadata(mockMetadata, privateIP)
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndTargetGroupArn := "cluster-frontend-tg"
 	clusterFrontEnd2 := "cluster-frontend2"
@@ -487,15 +487,15 @@ func TestDeregistersWithAttachedELBsV2(t *testing.T) {
 		lbTags{name: clusterFrontEnd2, tags: defaultTags},
 		lbTags{name: "other nlb", tags: []*elbv2.Tag{{Key: aws.String("Banana"), Value: aws.String("Tasty")}}},
 	)
-	mockRegisterTargets(mockElbV2, clusterFrontEndTargetGroupArn, instanceID)
-	mockRegisterTargets(mockElbV2, clusterFrontEnd2TargetGroupArn, instanceID)
+	mockRegisterTargets(mockElbV2, clusterFrontEndTargetGroupArn, privateIP)
+	mockRegisterTargets(mockElbV2, clusterFrontEnd2TargetGroupArn, privateIP)
 
 	mockElbV2.On("DeregisterTargets", &elbv2.DeregisterTargetsInput{
-		Targets:        []*elbv2.TargetDescription{{Id: aws.String(instanceID)}},
+		Targets:        []*elbv2.TargetDescription{{Id: aws.String(privateIP)}},
 		TargetGroupArn: aws.String(clusterFrontEndTargetGroupArn),
 	}).Return(&elbv2.DeregisterTargetsOutput{}, nil)
 	mockElbV2.On("DeregisterTargets", &elbv2.DeregisterTargetsInput{
-		Targets:        []*elbv2.TargetDescription{{Id: aws.String(instanceID)}},
+		Targets:        []*elbv2.TargetDescription{{Id: aws.String(privateIP)}},
 		TargetGroupArn: aws.String(clusterFrontEnd2TargetGroupArn),
 	}).Return(&elbv2.DeregisterTargetsOutput{}, nil)
 
@@ -515,8 +515,8 @@ func TestDeregistersWithAttachedELBsV2(t *testing.T) {
 func TestRegisterInstanceErrorV2(t *testing.T) {
 	// given
 	elbUpdaterV2, mockElbV2, mockMetadata := setup()
-	instanceID := "cow"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	privateIP := "192.168.0.1"
+	mockInstanceMetadata(mockMetadata, privateIP)
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndTargetGroup := "cluster-frontend-tg"
 	mockLoadBalancers(mockElbV2, lb{name: clusterFrontEnd, scheme: elbInternalScheme})
@@ -531,15 +531,15 @@ func TestRegisterInstanceErrorV2(t *testing.T) {
 	err := elbUpdaterV2.Update(controller.IngressEntries{})
 
 	// then
-	assert.EqualError(t, err, fmt.Sprintf("unable to register instance cow with nlb cluster-frontend: "+
-		"could not register Target Group(s) with Instance cow: [%s]", clusterFrontEndTargetGroup))
+	assert.EqualError(t, err, fmt.Sprintf("unable to register instance 192.168.0.1 with nlb cluster-frontend: "+
+		"could not register Target Group(s) with Instance 192.168.0.1: [%s]", clusterFrontEndTargetGroup))
 }
 
 func TestDeRegisterInstanceErrorV2(t *testing.T) {
 	// given
 	elbUpdaterV2, mockElbV2, mockMetadata := setup()
-	instanceID := "cow"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	privateIP := "192.168.0.1"
+	mockInstanceMetadata(mockMetadata, privateIP)
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndTargetGroup := "cluster-frontend-tg"
 	mockLoadBalancers(mockElbV2,
@@ -548,7 +548,7 @@ func TestDeRegisterInstanceErrorV2(t *testing.T) {
 	mockClusterTags(mockElbV2,
 		lbTags{name: clusterFrontEnd, tags: defaultTags},
 	)
-	mockRegisterTargets(mockElbV2, clusterFrontEndTargetGroup, instanceID)
+	mockRegisterTargets(mockElbV2, clusterFrontEndTargetGroup, privateIP)
 	mockElbV2.On("DeregisterTargets", mock.Anything).
 		Return(&elbv2.DeregisterTargetsOutput{}, errors.New("no deregister for you"))
 
@@ -564,8 +564,8 @@ func TestDeRegisterInstanceErrorV2(t *testing.T) {
 func TestRetriesUpdateIfFirstAttemptFailsV2(t *testing.T) {
 	// given
 	elbUpdaterV2, mockElbV2, mockMetadata := setup()
-	instanceID := "cow"
-	mockInstanceMetadata(mockMetadata, instanceID)
+	privateIP := "192.168.0.1"
+	mockInstanceMetadata(mockMetadata, privateIP)
 	clusterFrontEnd := "cluster-frontend"
 	mockLoadBalancers(mockElbV2,
 		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
