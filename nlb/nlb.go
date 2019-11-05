@@ -67,7 +67,7 @@ type nlb struct {
 	ingressClassTagValue string
 	region               string
 	expectedNumber       int
-	instanceID           string
+	privateIPAddress     string
 	elbs                 map[string]LoadBalancerDetails
 	registeredFrontends  util.SafeInt
 	initialised          initialised
@@ -107,8 +107,8 @@ func (e *nlb) attachToFrontEnds() error {
 		return fmt.Errorf("unable to query ec2 metadata service for InstanceId: %v", err)
 	}
 
-	instance := id.InstanceID
-	log.Infof("Attaching to NLBs from instance %s", instance)
+	privateIP := id.PrivateIP
+	log.Infof("Attaching to NLBs from instance %s", privateIP)
 	clusterFrontEnds, err := FindFrontEndLoadBalancersWithIngressClassName(e.awsElb, e.frontendTagValue, e.ingressClassTagValue)
 
 	if err != nil {
@@ -120,14 +120,14 @@ func (e *nlb) attachToFrontEnds() error {
 	// Save these now so we can always know what we might have done
 	// up until this point we have only read data
 	e.elbs = clusterFrontEnds
-	e.instanceID = instance
+	e.privateIPAddress = privateIP
 	registered := 0
 
 	for _, frontend := range clusterFrontEnds {
-		log.Infof("Registering instance %s with nlb %s", instance, frontend.Name)
-		err = registerWithLoadBalancer(e.awsElb, instance, frontend)
+		log.Infof("Registering instance %s with nlb %s", privateIP, frontend.Name)
+		err = registerWithLoadBalancer(e.awsElb, privateIP, frontend)
 		if err != nil {
-			return fmt.Errorf("unable to register instance %s with nlb %s: %v", instance, frontend.Name, err)
+			return fmt.Errorf("unable to register instance %s with nlb %s: %v", privateIP, frontend.Name, err)
 		}
 		registered++
 	}
@@ -195,23 +195,23 @@ func findTargetGroupArns(awsElb ELBV2, loadBalancer *elbv2.LoadBalancer) []strin
 	return arns
 }
 
-func registerWithLoadBalancer(awsElb ELBV2, instanceID string, lb LoadBalancerDetails) error {
+func registerWithLoadBalancer(awsElb ELBV2, privateIP string, lb LoadBalancerDetails) error {
 	var failedArns []string
 
 	for _, arn := range lb.TargetGroupArns {
-		log.Infof("Registering instance %s with Target Group %s", instanceID, arn)
+		log.Infof("Registering instance %s with Target Group %s", privateIP, arn)
 		_, err := awsElb.RegisterTargets(&elbv2.RegisterTargetsInput{
-			Targets:        []*elbv2.TargetDescription{{Id: aws.String(instanceID)}},
+			Targets:        []*elbv2.TargetDescription{{Id: aws.String(privateIP)}},
 			TargetGroupArn: aws.String(arn),
 		})
 		if err != nil {
-			log.Errorf("Could not register instance %s with Target Group %s: %v", instanceID, arn, err)
+			log.Errorf("Could not register instance %s with Target Group %s: %v", privateIP, arn, err)
 			failedArns = append(failedArns, arn)
 		}
 	}
 
 	if failedArns != nil {
-		return fmt.Errorf("could not register Target Group(s) with Instance %s: %v", instanceID, failedArns)
+		return fmt.Errorf("could not register Target Group(s) with Instance %s: %v", privateIP, failedArns)
 	}
 
 	return nil
@@ -303,10 +303,10 @@ func tagsDoMatch(elbTags []tag, tagsToMatch map[string]string) bool {
 func (e *nlb) Stop() error {
 	var failed = false
 	for _, elb := range e.elbs {
-		log.Infof("Deregistering instance %s with nlb %s", e.instanceID, elb.Name)
-		err := deregisterFromLoadBalancer(e.awsElb, e.instanceID, elb)
+		log.Infof("Deregistering instance %s with nlb %s", e.privateIPAddress, elb.Name)
+		err := deregisterFromLoadBalancer(e.awsElb, e.privateIPAddress, elb)
 		if err != nil {
-			log.Warnf("unable to deregister instance %s with nlb %s: %v", e.instanceID, elb.Name, err)
+			log.Warnf("unable to deregister instance %s with nlb %s: %v", e.privateIPAddress, elb.Name, err)
 			failed = true
 		}
 	}
@@ -320,23 +320,23 @@ func (e *nlb) Stop() error {
 	return nil
 }
 
-func deregisterFromLoadBalancer(awsElb ELBV2, instanceID string, lb LoadBalancerDetails) error {
+func deregisterFromLoadBalancer(awsElb ELBV2, privateIP string, lb LoadBalancerDetails) error {
 	var failedArns []string
 
 	for _, arn := range lb.TargetGroupArns {
-		log.Infof("Deregistering instance %s from Target Group %s", instanceID, arn)
+		log.Infof("Deregistering instance %s from Target Group %s", privateIP, arn)
 		_, err := awsElb.DeregisterTargets(&elbv2.DeregisterTargetsInput{
-			Targets:        []*elbv2.TargetDescription{{Id: aws.String(instanceID)}},
+			Targets:        []*elbv2.TargetDescription{{Id: aws.String(privateIP)}},
 			TargetGroupArn: aws.String(arn),
 		})
 		if err != nil {
-			log.Errorf("Could not deregister instance %s from Target Group %s: %v", instanceID, arn, err)
+			log.Errorf("Could not deregister instance %s from Target Group %s: %v", privateIP, arn, err)
 			failedArns = append(failedArns, arn)
 		}
 	}
 
 	if failedArns != nil {
-		return fmt.Errorf("could not deregister Target Group(s) from Instance %s: %v", instanceID, failedArns)
+		return fmt.Errorf("could not deregister Target Group(s) from Instance %s: %v", privateIP, failedArns)
 	}
 
 	return nil
