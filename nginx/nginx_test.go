@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1257,11 +1258,15 @@ func TestUpdatesMetricsFromNginxStatusPage(t *testing.T) {
 
 func assertIngressRequestCounters(t *testing.T, host, path string, in, out, ones, twos, threes, fours, fives float64) {
 	assert := assert.New(t)
+
 	inBytes, _ := ingressBytes.GetMetricWithLabelValues(host, path, "in")
+	assert.Equal("feed_ingress_ingress_bytes", metricName(ingressBytes))
 	assert.Equal(in, metricValue(inBytes), "in bytes for %s%s", host, path)
 	outBytes, _ := ingressBytes.GetMetricWithLabelValues(host, path, "out")
 	assert.Equal(out, metricValue(outBytes), "out bytes for %s%s", host, path)
+
 	req1xx, _ := ingressRequests.GetMetricWithLabelValues(host, path, "1xx")
+	assert.Equal("feed_ingress_ingress_requests", metricName(req1xx))
 	assert.Equal(ones, metricValue(req1xx), "1xx for %s%s", host, path)
 	req2xx, _ := ingressRequests.GetMetricWithLabelValues(host, path, "2xx")
 	assert.Equal(twos, metricValue(req2xx), "2xx for %s%s", host, path)
@@ -1275,11 +1280,15 @@ func assertIngressRequestCounters(t *testing.T, host, path string, in, out, ones
 
 func assertEndpointRequestCounters(t *testing.T, name, endpoint string, in, out, ones, twos, threes, fours, fives float64) {
 	assert := assert.New(t)
+
 	inBytes, _ := endpointBytes.GetMetricWithLabelValues(name, endpoint, "in")
+	assert.Equal("feed_ingress_endpoint_bytes", metricName(inBytes))
 	assert.Equal(in, metricValue(inBytes), "in bytes for %s%s", name, endpoint)
 	outBytes, _ := endpointBytes.GetMetricWithLabelValues(name, endpoint, "out")
 	assert.Equal(out, metricValue(outBytes), "out bytes for %s%s", name, endpoint)
+
 	req1xx, _ := endpointRequests.GetMetricWithLabelValues(name, endpoint, "1xx")
+	assert.Equal("feed_ingress_endpoint_requests", metricName(req1xx))
 	assert.Equal(ones, metricValue(req1xx), "1xx for %s%s", name, endpoint)
 	req2xx, _ := endpointRequests.GetMetricWithLabelValues(name, endpoint, "2xx")
 	assert.Equal(twos, metricValue(req2xx), "2xx for %s%s", name, endpoint)
@@ -1329,6 +1338,15 @@ func metricValue(c prometheus.Collector) float64 {
 		return *metricVal.Counter.Value
 	}
 	return -1.0
+}
+
+func metricName(c prometheus.Collector) string {
+	descriptionCh := make(chan *prometheus.Desc, 1)
+	c.Describe(descriptionCh)
+	desc := <-descriptionCh
+	descReflect := reflect.ValueOf(*desc)
+	fqNameField := descReflect.FieldByName("fqName")
+	return fqNameField.String()
 }
 
 func TestFailsToUpdateIfConfigurationIsBroken(t *testing.T) {
