@@ -3,6 +3,7 @@ package nlb
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -165,6 +166,23 @@ func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
 	elbUpdater.(*nlb).metadata = mockMetadata
 
 	return elbUpdater, mockElb, mockMetadata
+}
+
+func TestMetricsRegisteredCorrectly(t *testing.T) {
+	//when
+	_, _ = New(region, clusterName, ingressClass, 1, 0)
+
+	//then
+	assert.Equal(t, "feed_ingress_frontends_attached", metricName(attachedFrontendGauge))
+}
+
+func metricName(c prometheus.Collector) string {
+	descriptionCh := make(chan *prometheus.Desc, 1)
+	c.Describe(descriptionCh)
+	desc := <-descriptionCh
+	descReflect := reflect.ValueOf(*desc)
+	fqNameField := descReflect.FieldByName("fqName")
+	return fqNameField.String()
 }
 
 func TestCannotCreateUpdaterWithoutFrontEndTagValue(t *testing.T) {

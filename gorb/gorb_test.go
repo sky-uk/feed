@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -175,6 +176,12 @@ var _ = Describe("Gorb", func() {
 	})
 
 	Describe("Health endpoint", func() {
+		It("should register metrics on startup", func() {
+			_, _ = New(singleServiceConfig(serverURL))
+
+			Expect(metricName(attachedFrontendGauge)).To(Equal("feed_ingress_gorb_frontends_attached"))
+		})
+
 		It("should be healthy when status code is 200", func() {
 			gorbH.responsePrimers = append(gorbH.responsePrimers, gorbResponsePrimer{statusCode: 200})
 
@@ -345,3 +352,12 @@ var _ = Describe("Gorb", func() {
 		})
 	})
 })
+
+func metricName(c prometheus.Collector) string {
+	descriptionCh := make(chan *prometheus.Desc, 1)
+	c.Describe(descriptionCh)
+	desc := <-descriptionCh
+	descReflect := reflect.ValueOf(*desc)
+	fqNameField := descReflect.FieldByName("fqName")
+	return fqNameField.String()
+}

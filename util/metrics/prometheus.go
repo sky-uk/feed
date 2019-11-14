@@ -44,20 +44,20 @@ func SetConstLabels(l prometheus.Labels) {
 	constLabels = l
 }
 
-func gaugeOpts(name string, help string) prometheus.GaugeOpts {
+func gaugeOpts(subsystem, name, help string) prometheus.GaugeOpts {
 	return prometheus.GaugeOpts{
 		Namespace:   PrometheusNamespace,
-		Subsystem:   PrometheusDNSSubsystem,
+		Subsystem:   subsystem,
 		Name:        name,
 		Help:        help,
 		ConstLabels: ConstLabels(),
 	}
 }
 
-func counterOpts(name string, help string) prometheus.CounterOpts {
+func counterOpts(subsystem, name, help string) prometheus.CounterOpts {
 	return prometheus.CounterOpts{
 		Namespace:   PrometheusNamespace,
-		Subsystem:   PrometheusDNSSubsystem,
+		Subsystem:   subsystem,
 		Name:        name,
 		Help:        help,
 		ConstLabels: ConstLabels(),
@@ -73,16 +73,16 @@ func register(collector prometheus.Collector, name string) prometheus.Collector 
 }
 
 // RegisterNewDefaultGauge creates and registers a named Gauge with default options
-func RegisterNewDefaultGauge(name string, help string) prometheus.Gauge {
-	return register(prometheus.NewGauge(gaugeOpts(name, help)), name).(prometheus.Gauge)
+func RegisterNewDefaultGauge(subsystem, name, help string) prometheus.Gauge {
+	return register(prometheus.NewGauge(gaugeOpts(subsystem, name, help)), name).(prometheus.Gauge)
 }
 
 // RegisterNewDefaultGaugeVec creates and registers a named GaugeVec with default options
-func RegisterNewDefaultGaugeVec(name string, help string, labelNames []string) *prometheus.GaugeVec {
-	return register(prometheus.NewGaugeVec(gaugeOpts(name, help), labelNames), name).(*prometheus.GaugeVec)
+func RegisterNewDefaultGaugeVec(subsystem, name, help string, labelNames []string) *prometheus.GaugeVec {
+	return register(prometheus.NewGaugeVec(gaugeOpts(subsystem, name, help), labelNames), name).(*prometheus.GaugeVec)
 }
 
 // RegisterNewDefaultCounter creates and registers a named Counter with default options
-func RegisterNewDefaultCounter(name string, help string) prometheus.Counter {
-	return register(prometheus.NewCounter(counterOpts(name, help)), name).(prometheus.Counter)
+func RegisterNewDefaultCounter(subsystem, name, help string) prometheus.Counter {
+	return register(prometheus.NewCounter(counterOpts(subsystem, name, help)), name).(prometheus.Counter)
 }

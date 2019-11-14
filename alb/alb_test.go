@@ -2,6 +2,7 @@ package alb
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -106,6 +107,23 @@ func setup(targetGroupNames ...string) (controller.Updater, *mockALB, *mockMetad
 	a.(*alb).awsALB = mockALB
 	a.(*alb).metadata = mockMetadata
 	return a, mockALB, mockMetadata
+}
+
+func TestMetricsRegisteredCorrectly(t *testing.T) {
+	//when
+	_, _ = New(region, []string{"internal", "external"}, time.Nanosecond)
+
+	//then
+	assert.Equal(t, "feed_ingress_alb_frontends_attached", metricName(attachedFrontendGauge))
+}
+
+func metricName(c prometheus.Collector) string {
+	descriptionCh := make(chan *prometheus.Desc, 1)
+	c.Describe(descriptionCh)
+	desc := <-descriptionCh
+	descReflect := reflect.ValueOf(*desc)
+	fqNameField := descReflect.FieldByName("fqName")
+	return fqNameField.String()
 }
 
 func TestCanNotCreateUpdaterWithoutLabelValue(t *testing.T) {

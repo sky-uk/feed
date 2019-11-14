@@ -131,16 +131,9 @@ func AddHealthMetrics(pulse Pulse, prometheusSubsystem string) {
 }
 
 func createUnhealthyCounter(subsystem string) prometheus.Counter {
-	unhealthyCounter := prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: metrics.PrometheusNamespace,
-		Subsystem: subsystem,
-		Name:      "unhealthy_time",
-		Help: fmt.Sprintf("The number of seconds %s-%s has been unhealthy.",
-			metrics.PrometheusNamespace, subsystem),
-		ConstLabels: metrics.ConstLabels(),
-	})
-	prometheus.MustRegister(unhealthyCounter)
-	return unhealthyCounter
+	return metrics.RegisterNewDefaultCounter(subsystem, "unhealthy_time",
+		fmt.Sprintf("The number of seconds %s-%s has been unhealthy.",
+			metrics.PrometheusNamespace, subsystem))
 }
 
 // AddMetricsPusher starts a periodic push of metrics to a prometheus pushgateway.
