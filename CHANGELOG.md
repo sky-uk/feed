@@ -1,3 +1,6 @@
+# v2.2.2
+* [BUGFIX] feed-ingress metrics now have correct prefix of `feed_ingress_` (was `feed_dns_`)
+
 # v2.2.1
 * Attach to NLBs using the instance's private IP address rather than the instance ID to allow services to route to a feed instance on
 the same host.  More information can be found here: https://aws.amazon.com/premiumsupport/knowledge-center/target-connection-fails-load-balancer/.
