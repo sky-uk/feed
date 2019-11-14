@@ -4,14 +4,16 @@
 # v2.2.1
 * Attach to NLBs using the instance's private IP address rather than the instance ID to allow services to route to a feed instance on
 the same host.  More information can be found here: https://aws.amazon.com/premiumsupport/knowledge-center/target-connection-fails-load-balancer/.
+* [BUG] feed-ingress metrics are prefixed with `feed_dns_` instead of `feed_ingress_`. Fixed in [v2.2.2](#v222)
 
 # v2.2.0
 * Reintroduce support for deprecated ingress resource annotations
   `sky.uk/frontend-elb-scheme` and `sky.uk/backend-keepalive-seconds`
+* [BUG] feed-ingress metrics are prefixed with `feed_dns_` instead of `feed_ingress_`. Fixed in [v2.2.2](#v222)
 
 # v2.1.0
-* Added support for AWS Network Load Balancers
-  with the `nlb` subcommand
+* Added support for AWS Network Load Balancers with the `nlb` subcommand
+* [BUG] feed-ingress metrics are prefixed with `feed_dns_` instead of `feed_ingress_`. Fixed in [v2.2.2](#v222)
 
 # v2.0.0
 * Added support for multiple feed-ingress controllers per cluster
