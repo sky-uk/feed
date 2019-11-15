@@ -11,7 +11,8 @@ def sigquit_handler(sig, frame):
 
 # Can't do anything in this handler - python libs are not thread safe, so not safe to call e.g. print.
 def sighup_handler(sig, frame):
-    pass
+    with open(startup_marker_file_name, 'w') as f:
+        f.write('reloaded!')
 
 print('Running {}'.format(str(sys.argv)))
 
@@ -30,7 +31,7 @@ signal.signal(signal.SIGQUIT, sigquit_handler)
 signal.signal(signal.SIGHUP, sighup_handler)
 signal.pause
 
-startup_marker_file_name = str.join('/', sys.argv[2].split('/')[:-1]) + '/nginx-started'
+startup_marker_file_name = str.join('/', sys.argv[2].split('/')[:-1]) + '/nginx-log'
 with open(startup_marker_file_name, 'w') as f:
     f.write('started!')
 

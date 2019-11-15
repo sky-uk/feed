@@ -1367,3 +1367,173 @@ func createNamespaceFixture(name string, labels map[string]string) []*v1.Namespa
 		},
 	}
 }
+
+func TestUpdateFailsWhenK8sClientReturnsNoIngresses(t *testing.T) {
+	test := testSpec{
+		"ingress without rules definition",
+		createDefaultIngresses(),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		createLbEntriesFixture(),
+		defaultConfig(),
+	}
+
+	asserter := assert.New(t)
+	fmt.Printf("test: %s\n", test.description)
+	test.entries = addIngresses(test.ingresses, test.entries)
+
+	client := new(fake.FakeClient)
+	updater := new(fakeUpdater)
+
+	config := test.config
+	config.KubernetesClient = client
+	config.Updaters = []Updater{updater}
+	controller := New(config)
+
+	updater.On("Start").Return(nil)
+	updater.On("Stop").Return(nil)
+	updater.On("Health").Return(nil)
+
+	// This is the call we are testing (by returning an empty array of ingresses)
+	client.On("GetAllIngresses").Return([]*v1beta1.Ingress{}, nil)
+
+	ingressWatcher, ingressCh := createFakeWatcher()
+	serviceWatcher, serviceCh := createFakeWatcher()
+	namespaceWatcher, namespaceCh := createFakeWatcher()
+	client.On("WatchIngresses").Return(ingressWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
+	client.On("WatchNamespaces").Return(namespaceWatcher)
+
+	asserter.NoError(controller.Start())
+	ingressCh <- struct{}{}
+	serviceCh <- struct{}{}
+	namespaceCh <- struct{}{}
+
+	time.Sleep(smallWaitTime)
+
+	// This is the main assertion we are making (that 0 ingresses fails the update)
+	asserter.EqualError(controller.Health(), "updates failed to apply: found 0 ingresses")
+	asserter.NoError(controller.Stop())
+
+	time.Sleep(smallWaitTime)
+
+	updater.AssertExpectations(t)
+	client.AssertExpectations(t)
+}
+
+func TestUpdateFailsWhenK8sClientReturnsNoNamespaceIngresses(t *testing.T) {
+
+	namespaceSelector := &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"}
+
+	test := testSpec{
+		"ingress without rules definition",
+		createDefaultIngresses(),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		createLbEntriesFixture(),
+		Config{
+			DefaultAllow:                 ingressDefaultAllow,
+			DefaultBackendTimeoutSeconds: backendTimeout,
+			Name:                         defaultIngressClass,
+			NamespaceSelector:            namespaceSelector,
+		},
+	}
+
+	asserter := assert.New(t)
+	fmt.Printf("test: %s\n", test.description)
+	test.entries = addIngresses(test.ingresses, test.entries)
+
+	client := new(fake.FakeClient)
+	updater := new(fakeUpdater)
+
+	config := test.config
+	config.KubernetesClient = client
+	config.Updaters = []Updater{updater}
+	controller := New(config)
+
+	updater.On("Start").Return(nil)
+	updater.On("Stop").Return(nil)
+	updater.On("Health").Return(nil)
+
+	// This is the call we are testing (by returning an empty array of ingresses)
+	client.On("GetIngresses", namespaceSelector).Return([]*v1beta1.Ingress{}, nil)
+
+	ingressWatcher, ingressCh := createFakeWatcher()
+	serviceWatcher, serviceCh := createFakeWatcher()
+	namespaceWatcher, namespaceCh := createFakeWatcher()
+	client.On("WatchIngresses").Return(ingressWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
+	client.On("WatchNamespaces").Return(namespaceWatcher)
+
+	asserter.NoError(controller.Start())
+	ingressCh <- struct{}{}
+	serviceCh <- struct{}{}
+	namespaceCh <- struct{}{}
+
+	time.Sleep(smallWaitTime)
+
+	// This is the main assertion we are making (that 0 ingresses fails the update)
+	asserter.EqualError(controller.Health(), "updates failed to apply: found 0 ingresses")
+	asserter.NoError(controller.Stop())
+
+	time.Sleep(smallWaitTime)
+
+	updater.AssertExpectations(t)
+	client.AssertExpectations(t)
+}
+
+func TestUpdateFailsWhenK8sClientReturnsNoServices(t *testing.T) {
+	test := testSpec{
+		"ingress without rules definition",
+		createDefaultIngresses(),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		createLbEntriesFixture(),
+		defaultConfig(),
+	}
+
+	asserter := assert.New(t)
+	fmt.Printf("test: %s\n", test.description)
+	test.entries = addIngresses(test.ingresses, test.entries)
+
+	client := new(fake.FakeClient)
+	updater := new(fakeUpdater)
+
+	config := test.config
+	config.KubernetesClient = client
+	config.Updaters = []Updater{updater}
+	controller := New(config)
+
+	updater.On("Start").Return(nil)
+	updater.On("Stop").Return(nil)
+	updater.On("Health").Return(nil)
+	updater.AssertNotCalled(t, "Update")
+	//
+	// We have to return ingresses successfully first
+	client.On("GetAllIngresses").Return(test.ingresses, nil)
+	// This is the call we are testing (by returning an empty array of services)
+	client.On("GetServices").Return([]*v1.Service{}, nil)
+
+	ingressWatcher, ingressCh := createFakeWatcher()
+	serviceWatcher, serviceCh := createFakeWatcher()
+	namespaceWatcher, namespaceCh := createFakeWatcher()
+	client.On("WatchIngresses").Return(ingressWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
+	client.On("WatchNamespaces").Return(namespaceWatcher)
+
+	asserter.NoError(controller.Start())
+	ingressCh <- struct{}{}
+	serviceCh <- struct{}{}
+	namespaceCh <- struct{}{}
+
+	time.Sleep(smallWaitTime)
+
+	// This is the main assertion we are making (that 0 services fails the update)
+	asserter.EqualError(controller.Health(), "updates failed to apply: found 0 services")
+	asserter.NoError(controller.Stop())
+
+	time.Sleep(smallWaitTime)
+
+	updater.AssertExpectations(t)
+	client.AssertExpectations(t)
+}

@@ -71,3 +71,8 @@ func (e IngressEntry) validate() error {
 func (e IngressEntry) NamespaceName() string {
 	return fmt.Sprintf("%s/%s", e.Namespace, e.Name)
 }
+
+func (e IngressEntry) String() string {
+	return fmt.Sprintf("IngressEntry[Namespace=%s,Name=%s,Host=%s,Path=%s,ServiceAddress=%s,ServicePort=%d]",
+		e.Namespace, e.Name, e.Host, e.Path, e.ServiceAddress, e.ServicePort)
+}
