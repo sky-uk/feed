@@ -158,7 +158,6 @@ func TestReloadMetricIsIncremented(t *testing.T) {
 	conf.HealthPort = getPort(ts)
 	lb := newNginxWithConf(conf)
 
-
 	lb.Start()
 	err := lb.Update([]controller.IngressEntry{{
 		Host: "james.com",

@@ -64,7 +64,8 @@ func initMetrics() {
 				"Direction is 'in' for bytes received from the endpoint, 'out' for bytes sent to the endpoint. "+
 				"For implementation reasons, this counter is a gauge.",
 			endpointBytesLabelNames)
-		reloads = metrics.RegisterNewDefaultCounter("reloads", "Count of Nginx configuration reloads")
+		reloads = metrics.RegisterNewDefaultCounter(metrics.PrometheusIngressSubsystem, "reloads",
+			"Count of Nginx configuration reloads")
 	})
 }
 
@@ -187,6 +188,6 @@ func parseStatusBody(body io.Reader) (VTSMetrics, error) {
 	return vtsMetrics, nil
 }
 
-func incrementReloadMetric(){
+func incrementReloadMetric() {
 	reloads.Inc()
 }

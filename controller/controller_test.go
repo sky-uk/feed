@@ -260,8 +260,8 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 	updater.On("Update", mock.Anything).Return(fmt.Errorf("kaboom, update failed :(")).Once()
 	updater.On("Health").Return(nil)
 
-	client.On("GetAllIngresses").Return([]*v1beta1.Ingress{}, nil)
-	client.On("GetServices").Return([]*v1.Service{}, nil)
+	client.On("GetAllIngresses").Return(createDefaultIngresses(), nil)
+	client.On("GetServices").Return(createDefaultServices(), nil)
 	client.On("WatchIngresses").Return(ingressWatcher)
 	client.On("WatchServices").Return(serviceWatcher)
 	client.On("WatchNamespaces").Return(namespaceWatcher)
@@ -346,7 +346,17 @@ func TestUpdaterIsUpdatedForIngressWithoutCorrespondingService(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress without corresponding service",
 		createDefaultIngresses(),
-		[]*v1.Service{},
+		[]*v1.Service{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "non-default-name",
+					Namespace: "non-default-namespace",
+				},
+				Spec: v1.ServiceSpec{
+					ClusterIP: "non-default-ip",
+				},
+			},
+		},
 		createDefaultNamespaces(),
 		nil,
 		defaultConfig(),
@@ -1031,60 +1041,49 @@ func TestUpdaterIsUpdatedForIngressClassSetToTestInIngressAndConfig(t *testing.T
 	})
 }
 
-func TestUpdaterIsUpdatedForIngressInNamespaceMatchingSelector(t *testing.T) {
-	runAndAssertUpdates(t, expectGetIngresses, testSpec{
-		"ingress is in a namespace that matches the namespace selector",
-		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:   "",
-			stripPathAnnotation:      "false",
-			backendTimeoutSeconds:    "10",
-			frontendSchemeAnnotation: "internal",
-			ingressClassAnnotation:   defaultIngressClass,
-		}, ingressPath),
-		createDefaultServices(),
-		createNamespaceFixture(ingressNamespace, map[string]string{"team": "theteam"}),
-		[]IngressEntry{{
-			Namespace:             ingressNamespace,
-			Name:                  ingressName,
-			Host:                  ingressHost,
-			Path:                  ingressPath,
-			ServiceAddress:        serviceIP,
-			ServicePort:           ingressSvcPort,
-			LbScheme:              "internal",
-			Allow:                 []string{},
-			StripPaths:            false,
-			BackendTimeoutSeconds: backendTimeout,
-			IngressClass:          defaultIngressClass,
-		}},
-		Config{
-			DefaultAllow:                 ingressDefaultAllow,
-			DefaultBackendTimeoutSeconds: backendTimeout,
-			Name:                         defaultIngressClass,
-			NamespaceSelector:            &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"},
-		},
-	})
-}
+func TestNamespaceSelectorIsUsedToGetIngresses(t *testing.T) {
+	asserter := assert.New(t)
 
-func TestUpdaterIsNotUpdatedForIngressInNamespaceNotMatchingSelector(t *testing.T) {
-	runAndAssertUpdates(t, expectGetIngresses, testSpec{
-		"ingress is in a namespace that doesn't match the namespace selector",
-		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
-			ingressAllowAnnotation:   "",
-			stripPathAnnotation:      "false",
-			backendTimeoutSeconds:    "10",
-			frontendSchemeAnnotation: "internal",
-			ingressClassAnnotation:   defaultIngressClass,
-		}, ingressPath),
-		nil,
-		createNamespaceFixture(ingressNamespace, map[string]string{"team": "otherteam"}),
-		nil,
-		Config{
-			DefaultAllow:                 ingressDefaultAllow,
-			DefaultBackendTimeoutSeconds: backendTimeout,
-			Name:                         defaultIngressClass,
-			NamespaceSelector:            &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"},
-		},
-	})
+	client := new(fake.FakeClient)
+	updater := new(fakeUpdater)
+
+	config := Config{
+		DefaultAllow:                 ingressDefaultAllow,
+		DefaultBackendTimeoutSeconds: backendTimeout,
+		Name:                         defaultIngressClass,
+		NamespaceSelector:            &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"},
+	}
+
+	config.KubernetesClient = client
+	config.Updaters = []Updater{updater}
+
+	controller := New(config)
+
+	updater.On("Start").Return(nil)
+	updater.On("Stop").Return(nil)
+	updater.On("Health").Return(nil)
+
+	// The purpose of this test is to ensure that the NamespaceSelector is passed to GetIngresses
+	client.On("GetIngresses", &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"}).Return([]*v1beta1.Ingress{}, nil)
+
+	ingressWatcher, ingressCh := createFakeWatcher()
+	serviceWatcher, serviceCh := createFakeWatcher()
+	namespaceWatcher, namespaceCh := createFakeWatcher()
+	client.On("WatchIngresses").Return(ingressWatcher)
+	client.On("WatchServices").Return(serviceWatcher)
+	client.On("WatchNamespaces").Return(namespaceWatcher)
+
+	asserter.NoError(controller.Start())
+	ingressCh <- struct{}{}
+	serviceCh <- struct{}{}
+	namespaceCh <- struct{}{}
+	time.Sleep(smallWaitTime)
+
+	asserter.EqualError(controller.Health(), "updates failed to apply: found 0 ingresses")
+	asserter.NoError(controller.Stop())
+	time.Sleep(smallWaitTime)
+	updater.AssertExpectations(t)
+	client.AssertExpectations(t)
 }
 
 func TestUpdaterIsUpdatedForIngressWithoutHostDefinition(t *testing.T) {
