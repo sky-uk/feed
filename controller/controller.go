@@ -186,7 +186,7 @@ func (c *controller) updateIngresses() (err error) {
 		ingresses, err = c.client.GetIngresses(c.namespaceSelector)
 	}
 
-	log.Infof("Found %d ingresses", len(ingresses))
+	log.Debugf("Found %d ingresses", len(ingresses))
 
 	if err != nil {
 		return err
@@ -203,11 +203,13 @@ func (c *controller) updateIngresses() (err error) {
 		return err
 	}
 
-	log.Infof("Found %d services", len(services))
+	log.Debugf("Found %d services", len(services))
 
 	if len(services) == 0 {
 		return errors.New("found 0 services")
 	}
+
+	log.Infof("Found %d ingresses and %d services", len(ingresses), len(services))
 
 	// Combine ingresses and services to create Ingress Entries
 	serviceMap := serviceNamesToClusterIPs(services)
