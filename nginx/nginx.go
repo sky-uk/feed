@@ -91,6 +91,7 @@ func (n *nginxUpdater) signalRequired() {
 func (n *nginxUpdater) signalIfRequired() {
 	if n.updateRequired.Get() {
 		log.Info("Signalling Nginx to reload configuration")
+		incrementReloadMetric()
 		_ = n.nginx.sighup()
 		n.updateRequired.Set(false)
 	}
@@ -294,19 +295,28 @@ func (n *nginxUpdater) Stop() error {
 
 // Update is called by a single go routine from the controller
 func (n *nginxUpdater) Update(entries controller.IngressEntries) error {
-	updated, err := n.updateNginxConf(entries)
-	if err != nil {
-		return fmt.Errorf("unable to update nginx: %v", err)
+
+	// We don't expect 0 entries so this will protect us against http 404s
+	if len(entries) == 0 {
+		return errors.New("nginx update has been called with 0 entries")
 	}
 
+	// Create new config
+	hasChanged, err := n.updateNginxConf(entries)
+	if err != nil {
+		return fmt.Errorf("unable to update nginx config: %v", err)
+	}
+
+	// This will start Nginx if it's the first call to Update
 	if nginxStartErr := n.ensureNginxRunning(); nginxStartErr != nil {
 		return nginxStartErr
 	}
-	if updated {
-		if n.initialUpdateAttempted.Get() {
-			n.signalRequired()
-		}
+
+	// If Nginx is already running and there are changes then reload the config
+	if n.initialUpdateAttempted.Get() && hasChanged {
+		n.signalRequired()
 	}
+
 	n.initialUpdateAttempted.Set(true)
 
 	return nil
@@ -490,8 +500,10 @@ func uniqueIngressEntries(entries controller.IngressEntries) []controller.Ingres
 	sort.Slice(entries, func(i, j int) bool {
 		iEntry := entries[i]
 		jEntry := entries[j]
-		iString := strings.Join([]string{iEntry.Namespace, iEntry.Name, iEntry.Host, iEntry.Path}, ":")
-		jString := strings.Join([]string{jEntry.Namespace, jEntry.Name, jEntry.Host, jEntry.Path}, ":")
+		iString := strings.Join([]string{iEntry.Namespace, iEntry.Name, iEntry.Host, iEntry.Path,
+			iEntry.ServiceAddress, string(iEntry.ServicePort)}, ":")
+		jString := strings.Join([]string{jEntry.Namespace, jEntry.Name, jEntry.Host, jEntry.Path,
+			jEntry.ServiceAddress, string(jEntry.ServicePort)}, ":")
 		return iString < jString
 	})
 
@@ -504,7 +516,7 @@ func uniqueIngressEntries(entries controller.IngressEntries) []controller.Ingres
 			uniqueIngress[key] = ingressEntry
 			continue
 		}
-		log.Infof("Ignoring '%s' because it duplicates the host/path of '%s'", ingressEntry.NamespaceName(), existingIngressEntry.NamespaceName())
+		log.Infof("Ignoring '%s' because it duplicates the host/path of '%s'", ingressEntry, existingIngressEntry)
 	}
 
 	uniqueIngressEntries := make([]controller.IngressEntry, 0, len(uniqueIngress))

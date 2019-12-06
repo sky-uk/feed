@@ -19,6 +19,7 @@ var once sync.Once
 var connections, waitingConnections, writingConnections, readingConnections prometheus.Gauge
 var totalAccepts, totalHandled, totalRequests prometheus.Gauge
 var ingressRequests, endpointRequests, ingressBytes, endpointBytes *prometheus.GaugeVec
+var reloads prometheus.Counter
 var ingressRequestsLabelNames = []string{"host", "path", "code"}
 var endpointRequestsLabelNames = []string{"name", "endpoint", "code"}
 var ingressBytesLabelNames = []string{"host", "path", "direction"}
@@ -63,6 +64,8 @@ func initMetrics() {
 				"Direction is 'in' for bytes received from the endpoint, 'out' for bytes sent to the endpoint. "+
 				"For implementation reasons, this counter is a gauge.",
 			endpointBytesLabelNames)
+		reloads = metrics.RegisterNewDefaultCounter(metrics.PrometheusIngressSubsystem, "reloads",
+			"Count of Nginx configuration reloads")
 	})
 }
 
@@ -183,4 +186,8 @@ func parseStatusBody(body io.Reader) (VTSMetrics, error) {
 		return VTSMetrics{}, err
 	}
 	return vtsMetrics, nil
+}
+
+func incrementReloadMetric() {
+	reloads.Inc()
 }

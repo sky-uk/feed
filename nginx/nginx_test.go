@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/sky-uk/feed/controller"
 	"github.com/sky-uk/feed/util/metrics"
@@ -113,17 +114,82 @@ func TestNginxStartedAfterFirstUpdate(t *testing.T) {
 	}})
 	assert.NoError(t, err)
 
-	assert.True(t, nginxStartedSuccessfully(tmpDir))
+	assert.True(t, nginxHasStarted(tmpDir))
 }
 
-func nginxStartedSuccessfully(nginxDir string) bool {
-	filename := fmt.Sprintf("%s/nginx-started", nginxDir)
+func TestNginxDoesNotStartWithZeroIngresses(t *testing.T) {
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+	lb := newUpdater(tmpDir)
+
+	lb.Start()
+
+	assert.EqualError(t, lb.Update([]controller.IngressEntry{}), "nginx update has been called with 0 entries")
+	assert.False(t, nginxHasStarted(tmpDir))
+}
+
+func TestNginxDoesNotReloadWithZeroIngresses(t *testing.T) {
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+	lb := newUpdater(tmpDir)
+
+	lb.Start()
+	err := lb.Update([]controller.IngressEntry{{
+		Host: "james.com",
+	}})
+	assert.NoError(t, err)
+	assert.True(t, nginxHasStarted(tmpDir))
+
+	err = lb.Update([]controller.IngressEntry{})
+	assert.EqualError(t, err, "nginx update has been called with 0 entries")
+	time.Sleep(time.Second * 2)
+	assert.False(t, nginxHasReloaded(tmpDir))
+}
+
+func TestReloadMetricIsIncremented(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	ts := stubHealthPort()
+	defer ts.Close()
+
+	conf := newConf(tmpDir, fakeNginx)
+	conf.HealthPort = getPort(ts)
+	lb := newNginxWithConf(conf)
+
+	lb.Start()
+	err := lb.Update([]controller.IngressEntry{{
+		Host: "james.com",
+	}})
+	assert.NoError(err)
+	assert.True(nginxHasStarted(tmpDir))
+
+	err = lb.Update([]controller.IngressEntry{{
+		Host: "bob.com",
+	}})
+	time.Sleep(time.Second * 2)
+
+	assert.True(nginxHasReloaded(tmpDir))
+	assert.Equal(float64(1), testutil.ToFloat64(reloads))
+}
+
+func nginxHasStarted(tmpDir string) bool {
+	return nginxLogEquals(tmpDir, "started!")
+}
+
+func nginxHasReloaded(tmpDir string) bool {
+	return nginxLogEquals(tmpDir, "reloaded!")
+}
+
+func nginxLogEquals(nginxDir string, message string) bool {
+	filename := fmt.Sprintf("%s/nginx-log", nginxDir)
 	file, _ := os.Open(filename)
 	defer file.Close()
 
-	buf := make([]byte, 8)
+	buf := make([]byte, len(message))
 	file.Read(buf)
-	return string(buf) == "started!"
+	return string(buf) == message
 }
 
 func TestUnhealthyIfHealthPortIsNotUp(t *testing.T) {
@@ -434,7 +500,9 @@ func TestNginxConfig(t *testing.T) {
 		lb := newNginxWithConf(test.conf)
 
 		assert.NoError(lb.Start())
-		err := lb.Update(controller.IngressEntries{})
+		err := lb.Update([]controller.IngressEntry{{
+			Host: "james.com",
+		}})
 		assert.NoError(err)
 
 		config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
@@ -741,6 +809,62 @@ func TestNginxIngressEntries(t *testing.T) {
 				"        }\n" +
 				"    }",
 			},
+		},
+		{
+			"Duplicate host/path entries are ignored, the first one is kept order by Service",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Namespace:         "core",
+					Name:              "ingress",
+					Host:              "foo-0.com",
+					Path:              "/",
+					ServiceAddress:    "service-2",
+					ServicePort:       8080,
+					Allow:             []string{"10.82.0.0/16"},
+					CreationTimestamp: time.Now().Add(-1 * time.Minute),
+				},
+				{
+					Namespace:         "core",
+					Name:              "ingress",
+					Host:              "foo-0.com",
+					Path:              "/",
+					ServiceAddress:    "service-1",
+					ServicePort:       8080,
+					Allow:             []string{"10.82.0.0/16"},
+					CreationTimestamp: time.Now(),
+				},
+			},
+			nil,
+			[]string{"proxy_pass http://core.service-1.8080"},
+		},
+		{
+			"Duplicate host/path entries are ignored, the first one is kept order by Port",
+			defaultConf,
+			[]controller.IngressEntry{
+				{
+					Namespace:         "core",
+					Name:              "ingress",
+					Host:              "foo-0.com",
+					Path:              "/",
+					ServiceAddress:    "service",
+					ServicePort:       2,
+					Allow:             []string{"10.82.0.0/16"},
+					CreationTimestamp: time.Now().Add(-1 * time.Minute),
+				},
+				{
+					Namespace:         "core",
+					Name:              "ingress",
+					Host:              "foo-0.com",
+					Path:              "/",
+					ServiceAddress:    "service",
+					ServicePort:       1,
+					Allow:             []string{"10.82.0.0/16"},
+					CreationTimestamp: time.Now(),
+				},
+			},
+			nil,
+			[]string{"proxy_pass http://core.service.1"},
 		},
 		{
 			"Check path slashes are added correctly",
