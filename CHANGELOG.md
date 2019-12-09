@@ -1,3 +1,8 @@
+# v2.2.3
+* [BUGFIX] Handle receiving 0 ingresses from the k8s client by not reloading the Nginx config
+* [BUGFIX] Improve sorting when choosing which duplicate ingresses to keep
+* Added a new metric for Nginx reloads
+
 # v2.2.2
 * [BUGFIX] feed-ingress metrics now have correct prefix of `feed_ingress_` (was `feed_dns_`)
 
