@@ -131,7 +131,7 @@ func (e *nlb) attachToFrontEnds() error {
 		log.Infof("Registering instance %s with nlb %s", privateIP, frontend.Name)
 		err = registerWithLoadBalancer(e, frontend)
 		if err != nil {
-			return fmt.Errorf("unable to register instance %s with nlb %s: %v", privateIP, frontend.Name, err)
+			return fmt.Errorf("unable to register instance %s (%s) with nlb %s: %v", instanceID, privateIP, frontend.Name, err)
 		}
 		registered++
 	}
@@ -204,24 +204,24 @@ func registerWithLoadBalancer(n *nlb, lb LoadBalancerDetails) error {
 
 		targetDescription, err := generateTargetDescriptionFromTargetType(targetType, instanceID, privateIP)
 		if err != nil {
-			log.Errorf("Could not register instance %s with target group %v: %v", privateIP, targetGroupArn, err)
+			log.Errorf("Could not register instance %s (%s) with target group %v: %v", instanceID, privateIP, targetGroupArn, err)
 			failedArns = append(failedArns, targetGroupArn)
 			continue
 		}
 
-		log.Infof("Registering instance %s with target group %v (target type: %s)", privateIP, targetGroupArn, targetType)
+		log.Infof("Registering instance %s (%s) with target group %v (target type: %s)", instanceID, privateIP, targetGroupArn, targetType)
 		_, err = n.awsElb.RegisterTargets(&elbv2.RegisterTargetsInput{
 			Targets:        targetDescription,
 			TargetGroupArn: tg.TargetGroupArn,
 		})
 		if err != nil {
-			log.Errorf("Could not register instance %s with target group %v: %v", privateIP, targetGroupArn, err)
+			log.Errorf("Could not register instance %s (%s) with target group %v: %v", instanceID, privateIP, targetGroupArn, err)
 			failedArns = append(failedArns, targetGroupArn)
 		}
 	}
 
 	if failedArns != nil {
-		return fmt.Errorf("could not register target group(s) with instance %s: %v", privateIP, failedArns)
+		return fmt.Errorf("could not register target group(s) with instance %s (%s): %v", instanceID, privateIP, failedArns)
 	}
 
 	return nil
@@ -329,7 +329,7 @@ func (e *nlb) Stop() error {
 		log.Infof("Deregistering instance %s with nlb %s", e.privateIPAddress, elb.Name)
 		err := deregisterFromLoadBalancer(e, elb)
 		if err != nil {
-			log.Warnf("unable to deregister instance %s with nlb %s: %v", e.privateIPAddress, elb.Name, err)
+			log.Warnf("unable to deregister instance %s (%s) with nlb %s: %v", e.instanceID, e.privateIPAddress, elb.Name, err)
 			failed = true
 		}
 	}
@@ -354,24 +354,24 @@ func deregisterFromLoadBalancer(n *nlb, lb LoadBalancerDetails) error {
 
 		targetDescription, err := generateTargetDescriptionFromTargetType(targetType, instanceID, privateIP)
 		if err != nil {
-			log.Errorf("Could not register instance %s with target group %v: %v", privateIP, targetGroupArn, err)
+			log.Errorf("Could not deregister instance %s (%s) from target group %v: %v", instanceID, privateIP, targetGroupArn, err)
 			failedArns = append(failedArns, targetGroupArn)
 			continue
 		}
 
-		log.Infof("Deregistering instance %s from target group %s", n.privateIPAddress, targetGroupArn)
+		log.Infof("Deregistering instance %s (%s) from target group %s", n.instanceID, n.privateIPAddress, targetGroupArn)
 		_, err = n.awsElb.DeregisterTargets(&elbv2.DeregisterTargetsInput{
 			Targets:        targetDescription,
 			TargetGroupArn: tg.TargetGroupArn,
 		})
 		if err != nil {
-			log.Errorf("Could not deregister instance %s from target group %s: %v", n.privateIPAddress, targetGroupArn, err)
+			log.Errorf("Could not deregister instance %s (%s) from target group %s: %v", n.instanceID, n.privateIPAddress, targetGroupArn, err)
 			failedArns = append(failedArns, targetGroupArn)
 		}
 	}
 
 	if failedArns != nil {
-		return fmt.Errorf("could not deregister target group(s) from instance %s: %v", n.privateIPAddress, failedArns)
+		return fmt.Errorf("could not deregister target group(s) from instance %s (%s): %v", n.instanceID, n.privateIPAddress, failedArns)
 	}
 
 	return nil

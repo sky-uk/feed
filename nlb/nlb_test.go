@@ -663,8 +663,8 @@ func TestRegisterInstanceErrorV2(t *testing.T) {
 	err := elbUpdaterV2.Update(controller.IngressEntries{})
 
 	// then
-	assert.EqualError(t, err, fmt.Sprintf("unable to register instance 192.168.0.1 with nlb cluster-frontend: "+
-		"could not register target group(s) with instance 192.168.0.1: [%s]", clusterFrontEndTargetGroup))
+	assert.EqualError(t, err, fmt.Sprintf("unable to register instance %s (%s) with nlb %s: could not register target group(s) with instance %s (%s): [%s]",
+		instanceID, privateIP, clusterFrontEnd, instanceID, privateIP, clusterFrontEndTargetGroup))
 }
 
 func TestRegisterInstanceInvalidTypeError(t *testing.T) {
@@ -688,7 +688,8 @@ func TestRegisterInstanceInvalidTypeError(t *testing.T) {
 	err := elbUpdaterV2.Update(controller.IngressEntries{})
 
 	// then
-	assert.EqualError(t, err, fmt.Sprintf("unable to register instance %s with nlb %s: could not register target group(s) with instance %s: [%s]", privateIP, clusterFrontEnd, privateIP, clusterFrontEndTargetGroup))
+	assert.EqualError(t, err, fmt.Sprintf("unable to register instance %s (%s) with nlb %s: could not register target group(s) with instance %s (%s): [%s]",
+		instanceID, privateIP, clusterFrontEnd, instanceID, privateIP, clusterFrontEndTargetGroup))
 }
 
 func TestDeRegisterInstanceErrorV2(t *testing.T) {
