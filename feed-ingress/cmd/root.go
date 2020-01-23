@@ -58,7 +58,7 @@ const (
 	unset = -1
 
 	defaultResyncPeriod      = time.Minute * 15
-	defaultIngressPort       = 8080
+	defaultIngressPort       = unset
 	defaultIngressHTTPSPort  = unset
 	defaultIngressHealthPort = 8081
 	defaultIngressAllow      = "0.0.0.0/0"
