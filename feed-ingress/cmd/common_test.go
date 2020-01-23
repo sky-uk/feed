@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/sky-uk/feed/nginx"
 )
