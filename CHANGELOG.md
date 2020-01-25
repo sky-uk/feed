@@ -1,6 +1,6 @@
 # v3.0.0
 * Breaking change 
-  By default feed will not bind http port on 8080 if `--ingress-port=XXXX` is not provided   
+  Feed will not bind port http 8080 by default, unless `--ingress-port=XXXX` is provided   
   * Remove http binding by default (#216)
  
 # v2.3.0
