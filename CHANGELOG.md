@@ -1,3 +1,11 @@
+# v3.0.0
+* Breaking change 
+  Feed will not bind port http 8080 by default, unless `--ingress-port=XXXX` is provided   
+  * Remove http binding by default (#216)
+ 
+# v2.3.0
+* Support IP and Instance TargetGroup attachments (#214)
+
 # v2.2.3
 * [BUGFIX] Handle receiving 0 ingresses from the k8s client by not reloading the Nginx config
 * [BUGFIX] Improve sorting when choosing which duplicate ingresses to keep

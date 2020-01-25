@@ -56,10 +56,7 @@ func runCmd(appender appendIngressUpdaters) {
 }
 
 func createIngressUpdaters(kubernetesClient k8s.Client, appender appendIngressUpdaters) ([]controller.Updater, error) {
-	nginxConfig.Ports = []nginx.Port{{Name: "http", Port: ingressPort}}
-	if ingressHTTPSPort != unset {
-		nginxConfig.Ports = append(nginxConfig.Ports, nginx.Port{Name: "https", Port: ingressHTTPSPort})
-	}
+	nginxConfig.Ports = createPortsConfig(ingressPort, ingressHTTPSPort)
 
 	nginxConfig.HealthPort = ingressHealthPort
 	nginxConfig.SSLPath = nginxSSLPath
@@ -76,6 +73,21 @@ func createIngressUpdaters(kubernetesClient k8s.Client, appender appendIngressUp
 		return nil, err
 	}
 	return updaters, nil
+}
+
+func createPortsConfig(ingressPort int, ingressHTTPSPort int) []nginx.Port {
+	var ports = []nginx.Port{}
+	if ingressPort != unset {
+		ports = append(ports, nginx.Port{Name: "http", Port: ingressPort})
+	}
+	if ingressHTTPSPort != unset {
+		ports = append(ports, nginx.Port{Name: "https", Port: ingressHTTPSPort})
+	}
+
+	if len(ports) == 0 {
+		log.Fatal("Error http or https port must be provided,(--ingress-port=XXXX or --ingress-https-port=XXXX) exiting")
+	}
+	return ports
 }
 
 func parseNamespaceSelector(nameValueStr string) (*k8s.NamespaceSelector, error) {
