@@ -7,7 +7,6 @@ The types are copied from the stable api of the Kubernetes 1.3 release.
 package k8s
 
 import (
-	"errors"
 	"sync"
 	"time"
 
@@ -16,15 +15,10 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-// Time to handle multiple updates occurring in a short time period, such as at startup where
-// each existing endpoint / ingress produces a single update.
-const bufferedWatcherDuration = time.Millisecond * 50
 
 // Client for connecting to a Kubernetes cluster.
 // Watchers will receive a notification whenever the client connects to the API server,
@@ -55,14 +49,14 @@ type Client interface {
 
 type client struct {
 	sync.Mutex
-	clientset           *kubernetes.Clientset
-	resyncPeriod        time.Duration
-	ingressStore        cache.Store
-	ingressWatcher      *handlerWatcher
-	serviceStore        cache.Store
-	serviceWatcher      *handlerWatcher
-	namespaceStore      cache.Store
-	namespaceWatcher    *handlerWatcher
+	clientset        *kubernetes.Clientset
+	resyncPeriod     time.Duration
+	ingressStore     cache.Store
+	ingressWatcher   *handlerWatcher
+	serviceStore     cache.Store
+	serviceWatcher   *handlerWatcher
+	namespaceStore   cache.Store
+	namespaceWatcher *handlerWatcher
 }
 
 // NamespaceSelector defines the label name and value for filtering namespaces
@@ -83,10 +77,31 @@ func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
 		return nil, err
 	}
 
-	c := &client{clientset: clientset, resyncPeriod: resyncPeriod}
-	if err := c.initialiseStores(make(chan struct{})); err != nil {
+	store := newStore(clientset, make(chan struct{}), resyncPeriod)
+	namespaceSource, err := store.createNamespaceSource()
+	if err != nil {
 		return nil, err
 	}
+	serviceSource, err := store.createServiceSource()
+	if err != nil {
+		return nil, err
+	}
+	ingressSource, err := store.createIngressSource()
+	if err != nil {
+		return nil, err
+	}
+
+	c := &client{
+		clientset:        clientset,
+		resyncPeriod:     resyncPeriod,
+		namespaceStore:   namespaceSource.store,
+		namespaceWatcher: namespaceSource.watcher,
+		serviceStore:     serviceSource.store,
+		serviceWatcher:   serviceSource.watcher,
+		ingressStore:     ingressSource.store,
+		ingressWatcher:   ingressSource.watcher,
+	}
+
 	return c, nil
 }
 
@@ -149,36 +164,8 @@ func ingressInNamespace(ingress *v1beta1.Ingress, namespaces []*v1.Namespace) bo
 	return false
 }
 
-func (c *client) initialiseStores(stopCh chan struct{}) error {
-	if err := c.createNamespaceSource(stopCh); err !=nil {
-		return err
-	}
-	if err := c.createServiceSource(stopCh); err !=nil {
-		return err
-	}
-	if err := c.createIngressSource(stopCh); err !=nil {
-		return err
-	}
-	return nil
-}
-
 func (c *client) WatchIngresses() Watcher {
 	return c.ingressWatcher
-}
-
-func (c *client) createIngressSource(stopCh chan struct{}) error {
-	ingressLW := cache.NewListWatchFromClient(c.clientset.ExtensionsV1beta1().RESTClient(), "ingresses", "",
-		fields.Everything())
-	c.ingressWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
-	store, controller := cache.NewInformer(ingressLW, &v1beta1.Ingress{}, c.resyncPeriod, c.ingressWatcher)
-
-	c.ingressStore = store
-	go controller.Run(stopCh)
-
-	if !cache.WaitForCacheSync(stopCh, controller.HasSynced) {
-		return errors.New("error while waiting for ingress caches to populate")
-	}
-	return nil
 }
 
 func (c *client) GetServices() ([]*v1.Service, error) {
@@ -194,37 +181,8 @@ func (c *client) WatchServices() Watcher {
 	return c.serviceWatcher
 }
 
-func (c *client) createServiceSource(stopCh chan struct{}) error {
-	serviceLW := cache.NewListWatchFromClient(c.clientset.CoreV1().RESTClient(), "services", "", fields.Everything())
-	c.serviceWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
-	store, controller := cache.NewInformer(serviceLW, &v1.Service{}, c.resyncPeriod, c.serviceWatcher)
-
-	c.serviceStore = store
-	go controller.Run(stopCh)
-
-	if !cache.WaitForCacheSync(stopCh, controller.HasSynced) {
-		return errors.New("error while waiting for service cache to populate")
-	}
-	return nil
-}
-
 func (c *client) WatchNamespaces() Watcher {
 	return c.namespaceWatcher
-}
-
-func (c *client) createNamespaceSource(stopCh chan struct{}) error {
-	namespaceLW := cache.NewListWatchFromClient(
-		c.clientset.CoreV1().RESTClient(), "namespaces", "", fields.Everything())
-	c.namespaceWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
-	store, controller := cache.NewInformer(namespaceLW, &v1.Namespace{}, c.resyncPeriod, c.namespaceWatcher)
-
-	c.namespaceStore = store
-	go controller.Run(stopCh)
-
-	if !cache.WaitForCacheSync(stopCh, controller.HasSynced) {
-		return errors.New("error while waiting for namespace cache to populate")
-	}
-	return nil
 }
 
 func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
@@ -242,10 +200,12 @@ func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
 	return err
 }
 
-// Implement cache.ResourceEventHandler
 type handlerWatcher struct {
 	*bufferedWatcher
 }
+
+// Implement cache.ResourceEventHandler
+var _ cache.ResourceEventHandler = &handlerWatcher{}
 
 func (w *handlerWatcher) notify() {
 	w.bufferUpdate()
@@ -264,4 +224,19 @@ func (w *handlerWatcher) OnUpdate(old interface{}, new interface{}) {
 func (w *handlerWatcher) OnDelete(obj interface{}) {
 	log.Debugf("OnDelete called for %v - updating watcher", obj)
 	go w.notify()
+}
+
+
+type eventHandlerFactory interface {
+	createBufferedHandler(bufferTime time.Duration) *handlerWatcher
+}
+
+type bufferedEventHandlerFactory struct {
+}
+
+// Implement eventHandlerFactory
+var _ eventHandlerFactory = &bufferedEventHandlerFactory{}
+
+func (hf *bufferedEventHandlerFactory) createBufferedHandler(bufferTime time.Duration) *handlerWatcher{
+	return &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferTime)}
 }
