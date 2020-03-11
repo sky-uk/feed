@@ -58,13 +58,10 @@ type client struct {
 	clientset           *kubernetes.Clientset
 	resyncPeriod        time.Duration
 	ingressStore        cache.Store
-	ingressController   cache.Controller
 	ingressWatcher      *handlerWatcher
 	serviceStore        cache.Store
-	serviceController   cache.Controller
 	serviceWatcher      *handlerWatcher
 	namespaceStore      cache.Store
-	namespaceController cache.Controller
 	namespaceWatcher    *handlerWatcher
 }
 
@@ -86,7 +83,11 @@ func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
 		return nil, err
 	}
 
-	return &client{clientset: clientset, resyncPeriod: resyncPeriod}, nil
+	c := &client{clientset: clientset, resyncPeriod: resyncPeriod}
+	if err := c.initialiseStores(make(chan struct{})); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
@@ -94,10 +95,6 @@ func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
 }
 
 func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, error) {
-	if !c.namespaceController.HasSynced() {
-		return nil, errors.New("namespaces haven't synced yet")
-	}
-
 	var allIngresses []*v1beta1.Ingress
 	for _, obj := range c.ingressStore.List() {
 		allIngresses = append(allIngresses, obj.(*v1beta1.Ingress))
@@ -152,35 +149,39 @@ func ingressInNamespace(ingress *v1beta1.Ingress, namespaces []*v1.Namespace) bo
 	return false
 }
 
+func (c *client) initialiseStores(stopCh chan struct{}) error {
+	if err := c.createNamespaceSource(stopCh); err !=nil {
+		return err
+	}
+	if err := c.createServiceSource(stopCh); err !=nil {
+		return err
+	}
+	if err := c.createIngressSource(stopCh); err !=nil {
+		return err
+	}
+	return nil
+}
+
 func (c *client) WatchIngresses() Watcher {
-	c.createIngressSource()
 	return c.ingressWatcher
 }
 
-func (c *client) createIngressSource() {
-	c.Lock()
-	defer c.Unlock()
-	if c.ingressStore != nil {
-		return
-	}
-
+func (c *client) createIngressSource(stopCh chan struct{}) error {
 	ingressLW := cache.NewListWatchFromClient(c.clientset.ExtensionsV1beta1().RESTClient(), "ingresses", "",
 		fields.Everything())
 	c.ingressWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
 	store, controller := cache.NewInformer(ingressLW, &v1beta1.Ingress{}, c.resyncPeriod, c.ingressWatcher)
 
 	c.ingressStore = store
-	c.ingressController = controller
-	go controller.Run(make(chan struct{}))
+	go controller.Run(stopCh)
+
+	if !cache.WaitForCacheSync(stopCh, controller.HasSynced) {
+		return errors.New("error while waiting for ingress caches to populate")
+	}
+	return nil
 }
 
 func (c *client) GetServices() ([]*v1.Service, error) {
-	c.createServiceSource()
-
-	if !c.serviceController.HasSynced() {
-		return nil, errors.New("services haven't synced yet")
-	}
-
 	var services []*v1.Service
 	for _, obj := range c.serviceStore.List() {
 		services = append(services, obj.(*v1.Service))
@@ -190,46 +191,40 @@ func (c *client) GetServices() ([]*v1.Service, error) {
 }
 
 func (c *client) WatchServices() Watcher {
-	c.createServiceSource()
 	return c.serviceWatcher
 }
 
-func (c *client) createServiceSource() {
-	c.Lock()
-	defer c.Unlock()
-	if c.serviceStore != nil {
-		return
-	}
-
+func (c *client) createServiceSource(stopCh chan struct{}) error {
 	serviceLW := cache.NewListWatchFromClient(c.clientset.CoreV1().RESTClient(), "services", "", fields.Everything())
 	c.serviceWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
 	store, controller := cache.NewInformer(serviceLW, &v1.Service{}, c.resyncPeriod, c.serviceWatcher)
 
 	c.serviceStore = store
-	c.serviceController = controller
-	go controller.Run(make(chan struct{}))
+	go controller.Run(stopCh)
+
+	if !cache.WaitForCacheSync(stopCh, controller.HasSynced) {
+		return errors.New("error while waiting for service cache to populate")
+	}
+	return nil
 }
 
 func (c *client) WatchNamespaces() Watcher {
-	c.createNamespaceSource()
 	return c.namespaceWatcher
 }
 
-func (c *client) createNamespaceSource() {
-	c.Lock()
-	defer c.Unlock()
-	if c.namespaceStore != nil {
-		return
-	}
-
+func (c *client) createNamespaceSource(stopCh chan struct{}) error {
 	namespaceLW := cache.NewListWatchFromClient(
 		c.clientset.CoreV1().RESTClient(), "namespaces", "", fields.Everything())
 	c.namespaceWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
 	store, controller := cache.NewInformer(namespaceLW, &v1.Namespace{}, c.resyncPeriod, c.namespaceWatcher)
 
 	c.namespaceStore = store
-	c.namespaceController = controller
-	go controller.Run(make(chan struct{}))
+	go controller.Run(stopCh)
+
+	if !cache.WaitForCacheSync(stopCh, controller.HasSynced) {
+		return errors.New("error while waiting for namespace cache to populate")
+	}
+	return nil
 }
 
 func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
