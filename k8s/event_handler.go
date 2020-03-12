@@ -1,9 +1,10 @@
 package k8s
 
 import (
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/tools/cache"
-	"time"
 )
 
 type handlerWatcher struct {
@@ -32,7 +33,6 @@ func (w *handlerWatcher) OnDelete(obj interface{}) {
 	go w.notify()
 }
 
-
 type eventHandlerFactory interface {
 	createBufferedHandler(bufferTime time.Duration) *handlerWatcher
 }
@@ -43,6 +43,6 @@ type bufferedEventHandlerFactory struct {
 // Implement eventHandlerFactory
 var _ eventHandlerFactory = &bufferedEventHandlerFactory{}
 
-func (hf *bufferedEventHandlerFactory) createBufferedHandler(bufferTime time.Duration) *handlerWatcher{
+func (hf *bufferedEventHandlerFactory) createBufferedHandler(bufferTime time.Duration) *handlerWatcher {
 	return &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferTime)}
 }

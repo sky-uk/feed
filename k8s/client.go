@@ -16,7 +16,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -35,13 +34,13 @@ type Client interface {
 	GetServices() ([]*v1.Service, error)
 
 	// WatchIngresses watches for updates to ingresses and notifies the Watcher.
-	WatchIngresses() Watcher
+	WatchIngresses() (Watcher, error)
 
 	// WatchServices watches for updates to services and notifies the Watcher.
-	WatchServices() Watcher
+	WatchServices() (Watcher, error)
 
 	// WatchNamespaces watches for updates to namespaces and notifies the Watcher.
-	WatchNamespaces() Watcher
+	WatchNamespaces() (Watcher, error)
 
 	// UpdateIngressStatus updates the ingress status with the loadbalancer hostname or ip address.
 	UpdateIngressStatus(*v1beta1.Ingress) error
@@ -49,14 +48,9 @@ type Client interface {
 
 type client struct {
 	sync.Mutex
-	clientset        *kubernetes.Clientset
-	resyncPeriod     time.Duration
-	ingressStore     cache.Store
-	ingressWatcher   *handlerWatcher
-	serviceStore     cache.Store
-	serviceWatcher   *handlerWatcher
-	namespaceStore   cache.Store
-	namespaceWatcher *handlerWatcher
+	clientset    *kubernetes.Clientset
+	resyncPeriod time.Duration
+	store        *resourceStore
 }
 
 // NamespaceSelector defines the label name and value for filtering namespaces
@@ -77,31 +71,11 @@ func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
 		return nil, err
 	}
 
-	store := newStore(clientset, make(chan struct{}), resyncPeriod)
-	namespaceSource, err := store.createNamespaceSource()
-	if err != nil {
-		return nil, err
-	}
-	serviceSource, err := store.createServiceSource()
-	if err != nil {
-		return nil, err
-	}
-	ingressSource, err := store.createIngressSource()
-	if err != nil {
-		return nil, err
-	}
-
 	c := &client{
-		clientset:        clientset,
-		resyncPeriod:     resyncPeriod,
-		namespaceStore:   namespaceSource.store,
-		namespaceWatcher: namespaceSource.watcher,
-		serviceStore:     serviceSource.store,
-		serviceWatcher:   serviceSource.watcher,
-		ingressStore:     ingressSource.store,
-		ingressWatcher:   ingressSource.watcher,
+		clientset:    clientset,
+		resyncPeriod: resyncPeriod,
+		store:        newStore(clientset, make(chan struct{}), resyncPeriod),
 	}
-
 	return c, nil
 }
 
@@ -111,7 +85,11 @@ func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
 
 func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, error) {
 	var allIngresses []*v1beta1.Ingress
-	for _, obj := range c.ingressStore.List() {
+	ingressWatchedResource, err := c.store.getOrCreateIngressSource()
+	if err != nil {
+		return nil, err
+	}
+	for _, obj := range ingressWatchedResource.store.List() {
 		allIngresses = append(allIngresses, obj.(*v1beta1.Ingress))
 	}
 
@@ -119,7 +97,11 @@ func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, 
 		return allIngresses, nil
 	}
 
-	supportedNamespaces := supportedNamespaces(selector, toNamespaces(c.namespaceStore.List()))
+	namespaceWatchedResource, err := c.store.getOrCreateNamespaceSource()
+	if err != nil {
+		return nil, err
+	}
+	supportedNamespaces := supportedNamespaces(selector, toNamespaces(namespaceWatchedResource.store.List()))
 
 	var filteredIngresses []*v1beta1.Ingress
 	for _, ingress := range allIngresses {
@@ -164,25 +146,41 @@ func ingressInNamespace(ingress *v1beta1.Ingress, namespaces []*v1.Namespace) bo
 	return false
 }
 
-func (c *client) WatchIngresses() Watcher {
-	return c.ingressWatcher
+func (c *client) WatchIngresses() (Watcher, error) {
+	ingressWatchedResource, err := c.store.getOrCreateIngressSource()
+	if err != nil {
+		return nil, err
+	}
+	return ingressWatchedResource.watcher, nil
 }
 
 func (c *client) GetServices() ([]*v1.Service, error) {
 	var services []*v1.Service
-	for _, obj := range c.serviceStore.List() {
+	serviceSource, err := c.store.getOrCreateServiceSource()
+	if err != nil {
+		return nil, err
+	}
+	for _, obj := range serviceSource.store.List() {
 		services = append(services, obj.(*v1.Service))
 	}
 
 	return services, nil
 }
 
-func (c *client) WatchServices() Watcher {
-	return c.serviceWatcher
+func (c *client) WatchServices() (Watcher, error) {
+	serviceSource, err := c.store.getOrCreateServiceSource()
+	if err != nil {
+		return nil, err
+	}
+	return serviceSource.watcher, nil
 }
 
-func (c *client) WatchNamespaces() Watcher {
-	return c.namespaceWatcher
+func (c *client) WatchNamespaces() (Watcher, error) {
+	namespaceSource, err := c.store.getOrCreateNamespaceSource()
+	if err != nil {
+		return nil, err
+	}
+	return namespaceSource.watcher, nil
 }
 
 func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {

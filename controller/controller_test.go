@@ -80,9 +80,9 @@ func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 	client.On("GetAllIngresses").Return([]*v1beta1.Ingress{}, nil)
 	client.On("GetIngresses", mock.Anything).Return([]*v1beta1.Ingress{}, nil)
 	client.On("GetServices").Return([]*v1.Service{}, nil)
-	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchServices").Return(serviceWatcher)
-	client.On("WatchNamespaces").Return(namespaceWatcher)
+	client.On("WatchIngresses").Return(ingressWatcher, nil)
+	client.On("WatchServices").Return(serviceWatcher, nil)
+	client.On("WatchNamespaces").Return(namespaceWatcher, nil)
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
 	updater.On("Update", mock.Anything).Return(nil)
@@ -262,9 +262,9 @@ func TestUnhealthyIfUpdaterFails(t *testing.T) {
 
 	client.On("GetAllIngresses").Return(createDefaultIngresses(), nil)
 	client.On("GetServices").Return(createDefaultServices(), nil)
-	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchServices").Return(serviceWatcher)
-	client.On("WatchNamespaces").Return(namespaceWatcher)
+	client.On("WatchIngresses").Return(ingressWatcher, nil)
+	client.On("WatchServices").Return(serviceWatcher, nil)
+	client.On("WatchNamespaces").Return(namespaceWatcher, nil)
 	asserter.NoError(controller.Start())
 
 	// expect
@@ -1069,9 +1069,9 @@ func TestNamespaceSelectorIsUsedToGetIngresses(t *testing.T) {
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()
 	namespaceWatcher, namespaceCh := createFakeWatcher()
-	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchServices").Return(serviceWatcher)
-	client.On("WatchNamespaces").Return(namespaceWatcher)
+	client.On("WatchIngresses").Return(ingressWatcher, nil)
+	client.On("WatchServices").Return(serviceWatcher, nil)
+	client.On("WatchNamespaces").Return(namespaceWatcher, nil)
 
 	asserter.NoError(controller.Start())
 	ingressCh <- struct{}{}
@@ -1163,9 +1163,9 @@ func runAndAssertUpdates(t *testing.T, clientExpectation clientExpectation, test
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()
 	namespaceWatcher, namespaceCh := createFakeWatcher()
-	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchServices").Return(serviceWatcher)
-	client.On("WatchNamespaces").Return(namespaceWatcher)
+	client.On("WatchIngresses").Return(ingressWatcher, nil)
+	client.On("WatchServices").Return(serviceWatcher, nil)
+	client.On("WatchNamespaces").Return(namespaceWatcher, nil)
 
 	//when
 	asserter.NoError(controller.Start())
@@ -1399,9 +1399,9 @@ func TestUpdateFailsWhenK8sClientReturnsNoIngresses(t *testing.T) {
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()
 	namespaceWatcher, namespaceCh := createFakeWatcher()
-	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchServices").Return(serviceWatcher)
-	client.On("WatchNamespaces").Return(namespaceWatcher)
+	client.On("WatchIngresses").Return(ingressWatcher, nil)
+	client.On("WatchServices").Return(serviceWatcher, nil)
+	client.On("WatchNamespaces").Return(namespaceWatcher, nil)
 
 	asserter.NoError(controller.Start())
 	ingressCh <- struct{}{}
@@ -1460,9 +1460,9 @@ func TestUpdateFailsWhenK8sClientReturnsNoNamespaceIngresses(t *testing.T) {
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()
 	namespaceWatcher, namespaceCh := createFakeWatcher()
-	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchServices").Return(serviceWatcher)
-	client.On("WatchNamespaces").Return(namespaceWatcher)
+	client.On("WatchIngresses").Return(ingressWatcher, nil)
+	client.On("WatchServices").Return(serviceWatcher, nil)
+	client.On("WatchNamespaces").Return(namespaceWatcher, nil)
 
 	asserter.NoError(controller.Start())
 	ingressCh <- struct{}{}
@@ -1516,9 +1516,9 @@ func TestUpdateFailsWhenK8sClientReturnsNoServices(t *testing.T) {
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()
 	namespaceWatcher, namespaceCh := createFakeWatcher()
-	client.On("WatchIngresses").Return(ingressWatcher)
-	client.On("WatchServices").Return(serviceWatcher)
-	client.On("WatchNamespaces").Return(namespaceWatcher)
+	client.On("WatchIngresses").Return(ingressWatcher, nil)
+	client.On("WatchServices").Return(serviceWatcher, nil)
+	client.On("WatchNamespaces").Return(namespaceWatcher, nil)
 
 	asserter.NoError(controller.Start())
 	ingressCh <- struct{}{}
