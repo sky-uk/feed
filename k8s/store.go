@@ -16,7 +16,7 @@ import (
 // each existing endpoint / ingress produces a single update.
 const bufferedWatcherDuration = time.Millisecond * 50
 
-//
+// Store encapsulates the creation of the shared informer for each watched resource
 type Store interface {
 	// GetOrCreateNamespaceSource create a namespace informer and returns its corresponding store and event handler
 	GetOrCreateNamespaceSource() (*WatchedResource, error)
