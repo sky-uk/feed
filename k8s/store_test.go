@@ -20,7 +20,7 @@ var _ = Describe("Store", func() {
 	var (
 		stopCh               chan struct{}
 		resyncPeriod         time.Duration
-		store                *resourceStore
+		store                *lazyLoadedStore
 		fakesInformerFactory *fakeInformerFactory
 		fakesHandlerFactory  *fakeEventHandlerFactory
 		fakesStore           *cache.FakeCustomStore
@@ -36,7 +36,7 @@ var _ = Describe("Store", func() {
 		fakesHandlerFactory = &fakeEventHandlerFactory{}
 		fakesStore = &cache.FakeCustomStore{}
 		fakesController = &fakeController{}
-		store = &resourceStore{
+		store = &lazyLoadedStore{
 			clientset:           nil,
 			stopCh:              stopCh,
 			resyncPeriod:        resyncPeriod,
@@ -59,7 +59,7 @@ var _ = Describe("Store", func() {
 			fakesController.On("Run", mock.Anything)
 			fakesController.On("HasSynced").Return(true)
 
-			source, err := store.getOrCreateNamespaceSource()
+			source, err := store.GetOrCreateNamespaceSource()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(source).NotTo(BeNil())
 			Expect(source.store).To(Equal(fakesStore))
@@ -74,23 +74,23 @@ var _ = Describe("Store", func() {
 			fakesController.On("HasSynced").Return(false).After(cacheSyncDuration).Return(true)
 
 			startTime := time.Now()
-			_, err := store.getOrCreateNamespaceSource()
+			_, err := store.GetOrCreateNamespaceSource()
 			endTime := time.Now()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(endTime).To(BeTemporally(">", startTime.Add(cacheSyncDuration), time.Millisecond*500))
 		})
 
 		It("should return the existing watched resource when already exists", func() {
-			store = &resourceStore{
+			store = &lazyLoadedStore{
 				clientset:                nil,
 				stopCh:                   stopCh,
 				resyncPeriod:             resyncPeriod,
 				informerFactory:          fakesInformerFactory,
 				eventHandlerFactory:      fakesHandlerFactory,
-				namespaceWatchedResource: &watchedResource{watcher: eventHandler, store: fakesStore},
+				namespaceWatchedResource: &WatchedResource{watcher: eventHandler, store: fakesStore},
 			}
 
-			source, err := store.getOrCreateNamespaceSource()
+			source, err := store.GetOrCreateNamespaceSource()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(source).NotTo(BeNil())
 			Expect(source.store).To(Equal(fakesStore))
@@ -106,7 +106,7 @@ var _ = Describe("Store", func() {
 			fakesController.On("Run", mock.Anything)
 			fakesController.On("HasSynced").Return(true)
 
-			source, err := store.getOrCreateIngressSource()
+			source, err := store.GetOrCreateIngressSource()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(source).NotTo(BeNil())
 			Expect(source.store).To(Equal(fakesStore))
@@ -121,23 +121,23 @@ var _ = Describe("Store", func() {
 			fakesController.On("HasSynced").Return(false).After(cacheSyncDuration).Return(true)
 
 			startTime := time.Now()
-			_, err := store.getOrCreateIngressSource()
+			_, err := store.GetOrCreateIngressSource()
 			endTime := time.Now()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(endTime).To(BeTemporally(">", startTime.Add(cacheSyncDuration), time.Millisecond*500))
 		})
 
 		It("should return the existing watched resource when already exists", func() {
-			store = &resourceStore{
+			store = &lazyLoadedStore{
 				clientset:              nil,
 				stopCh:                 stopCh,
 				resyncPeriod:           resyncPeriod,
 				informerFactory:        fakesInformerFactory,
 				eventHandlerFactory:    fakesHandlerFactory,
-				ingressWatchedResource: &watchedResource{watcher: eventHandler, store: fakesStore},
+				ingressWatchedResource: &WatchedResource{watcher: eventHandler, store: fakesStore},
 			}
 
-			source, err := store.getOrCreateIngressSource()
+			source, err := store.GetOrCreateIngressSource()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(source).NotTo(BeNil())
 			Expect(source.store).To(Equal(fakesStore))
@@ -153,7 +153,7 @@ var _ = Describe("Store", func() {
 			fakesController.On("Run", mock.Anything)
 			fakesController.On("HasSynced").Return(true)
 
-			source, err := store.getOrCreateServiceSource()
+			source, err := store.GetOrCreateServiceSource()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(source).NotTo(BeNil())
 			Expect(source.store).To(Equal(fakesStore))
@@ -168,23 +168,23 @@ var _ = Describe("Store", func() {
 			fakesController.On("HasSynced").Return(false).After(cacheSyncDuration).Return(true)
 
 			startTime := time.Now()
-			_, err := store.getOrCreateServiceSource()
+			_, err := store.GetOrCreateServiceSource()
 			endTime := time.Now()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(endTime).To(BeTemporally(">", startTime.Add(cacheSyncDuration), time.Millisecond*500))
 		})
 
 		It("should return the existing watched resource when already exists", func() {
-			store = &resourceStore{
+			store = &lazyLoadedStore{
 				clientset:              nil,
 				stopCh:                 stopCh,
 				resyncPeriod:           resyncPeriod,
 				informerFactory:        fakesInformerFactory,
 				eventHandlerFactory:    fakesHandlerFactory,
-				serviceWatchedResource: &watchedResource{watcher: eventHandler, store: fakesStore},
+				serviceWatchedResource: &WatchedResource{watcher: eventHandler, store: fakesStore},
 			}
 
-			source, err := store.getOrCreateServiceSource()
+			source, err := store.GetOrCreateServiceSource()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(source).NotTo(BeNil())
 			Expect(source.store).To(Equal(fakesStore))

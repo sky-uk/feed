@@ -50,7 +50,7 @@ type client struct {
 	sync.Mutex
 	clientset    *kubernetes.Clientset
 	resyncPeriod time.Duration
-	store        *resourceStore
+	store        Store
 }
 
 // NamespaceSelector defines the label name and value for filtering namespaces
@@ -74,7 +74,7 @@ func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
 	c := &client{
 		clientset:    clientset,
 		resyncPeriod: resyncPeriod,
-		store:        newStore(clientset, make(chan struct{}), resyncPeriod),
+		store:        NewStore(clientset, make(chan struct{}), resyncPeriod),
 	}
 	return c, nil
 }
@@ -85,7 +85,7 @@ func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
 
 func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, error) {
 	var allIngresses []*v1beta1.Ingress
-	ingressWatchedResource, err := c.store.getOrCreateIngressSource()
+	ingressWatchedResource, err := c.store.GetOrCreateIngressSource()
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, 
 		return allIngresses, nil
 	}
 
-	namespaceWatchedResource, err := c.store.getOrCreateNamespaceSource()
+	namespaceWatchedResource, err := c.store.GetOrCreateNamespaceSource()
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func ingressInNamespace(ingress *v1beta1.Ingress, namespaces []*v1.Namespace) bo
 }
 
 func (c *client) WatchIngresses() (Watcher, error) {
-	ingressWatchedResource, err := c.store.getOrCreateIngressSource()
+	ingressWatchedResource, err := c.store.GetOrCreateIngressSource()
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (c *client) WatchIngresses() (Watcher, error) {
 
 func (c *client) GetServices() ([]*v1.Service, error) {
 	var services []*v1.Service
-	serviceSource, err := c.store.getOrCreateServiceSource()
+	serviceSource, err := c.store.GetOrCreateServiceSource()
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func (c *client) GetServices() ([]*v1.Service, error) {
 }
 
 func (c *client) WatchServices() (Watcher, error) {
-	serviceSource, err := c.store.getOrCreateServiceSource()
+	serviceSource, err := c.store.GetOrCreateServiceSource()
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (c *client) WatchServices() (Watcher, error) {
 }
 
 func (c *client) WatchNamespaces() (Watcher, error) {
-	namespaceSource, err := c.store.getOrCreateNamespaceSource()
+	namespaceSource, err := c.store.GetOrCreateNamespaceSource()
 	if err != nil {
 		return nil, err
 	}
