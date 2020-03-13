@@ -5,6 +5,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
@@ -76,6 +77,7 @@ func (s *lazyLoadedStore) GetOrCreateNamespaceSource() (*WatchedResource, error)
 		return s.namespaceWatchedResource, nil
 	}
 
+	log.Debug("Creating an informer to watch namespace resources")
 	namespaceWatcher := s.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
 	store, controller := s.informerFactory.createNamespaceInformer(s.resyncPeriod, namespaceWatcher)
 
@@ -85,6 +87,7 @@ func (s *lazyLoadedStore) GetOrCreateNamespaceSource() (*WatchedResource, error)
 		return &WatchedResource{}, errors.New("error while waiting for namespace cache to populate")
 	}
 
+	log.Debug("Namespace cache has been fully populated")
 	return &WatchedResource{
 		store:   store,
 		watcher: namespaceWatcher,
@@ -97,6 +100,7 @@ func (s *lazyLoadedStore) GetOrCreateIngressSource() (*WatchedResource, error) {
 		return s.ingressWatchedResource, nil
 	}
 
+	log.Debug("Creating an informer to watch ingress resources")
 	ingressWatcher := s.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
 	store, controller := s.informerFactory.createIngressInformer(s.resyncPeriod, ingressWatcher)
 
@@ -106,6 +110,7 @@ func (s *lazyLoadedStore) GetOrCreateIngressSource() (*WatchedResource, error) {
 		return &WatchedResource{}, errors.New("error while waiting for ingress cache to populate")
 	}
 
+	log.Debug("Ingress cache has been fully populated")
 	return &WatchedResource{
 		store:   store,
 		watcher: ingressWatcher,
@@ -118,6 +123,7 @@ func (s *lazyLoadedStore) GetOrCreateServiceSource() (*WatchedResource, error) {
 		return s.serviceWatchedResource, nil
 	}
 
+	log.Debug("Creating an informer to watch service resources")
 	serviceWatcher := s.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
 	store, controller := s.informerFactory.createServiceInformer(s.resyncPeriod, serviceWatcher)
 
@@ -127,6 +133,7 @@ func (s *lazyLoadedStore) GetOrCreateServiceSource() (*WatchedResource, error) {
 		return &WatchedResource{}, errors.New("error while waiting for service cache to populate")
 	}
 
+	log.Debug("Service cache has been fully populated")
 	return &WatchedResource{
 		store:   store,
 		watcher: serviceWatcher,
