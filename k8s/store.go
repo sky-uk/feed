@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
