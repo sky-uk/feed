@@ -1,3 +1,6 @@
+# v3.1.1
+* [BUGFIX] Wait for informer cache to be fully populates before interrogating it (#218)
+
 # v3.1.0
 * Fix X-Forwarded-Host to correctly forward client Host header (#217)
 
