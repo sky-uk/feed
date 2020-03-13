@@ -58,7 +58,8 @@ test : build
 # Docker build
 git_rev := $(shell git rev-parse --short HEAD)
 git_tag := $(shell git tag --points-at=$(git_rev))
-image_prefix := skycirrus/feed
+REGISTRY ?= skycirrus
+image_prefix := $(REGISTRY)/feed
 
 docker : test
 	@echo "== build docker images"
