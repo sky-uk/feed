@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -96,6 +97,30 @@ var _ = Describe("Store", func() {
 			Expect(source.store).To(Equal(fakesStore))
 			Expect(source.watcher).To(Equal(eventHandler))
 		})
+
+		It("should guard against concurrent access", func() {
+			fakesHandlerFactory.On("createBufferedHandler", bufferedWatcherDuration).Return(eventHandler)
+			fakesInformerFactory.On("createNamespaceInformer", resyncPeriod, eventHandler).Return(fakesStore, fakesController)
+			fakesController.On("Run", mock.Anything)
+			fakesController.On("HasSynced").Return(true)
+
+			var waitGroup sync.WaitGroup
+			watchedResources := sync.Map{}
+			concurrentCalls := 10
+			for i := 0; i < concurrentCalls; i++ {
+				waitGroup.Add(1)
+				go func() {
+					source, err := store.GetOrCreateNamespaceSource()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(source).NotTo(BeNil())
+					watchedResources.LoadOrStore(source, true)
+					waitGroup.Done()
+				}()
+			}
+
+			waitGroup.Wait()
+			Expect(lengthOf(watchedResources)).To(Equal(1))
+		})
 	})
 
 	Describe("ingress source creation", func() {
@@ -142,6 +167,30 @@ var _ = Describe("Store", func() {
 			Expect(source).NotTo(BeNil())
 			Expect(source.store).To(Equal(fakesStore))
 			Expect(source.watcher).To(Equal(eventHandler))
+		})
+
+		It("should guard against concurrent access", func() {
+			fakesHandlerFactory.On("createBufferedHandler", bufferedWatcherDuration).Return(eventHandler)
+			fakesInformerFactory.On("createIngressInformer", resyncPeriod, eventHandler).Return(fakesStore, fakesController)
+			fakesController.On("Run", mock.Anything)
+			fakesController.On("HasSynced").Return(true)
+
+			var waitGroup sync.WaitGroup
+			watchedResources := sync.Map{}
+			concurrentCalls := 10
+			for i := 0; i < concurrentCalls; i++ {
+				waitGroup.Add(1)
+				go func() {
+					source, err := store.GetOrCreateIngressSource()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(source).NotTo(BeNil())
+					watchedResources.LoadOrStore(source, true)
+					waitGroup.Done()
+				}()
+			}
+
+			waitGroup.Wait()
+			Expect(lengthOf(watchedResources)).To(Equal(1))
 		})
 	})
 
@@ -190,9 +239,42 @@ var _ = Describe("Store", func() {
 			Expect(source.store).To(Equal(fakesStore))
 			Expect(source.watcher).To(Equal(eventHandler))
 		})
+
+		It("should guard against concurrent access", func() {
+			fakesHandlerFactory.On("createBufferedHandler", bufferedWatcherDuration).Return(eventHandler)
+			fakesInformerFactory.On("createServiceInformer", resyncPeriod, eventHandler).Return(fakesStore, fakesController)
+			fakesController.On("Run", mock.Anything)
+			fakesController.On("HasSynced").Return(true)
+
+			var waitGroup sync.WaitGroup
+			watchedResources := sync.Map{}
+			concurrentCalls := 10
+			for i := 0; i < concurrentCalls; i++ {
+				waitGroup.Add(1)
+				go func() {
+					source, err := store.GetOrCreateServiceSource()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(source).NotTo(BeNil())
+					watchedResources.LoadOrStore(source, true)
+					waitGroup.Done()
+				}()
+			}
+
+			waitGroup.Wait()
+			Expect(lengthOf(watchedResources)).To(Equal(1))
+		})
 	})
 
 })
+
+func lengthOf(theSyncMap sync.Map) int {
+	length := 0
+	theSyncMap.Range(func(key, val interface{}) bool {
+		length++
+		return true
+	})
+	return length
+}
 
 type fakeController struct {
 	mock.Mock

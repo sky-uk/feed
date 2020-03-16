@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -27,6 +28,7 @@ type Store interface {
 }
 
 type lazyLoadedStore struct {
+	sync.Mutex
 	clientset                *kubernetes.Clientset
 	stopCh                   chan struct{}
 	resyncPeriod             time.Duration
@@ -70,32 +72,53 @@ func NewStore(clientset *kubernetes.Clientset, stopCh chan struct{}, resyncPerio
 
 //  GetOrCreateNamespaceSource creates a namespace informer and registers and event handler to watch for changes
 func (s *lazyLoadedStore) GetOrCreateNamespaceSource() (*WatchedResource, error) {
+	s.Lock()
+	defer s.Unlock()
 	if s.namespaceWatchedResource != nil {
 		return s.namespaceWatchedResource, nil
 	}
 
 	log.Debug("Creating an informer to watch namespace resources")
-	return s.getOrCreateSource(s.informerFactory.createNamespaceInformer)
+	var err error
+	s.namespaceWatchedResource, err = s.getOrCreateSource(s.informerFactory.createNamespaceInformer)
+	if err != nil {
+		return nil, err
+	}
+	return s.namespaceWatchedResource, nil
 }
 
 //  GetOrCreateNamespaceSource creates an ingress informer and registers and event handler to watch for changes
 func (s *lazyLoadedStore) GetOrCreateIngressSource() (*WatchedResource, error) {
+	s.Lock()
+	defer s.Unlock()
 	if s.ingressWatchedResource != nil {
 		return s.ingressWatchedResource, nil
 	}
 
 	log.Debug("Creating an informer to watch ingress resources")
-	return s.getOrCreateSource(s.informerFactory.createIngressInformer)
+	var err error
+	s.ingressWatchedResource, err = s.getOrCreateSource(s.informerFactory.createIngressInformer)
+	if err != nil {
+		return nil, err
+	}
+	return s.ingressWatchedResource, nil
 }
 
 //  GetOrCreateServiceSource creates an ingress informer and registers and event handler to watch for changes
 func (s *lazyLoadedStore) GetOrCreateServiceSource() (*WatchedResource, error) {
+	s.Lock()
+	defer s.Unlock()
 	if s.serviceWatchedResource != nil {
 		return s.serviceWatchedResource, nil
 	}
 
 	log.Debug("Creating an informer to watch service resources")
-	return s.getOrCreateSource(s.informerFactory.createServiceInformer)
+	var err error
+	s.serviceWatchedResource, err = s.getOrCreateSource(s.informerFactory.createServiceInformer)
+	if err != nil {
+		return nil, err
+	}
+	return s.serviceWatchedResource, nil
 }
 
 func (s *lazyLoadedStore) getOrCreateSource(createInformer func (time.Duration, cache.ResourceEventHandler) (cache.Store, cache.Controller)) (*WatchedResource, error) {
