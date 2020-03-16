@@ -121,6 +121,31 @@ var _ = Describe("Store", func() {
 			waitGroup.Wait()
 			Expect(lengthOf(watchedStores)).To(Equal(1))
 		})
+
+		It("should not save the store when an error occurs", func() {
+			syncActionedCh := make(chan struct{})
+			fakesHandlerFactory.On("createBufferedHandler", bufferedWatcherDuration).Return(eventHandler)
+			fakesInformerFactory.On("createNamespaceInformer", resyncPeriod, eventHandler).Return(fakesStore, fakesController)
+			fakesController.On("Run", mock.Anything)
+			fakesController.On("HasSynced").Return(false).Run(func(args mock.Arguments) {
+				syncActionedCh <- struct{}{}
+			})
+
+			var waitGroup sync.WaitGroup
+			var err error
+			waitGroup.Add(1)
+			go func() {
+				_, err = store.GetOrCreateNamespaceSource()
+				waitGroup.Done()
+			}()
+
+			<-syncActionedCh
+			close(stopCh)
+
+			waitGroup.Wait()
+			Expect(err).To(HaveOccurred())
+			Expect(store.namespaceWatchedStore).To(BeNil())
+		})
 	})
 
 	Describe("ingress source creation", func() {
@@ -142,7 +167,7 @@ var _ = Describe("Store", func() {
 			fakesHandlerFactory.On("createBufferedHandler", bufferedWatcherDuration).Return(eventHandler)
 			fakesInformerFactory.On("createIngressInformer", resyncPeriod, eventHandler).Return(fakesStore, fakesController)
 			fakesController.On("Run", mock.Anything)
-			cacheSyncDuration := time.Second * 1
+			cacheSyncDuration := time.Second
 			fakesController.On("HasSynced").Return(false).After(cacheSyncDuration).Return(true)
 
 			startTime := time.Now()
@@ -191,6 +216,31 @@ var _ = Describe("Store", func() {
 
 			waitGroup.Wait()
 			Expect(lengthOf(watchedStores)).To(Equal(1))
+		})
+
+		It("should not save the store when an error occurs", func() {
+			syncActionedCh := make(chan struct{})
+			fakesHandlerFactory.On("createBufferedHandler", bufferedWatcherDuration).Return(eventHandler)
+			fakesInformerFactory.On("createIngressInformer", resyncPeriod, eventHandler).Return(fakesStore, fakesController)
+			fakesController.On("Run", mock.Anything)
+			fakesController.On("HasSynced").Return(false).Run(func(args mock.Arguments) {
+				syncActionedCh <- struct{}{}
+			})
+
+			var waitGroup sync.WaitGroup
+			var err error
+			waitGroup.Add(1)
+			go func() {
+				_, err = store.GetOrCreateIngressSource()
+				waitGroup.Done()
+			}()
+
+			<-syncActionedCh
+			close(stopCh)
+
+			waitGroup.Wait()
+			Expect(err).To(HaveOccurred())
+			Expect(store.ingressWatchedStore).To(BeNil())
 		})
 	})
 
@@ -262,6 +312,31 @@ var _ = Describe("Store", func() {
 
 			waitGroup.Wait()
 			Expect(lengthOf(watchedStores)).To(Equal(1))
+		})
+
+		It("should not save the store when an error occurs", func() {
+			syncActionedCh := make(chan struct{})
+			fakesHandlerFactory.On("createBufferedHandler", bufferedWatcherDuration).Return(eventHandler)
+			fakesInformerFactory.On("createServiceInformer", resyncPeriod, eventHandler).Return(fakesStore, fakesController)
+			fakesController.On("Run", mock.Anything)
+			fakesController.On("HasSynced").Return(false).Run(func(args mock.Arguments) {
+				syncActionedCh <- struct{}{}
+			})
+
+			var waitGroup sync.WaitGroup
+			var err error
+			waitGroup.Add(1)
+			go func() {
+				_, err = store.GetOrCreateServiceSource()
+				waitGroup.Done()
+			}()
+
+			<-syncActionedCh
+			close(stopCh)
+
+			waitGroup.Wait()
+			Expect(err).To(HaveOccurred())
+			Expect(store.serviceWatchedStore).To(BeNil())
 		})
 	})
 

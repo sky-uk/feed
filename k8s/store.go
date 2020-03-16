@@ -79,11 +79,11 @@ func (s *lazyLoadedStore) GetOrCreateNamespaceSource() (*WatchedStore, error) {
 	}
 
 	log.Debug("Creating an informer to watch namespace resources")
-	var err error
-	s.namespaceWatchedStore, err = s.getOrCreateSource(s.informerFactory.createNamespaceInformer)
+	namespaceWatchedStore, err := s.getOrCreateSource(s.informerFactory.createNamespaceInformer)
 	if err != nil {
 		return nil, err
 	}
+	s.namespaceWatchedStore = namespaceWatchedStore
 	return s.namespaceWatchedStore, nil
 }
 
@@ -96,11 +96,11 @@ func (s *lazyLoadedStore) GetOrCreateIngressSource() (*WatchedStore, error) {
 	}
 
 	log.Debug("Creating an informer to watch ingress resources")
-	var err error
-	s.ingressWatchedStore, err = s.getOrCreateSource(s.informerFactory.createIngressInformer)
+	ingressWatchedStore, err := s.getOrCreateSource(s.informerFactory.createIngressInformer)
 	if err != nil {
 		return nil, err
 	}
+	s.ingressWatchedStore = ingressWatchedStore
 	return s.ingressWatchedStore, nil
 }
 
@@ -113,11 +113,11 @@ func (s *lazyLoadedStore) GetOrCreateServiceSource() (*WatchedStore, error) {
 	}
 
 	log.Debug("Creating an informer to watch service resources")
-	var err error
-	s.serviceWatchedStore, err = s.getOrCreateSource(s.informerFactory.createServiceInformer)
+	serviceWatchedStore, err := s.getOrCreateSource(s.informerFactory.createServiceInformer)
 	if err != nil {
 		return nil, err
 	}
+	s.serviceWatchedStore = serviceWatchedStore
 	return s.serviceWatchedStore, nil
 }
 
