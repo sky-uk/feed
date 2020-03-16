@@ -105,7 +105,7 @@ var _ = Describe("Store", func() {
 			fakesController.On("HasSynced").Return(true)
 
 			var waitGroup sync.WaitGroup
-			watchedStores := sync.Map{}
+			watchedStores := &sync.Map{}
 			concurrentCalls := 10
 			for i := 0; i < concurrentCalls; i++ {
 				waitGroup.Add(1)
@@ -176,7 +176,7 @@ var _ = Describe("Store", func() {
 			fakesController.On("HasSynced").Return(true)
 
 			var waitGroup sync.WaitGroup
-			watchedStores := sync.Map{}
+			watchedStores := &sync.Map{}
 			concurrentCalls := 10
 			for i := 0; i < concurrentCalls; i++ {
 				waitGroup.Add(1)
@@ -247,7 +247,7 @@ var _ = Describe("Store", func() {
 			fakesController.On("HasSynced").Return(true)
 
 			var waitGroup sync.WaitGroup
-			watchedStores := sync.Map{}
+			watchedStores := &sync.Map{}
 			concurrentCalls := 10
 			for i := 0; i < concurrentCalls; i++ {
 				waitGroup.Add(1)
@@ -267,7 +267,7 @@ var _ = Describe("Store", func() {
 
 })
 
-func lengthOf(theSyncMap sync.Map) int {
+func lengthOf(theSyncMap *sync.Map) int {
 	length := 0
 	theSyncMap.Range(func(key, val interface{}) bool {
 		length++
