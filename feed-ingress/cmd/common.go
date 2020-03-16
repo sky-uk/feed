@@ -25,7 +25,8 @@ func runCmd(appender appendIngressUpdaters) {
 	cmdutil.ConfigureLogging(debug)
 	cmdutil.ConfigureMetrics("feed-ingress", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)
 
-	client, err := k8s.New(kubeconfig, resyncPeriod)
+	stopCh := make(chan struct{})
+	client, err := k8s.New(kubeconfig, resyncPeriod, stopCh)
 	if err != nil {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
@@ -41,7 +42,7 @@ func runCmd(appender appendIngressUpdaters) {
 		log.Fatalf("invalid format for --%s (%s)", ingressControllerNamespaceSelectorFlag, namespaceSelector)
 	}
 
-	feedController := controller.New(controllerConfig)
+	feedController := controller.New(controllerConfig, stopCh)
 
 	cmdutil.AddHealthMetrics(feedController, metrics.PrometheusIngressSubsystem)
 	cmdutil.AddHealthPort(feedController, healthPort)

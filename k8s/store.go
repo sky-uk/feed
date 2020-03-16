@@ -60,7 +60,7 @@ type cacheInformerFactory struct {
 }
 
 // NewStore creates a new store that starts watching for resources only when requested
-func NewStore(clientset *kubernetes.Clientset, stopCh chan struct{}, resyncPeriod time.Duration) Store {
+func NewStore(clientset *kubernetes.Clientset, resyncPeriod time.Duration, stopCh chan struct{}) Store {
 	return &lazyLoadedStore{
 		clientset:           clientset,
 		stopCh:              stopCh,

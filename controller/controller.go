@@ -65,7 +65,7 @@ type controller struct {
 	defaultProxyBufferSize       int
 	defaultProxyBufferBlocks     int
 	watcher                      k8s.Watcher
-	doneCh                       chan struct{}
+	stopCh                       chan struct{}
 	watcherDone                  sync.WaitGroup
 	started                      bool
 	updatesHealth                util.SafeError
@@ -92,7 +92,7 @@ type Config struct {
 }
 
 // New creates an ingress controller.
-func New(conf Config) Controller {
+func New(conf Config, stopCh chan struct{}) Controller {
 	return &controller{
 		client:                       conf.KubernetesClient,
 		updaters:                     conf.Updaters,
@@ -103,7 +103,7 @@ func New(conf Config) Controller {
 		defaultBackendMaxConnections: conf.DefaultBackendMaxConnections,
 		defaultProxyBufferSize:       conf.DefaultProxyBufferSize,
 		defaultProxyBufferBlocks:     conf.DefaultProxyBufferBlocks,
-		doneCh:                       make(chan struct{}),
+		stopCh:                       stopCh,
 		name:                         conf.Name,
 		includeClasslessIngresses:    conf.IncludeClasslessIngresses,
 		namespaceSelector:            conf.NamespaceSelector,
@@ -177,7 +177,7 @@ func (c *controller) handleUpdates() {
 			} else {
 				c.updatesHealth.Set(nil)
 			}
-		case <-c.doneCh:
+		case <-c.stopCh:
 			return
 		}
 	}
@@ -400,7 +400,7 @@ func (c *controller) Stop() error {
 	}
 
 	log.Info("Stopping controller")
-	close(c.doneCh)
+	close(c.stopCh)
 
 	for i := range c.updaters {
 		u := c.updaters[len(c.updaters)-1-i]

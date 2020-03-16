@@ -97,7 +97,7 @@ func newController(lb Updater, client k8s.Client) Controller {
 		KubernetesClient:             client,
 		DefaultAllow:                 ingressDefaultAllow,
 		DefaultBackendTimeoutSeconds: backendTimeout,
-	})
+	}, make(chan struct{}))
 }
 
 func TestControllerCanBeStartedAndStopped(t *testing.T) {
@@ -130,7 +130,7 @@ func TestControllerStartsAndStopsUpdatersInCorrectOrder(t *testing.T) {
 		KubernetesClient:             client,
 		DefaultAllow:                 ingressDefaultAllow,
 		DefaultBackendTimeoutSeconds: backendTimeout,
-	})
+	}, make(chan struct{}))
 
 	// when
 	started = nil
@@ -160,7 +160,7 @@ func TestControllerStopsAnyStartedUpdatersIfOneFailsToStart(t *testing.T) {
 		KubernetesClient:             client,
 		DefaultAllow:                 ingressDefaultAllow,
 		DefaultBackendTimeoutSeconds: backendTimeout,
-	})
+	}, make(chan struct{}))
 
 	// when
 	asserter.Error(controller.Start())
@@ -1057,7 +1057,7 @@ func TestNamespaceSelectorIsUsedToGetIngresses(t *testing.T) {
 	config.KubernetesClient = client
 	config.Updaters = []Updater{updater}
 
-	controller := New(config)
+	controller := New(config, make(chan struct{}))
 
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
@@ -1150,7 +1150,7 @@ func runAndAssertUpdates(t *testing.T, clientExpectation clientExpectation, test
 	config.KubernetesClient = client
 	config.Updaters = []Updater{updater}
 
-	controller := New(config)
+	controller := New(config, make(chan struct{}))
 
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
@@ -1387,7 +1387,7 @@ func TestUpdateFailsWhenK8sClientReturnsNoIngresses(t *testing.T) {
 	config := test.config
 	config.KubernetesClient = client
 	config.Updaters = []Updater{updater}
-	controller := New(config)
+	controller := New(config, make(chan struct{}))
 
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
@@ -1448,7 +1448,7 @@ func TestUpdateFailsWhenK8sClientReturnsNoNamespaceIngresses(t *testing.T) {
 	config := test.config
 	config.KubernetesClient = client
 	config.Updaters = []Updater{updater}
-	controller := New(config)
+	controller := New(config, make(chan struct{}))
 
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)
@@ -1501,7 +1501,7 @@ func TestUpdateFailsWhenK8sClientReturnsNoServices(t *testing.T) {
 	config := test.config
 	config.KubernetesClient = client
 	config.Updaters = []Updater{updater}
-	controller := New(config)
+	controller := New(config, make(chan struct{}))
 
 	updater.On("Start").Return(nil)
 	updater.On("Stop").Return(nil)

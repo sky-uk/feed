@@ -60,7 +60,7 @@ type NamespaceSelector struct {
 }
 
 // New creates a client for the kubernetes API server.
-func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
+func New(kubeconfig string, resyncPeriod time.Duration, stopCh chan struct{}) (Client, error) {
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
 	c := &client{
 		clientset:    clientset,
 		resyncPeriod: resyncPeriod,
-		store:        NewStore(clientset, make(chan struct{}), resyncPeriod),
+		store:        NewStore(clientset, resyncPeriod, stopCh),
 	}
 	return c, nil
 }
