@@ -20,28 +20,28 @@ const bufferedWatcherDuration = time.Millisecond * 50
 // Store encapsulates the creation of the shared informer for each watched resource
 type Store interface {
 	// GetOrCreateNamespaceSource create a namespace informer and returns its corresponding store and event handler
-	GetOrCreateNamespaceSource() (*WatchedResource, error)
+	GetOrCreateNamespaceSource() (*WatchedStore, error)
 	// GetOrCreateIngressSource create an ingress informer and returns its corresponding store and event handler
-	GetOrCreateIngressSource() (*WatchedResource, error)
+	GetOrCreateIngressSource() (*WatchedStore, error)
 	// GetOrCreateServiceSource create a service informer and returns its corresponding store and event handler
-	GetOrCreateServiceSource() (*WatchedResource, error)
+	GetOrCreateServiceSource() (*WatchedStore, error)
 }
 
 type lazyLoadedStore struct {
 	sync.Mutex
-	clientset                *kubernetes.Clientset
-	stopCh                   chan struct{}
-	resyncPeriod             time.Duration
-	informerFactory          informerFactory
-	eventHandlerFactory      eventHandlerFactory
-	namespaceWatchedResource *WatchedResource
-	ingressWatchedResource   *WatchedResource
-	serviceWatchedResource   *WatchedResource
+	clientset             *kubernetes.Clientset
+	stopCh                chan struct{}
+	resyncPeriod          time.Duration
+	informerFactory       informerFactory
+	eventHandlerFactory   eventHandlerFactory
+	namespaceWatchedStore *WatchedStore
+	ingressWatchedStore   *WatchedStore
+	serviceWatchedStore   *WatchedStore
 }
 
-// WatchedResource exposes a store for the resource to allow interrogating the current state via get/list operations
+// WatchedStore exposes a store for the resource to allow interrogating the current state via get/list operations
 // and an watcher so clients can subscribe to update notifications
-type WatchedResource struct {
+type WatchedStore struct {
 	store   cache.Store
 	watcher *handlerWatcher
 }
@@ -71,67 +71,67 @@ func NewStore(clientset *kubernetes.Clientset, stopCh chan struct{}, resyncPerio
 }
 
 //  GetOrCreateNamespaceSource creates a namespace informer and registers and event handler to watch for changes
-func (s *lazyLoadedStore) GetOrCreateNamespaceSource() (*WatchedResource, error) {
+func (s *lazyLoadedStore) GetOrCreateNamespaceSource() (*WatchedStore, error) {
 	s.Lock()
 	defer s.Unlock()
-	if s.namespaceWatchedResource != nil {
-		return s.namespaceWatchedResource, nil
+	if s.namespaceWatchedStore != nil {
+		return s.namespaceWatchedStore, nil
 	}
 
 	log.Debug("Creating an informer to watch namespace resources")
 	var err error
-	s.namespaceWatchedResource, err = s.getOrCreateSource(s.informerFactory.createNamespaceInformer)
+	s.namespaceWatchedStore, err = s.getOrCreateSource(s.informerFactory.createNamespaceInformer)
 	if err != nil {
 		return nil, err
 	}
-	return s.namespaceWatchedResource, nil
+	return s.namespaceWatchedStore, nil
 }
 
 //  GetOrCreateNamespaceSource creates an ingress informer and registers and event handler to watch for changes
-func (s *lazyLoadedStore) GetOrCreateIngressSource() (*WatchedResource, error) {
+func (s *lazyLoadedStore) GetOrCreateIngressSource() (*WatchedStore, error) {
 	s.Lock()
 	defer s.Unlock()
-	if s.ingressWatchedResource != nil {
-		return s.ingressWatchedResource, nil
+	if s.ingressWatchedStore != nil {
+		return s.ingressWatchedStore, nil
 	}
 
 	log.Debug("Creating an informer to watch ingress resources")
 	var err error
-	s.ingressWatchedResource, err = s.getOrCreateSource(s.informerFactory.createIngressInformer)
+	s.ingressWatchedStore, err = s.getOrCreateSource(s.informerFactory.createIngressInformer)
 	if err != nil {
 		return nil, err
 	}
-	return s.ingressWatchedResource, nil
+	return s.ingressWatchedStore, nil
 }
 
 //  GetOrCreateServiceSource creates an ingress informer and registers and event handler to watch for changes
-func (s *lazyLoadedStore) GetOrCreateServiceSource() (*WatchedResource, error) {
+func (s *lazyLoadedStore) GetOrCreateServiceSource() (*WatchedStore, error) {
 	s.Lock()
 	defer s.Unlock()
-	if s.serviceWatchedResource != nil {
-		return s.serviceWatchedResource, nil
+	if s.serviceWatchedStore != nil {
+		return s.serviceWatchedStore, nil
 	}
 
 	log.Debug("Creating an informer to watch service resources")
 	var err error
-	s.serviceWatchedResource, err = s.getOrCreateSource(s.informerFactory.createServiceInformer)
+	s.serviceWatchedStore, err = s.getOrCreateSource(s.informerFactory.createServiceInformer)
 	if err != nil {
 		return nil, err
 	}
-	return s.serviceWatchedResource, nil
+	return s.serviceWatchedStore, nil
 }
 
-func (s *lazyLoadedStore) getOrCreateSource(createInformer func (time.Duration, cache.ResourceEventHandler) (cache.Store, cache.Controller)) (*WatchedResource, error) {
+func (s *lazyLoadedStore) getOrCreateSource(createInformer func (time.Duration, cache.ResourceEventHandler) (cache.Store, cache.Controller)) (*WatchedStore, error) {
 	watcher := s.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
 	store, controller := createInformer(s.resyncPeriod, watcher)
 
 	go controller.Run(s.stopCh)
 
 	if !cache.WaitForCacheSync(s.stopCh, controller.HasSynced) {
-		return &WatchedResource{}, errors.New("error while waiting for cache to populate")
+		return &WatchedStore{}, errors.New("error while waiting for cache to populate")
 	}
 
-	return &WatchedResource{
+	return &WatchedStore{
 		store:   store,
 		watcher: watcher,
 	}, nil

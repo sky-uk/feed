@@ -83,12 +83,12 @@ var _ = Describe("Store", func() {
 
 		It("should return the existing watched resource when already exists", func() {
 			store = &lazyLoadedStore{
-				clientset:                nil,
-				stopCh:                   stopCh,
-				resyncPeriod:             resyncPeriod,
-				informerFactory:          fakesInformerFactory,
-				eventHandlerFactory:      fakesHandlerFactory,
-				namespaceWatchedResource: &WatchedResource{watcher: eventHandler, store: fakesStore},
+				clientset:             nil,
+				stopCh:                stopCh,
+				resyncPeriod:          resyncPeriod,
+				informerFactory:       fakesInformerFactory,
+				eventHandlerFactory:   fakesHandlerFactory,
+				namespaceWatchedStore: &WatchedStore{watcher: eventHandler, store: fakesStore},
 			}
 
 			source, err := store.GetOrCreateNamespaceSource()
@@ -105,7 +105,7 @@ var _ = Describe("Store", func() {
 			fakesController.On("HasSynced").Return(true)
 
 			var waitGroup sync.WaitGroup
-			watchedResources := sync.Map{}
+			watchedStores := sync.Map{}
 			concurrentCalls := 10
 			for i := 0; i < concurrentCalls; i++ {
 				waitGroup.Add(1)
@@ -113,13 +113,13 @@ var _ = Describe("Store", func() {
 					source, err := store.GetOrCreateNamespaceSource()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(source).NotTo(BeNil())
-					watchedResources.LoadOrStore(source, true)
+					watchedStores.LoadOrStore(source, true)
 					waitGroup.Done()
 				}()
 			}
 
 			waitGroup.Wait()
-			Expect(lengthOf(watchedResources)).To(Equal(1))
+			Expect(lengthOf(watchedStores)).To(Equal(1))
 		})
 	})
 
@@ -154,12 +154,12 @@ var _ = Describe("Store", func() {
 
 		It("should return the existing watched resource when already exists", func() {
 			store = &lazyLoadedStore{
-				clientset:              nil,
-				stopCh:                 stopCh,
-				resyncPeriod:           resyncPeriod,
-				informerFactory:        fakesInformerFactory,
-				eventHandlerFactory:    fakesHandlerFactory,
-				ingressWatchedResource: &WatchedResource{watcher: eventHandler, store: fakesStore},
+				clientset:           nil,
+				stopCh:              stopCh,
+				resyncPeriod:        resyncPeriod,
+				informerFactory:     fakesInformerFactory,
+				eventHandlerFactory: fakesHandlerFactory,
+				ingressWatchedStore: &WatchedStore{watcher: eventHandler, store: fakesStore},
 			}
 
 			source, err := store.GetOrCreateIngressSource()
@@ -176,7 +176,7 @@ var _ = Describe("Store", func() {
 			fakesController.On("HasSynced").Return(true)
 
 			var waitGroup sync.WaitGroup
-			watchedResources := sync.Map{}
+			watchedStores := sync.Map{}
 			concurrentCalls := 10
 			for i := 0; i < concurrentCalls; i++ {
 				waitGroup.Add(1)
@@ -184,13 +184,13 @@ var _ = Describe("Store", func() {
 					source, err := store.GetOrCreateIngressSource()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(source).NotTo(BeNil())
-					watchedResources.LoadOrStore(source, true)
+					watchedStores.LoadOrStore(source, true)
 					waitGroup.Done()
 				}()
 			}
 
 			waitGroup.Wait()
-			Expect(lengthOf(watchedResources)).To(Equal(1))
+			Expect(lengthOf(watchedStores)).To(Equal(1))
 		})
 	})
 
@@ -225,12 +225,12 @@ var _ = Describe("Store", func() {
 
 		It("should return the existing watched resource when already exists", func() {
 			store = &lazyLoadedStore{
-				clientset:              nil,
-				stopCh:                 stopCh,
-				resyncPeriod:           resyncPeriod,
-				informerFactory:        fakesInformerFactory,
-				eventHandlerFactory:    fakesHandlerFactory,
-				serviceWatchedResource: &WatchedResource{watcher: eventHandler, store: fakesStore},
+				clientset:           nil,
+				stopCh:              stopCh,
+				resyncPeriod:        resyncPeriod,
+				informerFactory:     fakesInformerFactory,
+				eventHandlerFactory: fakesHandlerFactory,
+				serviceWatchedStore: &WatchedStore{watcher: eventHandler, store: fakesStore},
 			}
 
 			source, err := store.GetOrCreateServiceSource()
@@ -247,7 +247,7 @@ var _ = Describe("Store", func() {
 			fakesController.On("HasSynced").Return(true)
 
 			var waitGroup sync.WaitGroup
-			watchedResources := sync.Map{}
+			watchedStores := sync.Map{}
 			concurrentCalls := 10
 			for i := 0; i < concurrentCalls; i++ {
 				waitGroup.Add(1)
@@ -255,13 +255,13 @@ var _ = Describe("Store", func() {
 					source, err := store.GetOrCreateServiceSource()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(source).NotTo(BeNil())
-					watchedResources.LoadOrStore(source, true)
+					watchedStores.LoadOrStore(source, true)
 					waitGroup.Done()
 				}()
 			}
 
 			waitGroup.Wait()
-			Expect(lengthOf(watchedResources)).To(Equal(1))
+			Expect(lengthOf(watchedStores)).To(Equal(1))
 		})
 	})
 
