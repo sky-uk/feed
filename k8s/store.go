@@ -128,7 +128,7 @@ func (s *lazyLoadedStore) getOrCreateSource(createInformer func(time.Duration, c
 	go controller.Run(s.stopCh)
 
 	if !cache.WaitForCacheSync(s.stopCh, controller.HasSynced) {
-		return &WatchedStore{}, errors.New("error while waiting for cache to populate")
+		return nil, errors.New("error while waiting for cache to populate")
 	}
 
 	return &WatchedStore{
