@@ -57,9 +57,6 @@ type cacheInformerFactory struct {
 	clientset *kubernetes.Clientset
 }
 
-// Implement cache.ResourceEventHandler
-var _ informerFactory = &cacheInformerFactory{}
-
 // NewStore creates a new store that starts watching for resources only when requested
 func NewStore(clientset *kubernetes.Clientset, stopCh chan struct{}, resyncPeriod time.Duration) Store {
 	return &lazyLoadedStore{
@@ -78,20 +75,7 @@ func (s *lazyLoadedStore) GetOrCreateNamespaceSource() (*WatchedResource, error)
 	}
 
 	log.Debug("Creating an informer to watch namespace resources")
-	namespaceWatcher := s.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
-	store, controller := s.informerFactory.createNamespaceInformer(s.resyncPeriod, namespaceWatcher)
-
-	go controller.Run(s.stopCh)
-
-	if !cache.WaitForCacheSync(s.stopCh, controller.HasSynced) {
-		return &WatchedResource{}, errors.New("error while waiting for namespace cache to populate")
-	}
-
-	log.Debug("Namespace cache has been fully populated")
-	return &WatchedResource{
-		store:   store,
-		watcher: namespaceWatcher,
-	}, nil
+	return s.getOrCreateSource(s.informerFactory.createNamespaceInformer)
 }
 
 //  GetOrCreateNamespaceSource creates an ingress informer and registers and event handler to watch for changes
@@ -101,20 +85,7 @@ func (s *lazyLoadedStore) GetOrCreateIngressSource() (*WatchedResource, error) {
 	}
 
 	log.Debug("Creating an informer to watch ingress resources")
-	ingressWatcher := s.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
-	store, controller := s.informerFactory.createIngressInformer(s.resyncPeriod, ingressWatcher)
-
-	go controller.Run(s.stopCh)
-
-	if !cache.WaitForCacheSync(s.stopCh, controller.HasSynced) {
-		return &WatchedResource{}, errors.New("error while waiting for ingress cache to populate")
-	}
-
-	log.Debug("Ingress cache has been fully populated")
-	return &WatchedResource{
-		store:   store,
-		watcher: ingressWatcher,
-	}, nil
+	return s.getOrCreateSource(s.informerFactory.createIngressInformer)
 }
 
 //  GetOrCreateServiceSource creates an ingress informer and registers and event handler to watch for changes
@@ -124,19 +95,22 @@ func (s *lazyLoadedStore) GetOrCreateServiceSource() (*WatchedResource, error) {
 	}
 
 	log.Debug("Creating an informer to watch service resources")
-	serviceWatcher := s.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
-	store, controller := s.informerFactory.createServiceInformer(s.resyncPeriod, serviceWatcher)
+	return s.getOrCreateSource(s.informerFactory.createServiceInformer)
+}
+
+func (s *lazyLoadedStore) getOrCreateSource(createInformer func (time.Duration, cache.ResourceEventHandler) (cache.Store, cache.Controller)) (*WatchedResource, error) {
+	watcher := s.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
+	store, controller := createInformer(s.resyncPeriod, watcher)
 
 	go controller.Run(s.stopCh)
 
 	if !cache.WaitForCacheSync(s.stopCh, controller.HasSynced) {
-		return &WatchedResource{}, errors.New("error while waiting for service cache to populate")
+		return &WatchedResource{}, errors.New("error while waiting for cache to populate")
 	}
 
-	log.Debug("Service cache has been fully populated")
 	return &WatchedResource{
 		store:   store,
-		watcher: serviceWatcher,
+		watcher: watcher,
 	}, nil
 }
 
