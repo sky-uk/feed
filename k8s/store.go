@@ -121,7 +121,7 @@ func (s *lazyLoadedStore) GetOrCreateServiceSource() (*WatchedStore, error) {
 	return s.serviceWatchedStore, nil
 }
 
-func (s *lazyLoadedStore) getOrCreateSource(createInformer func (time.Duration, cache.ResourceEventHandler) (cache.Store, cache.Controller)) (*WatchedStore, error) {
+func (s *lazyLoadedStore) getOrCreateSource(createInformer func(time.Duration, cache.ResourceEventHandler) (cache.Store, cache.Controller)) (*WatchedStore, error) {
 	watcher := s.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
 	store, controller := createInformer(s.resyncPeriod, watcher)
 
