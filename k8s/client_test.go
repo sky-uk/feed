@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"sync"
 	"testing"
@@ -17,18 +18,18 @@ func TestClient(t *testing.T) {
 
 var _ = Describe("Client", func() {
 
-	var (
-		clt                  *client
-		stopCh               chan struct{}
-		resyncPeriod         time.Duration
-		fakesInformerFactory *fakeInformerFactory
-		fakesHandlerFactory  *fakeEventHandlerFactory
-		fakesStore           *cache.FakeCustomStore
-		fakesController      *fakeController
-		eventHandler         *handlerWatcher
-	)
-
 	Describe("Watchers", func() {
+
+		var (
+			clt                  *client
+			stopCh               chan struct{}
+			resyncPeriod         time.Duration
+			fakesInformerFactory *fakeInformerFactory
+			fakesHandlerFactory  *fakeEventHandlerFactory
+			fakesStore           *cache.FakeCustomStore
+			fakesController      *fakeController
+			eventHandler         *handlerWatcher
+		)
 
 		BeforeEach(func() {
 			stopCh = make(chan struct{})
@@ -64,7 +65,7 @@ var _ = Describe("Client", func() {
 				})
 
 				watcher := clt.WatchIngresses()
-				<- runExecutedCh
+				<-runExecutedCh
 
 				Expect(watcher).To(Equal(eventHandler))
 				Expect(clt.ingressWatcher).To(Equal(eventHandler))
@@ -116,7 +117,7 @@ var _ = Describe("Client", func() {
 					}()
 				}
 
-				<- runExecutedCh
+				<-runExecutedCh
 
 				waitGroup.Wait()
 				Expect(lengthOf(watchers)).To(Equal(1))
@@ -134,7 +135,7 @@ var _ = Describe("Client", func() {
 				})
 
 				watcher := clt.WatchServices()
-				<- runExecutedCh
+				<-runExecutedCh
 
 				Expect(watcher).To(Equal(eventHandler))
 				Expect(clt.serviceWatcher).To(Equal(eventHandler))
@@ -186,7 +187,7 @@ var _ = Describe("Client", func() {
 					}()
 				}
 
-				<- runExecutedCh
+				<-runExecutedCh
 
 				waitGroup.Wait()
 				Expect(lengthOf(watchers)).To(Equal(1))
@@ -204,7 +205,7 @@ var _ = Describe("Client", func() {
 				})
 
 				watcher := clt.WatchNamespaces()
-				<- runExecutedCh
+				<-runExecutedCh
 
 				Expect(watcher).To(Equal(eventHandler))
 				Expect(clt.namespaceWatcher).To(Equal(eventHandler))
@@ -223,9 +224,9 @@ var _ = Describe("Client", func() {
 					stopCh:              stopCh,
 					informerFactory:     fakesInformerFactory,
 					eventHandlerFactory: fakesHandlerFactory,
-					namespaceStore:        existingStore,
-					namespaceWatcher:      existingHandler,
-					namespaceController:   existingController,
+					namespaceStore:      existingStore,
+					namespaceWatcher:    existingHandler,
+					namespaceController: existingController,
 				}
 
 				watcher := clt.WatchNamespaces()
@@ -256,7 +257,7 @@ var _ = Describe("Client", func() {
 					}()
 				}
 
-				<- runExecutedCh
+				<-runExecutedCh
 
 				waitGroup.Wait()
 				Expect(lengthOf(watchers)).To(Equal(1))
@@ -265,6 +266,68 @@ var _ = Describe("Client", func() {
 
 	})
 
+	Describe("GetAllIngresses", func() {
+
+		var (
+			fakesIngressStore        *cache.FakeCustomStore
+			fakesNamespaceController *fakeController
+			fakesIngressController   *fakeController
+			clt                      *client
+		)
+
+		BeforeEach(func() {
+			fakesNamespaceController = &fakeController{}
+			fakesIngressController = &fakeController{}
+			fakesIngressStore = &cache.FakeCustomStore{}
+			clt = &client{
+				namespaceController: fakesNamespaceController,
+				ingressController:   fakesIngressController,
+				ingressStore:        fakesIngressStore,
+			}
+		})
+
+		It("should return all ingresses in the store when stores have synced", func() {
+			storeIngresses := []*v1beta1.Ingress{{}}
+			fakesIngressStore.ListFunc = func() []interface{} {
+				b := make([]interface{}, len(storeIngresses))
+				for i := range storeIngresses {
+					b[i] = storeIngresses[i]
+				}
+				return b
+			}
+
+			fakesNamespaceController.On("HasSynced").Return(true)
+			fakesIngressController.On("HasSynced").Return(true)
+
+			ingresses, err := clt.GetAllIngresses()
+			Expect(ingresses).To(Equal(storeIngresses))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return an error when namespace controller has not synced", func() {
+			fakesNamespaceController.On("HasSynced").Return(false)
+			fakesIngressController.On("HasSynced").Return(false)
+			ingresses, err := clt.GetAllIngresses()
+			Expect(err).To(HaveOccurred())
+			Expect(ingresses).To(BeNil())
+		})
+
+		It("should return an error when ingress controller has not synced", func() {
+			fakesNamespaceController.On("HasSynced").Return(true)
+			fakesIngressController.On("HasSynced").Return(false)
+			ingresses, err := clt.GetAllIngresses()
+			Expect(err).To(HaveOccurred())
+			Expect(ingresses).To(BeNil())
+		})
+
+		It("should return an error when both namespace and ingress controller have not synced", func() {
+			fakesNamespaceController.On("HasSynced").Return(false)
+			fakesIngressController.On("HasSynced").Return(false)
+			ingresses, err := clt.GetAllIngresses()
+			Expect(err).To(HaveOccurred())
+			Expect(ingresses).To(BeNil())
+		})
+	})
 
 })
 

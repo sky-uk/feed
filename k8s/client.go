@@ -107,6 +107,9 @@ func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, 
 	if !c.namespaceController.HasSynced() {
 		return nil, errors.New("namespaces haven't synced yet")
 	}
+	if !c.ingressController.HasSynced() {
+		return nil, errors.New("ingresses haven't synced yet")
+	}
 
 	var allIngresses []*v1beta1.Ingress
 	for _, obj := range c.ingressStore.List() {
