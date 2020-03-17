@@ -1,15 +1,16 @@
 package k8s
 
 import (
+	"sync"
+	"testing"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestClient(t *testing.T) {
