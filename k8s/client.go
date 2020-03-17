@@ -187,8 +187,6 @@ func (c *client) createIngressSource() {
 }
 
 func (c *client) GetServices() ([]*v1.Service, error) {
-	c.createServiceSource()
-
 	if !c.serviceController.HasSynced() {
 		return nil, errors.New("services haven't synced yet")
 	}

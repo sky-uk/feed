@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"sync"
@@ -287,20 +288,20 @@ var _ = Describe("Client", func() {
 		})
 
 		It("should return all ingresses in the store when stores have synced", func() {
-			storeIngresses := []*v1beta1.Ingress{{}}
+			ingressesInStore := []*v1beta1.Ingress{{}}
 			fakesIngressStore.ListFunc = func() []interface{} {
-				b := make([]interface{}, len(storeIngresses))
-				for i := range storeIngresses {
-					b[i] = storeIngresses[i]
+				theList := make([]interface{}, len(ingressesInStore))
+				for i := range ingressesInStore {
+					theList[i] = ingressesInStore[i]
 				}
-				return b
+				return theList
 			}
 
 			fakesNamespaceController.On("HasSynced").Return(true)
 			fakesIngressController.On("HasSynced").Return(true)
 
 			ingresses, err := clt.GetAllIngresses()
-			Expect(ingresses).To(Equal(storeIngresses))
+			Expect(ingresses).To(Equal(ingressesInStore))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -320,13 +321,55 @@ var _ = Describe("Client", func() {
 			Expect(ingresses).To(BeNil())
 		})
 
-		It("should return an error when both namespace and ingress controller have not synced", func() {
+		It("should return an error when both namespace and ingress controllers have not synced", func() {
 			fakesNamespaceController.On("HasSynced").Return(false)
 			fakesIngressController.On("HasSynced").Return(false)
 			ingresses, err := clt.GetAllIngresses()
 			Expect(err).To(HaveOccurred())
 			Expect(ingresses).To(BeNil())
 		})
+	})
+
+	Describe("GetServices", func() {
+		var (
+			fakesServiceStore      *cache.FakeCustomStore
+			fakesServiceController *fakeController
+			clt                    *client
+		)
+
+		BeforeEach(func() {
+			fakesServiceController = &fakeController{}
+			fakesServiceStore = &cache.FakeCustomStore{}
+			clt = &client{
+				serviceController: fakesServiceController,
+				serviceStore:      fakesServiceStore,
+			}
+		})
+
+		It("should return all services in the store when the service store has synced", func() {
+			servicesInStore := []*v1.Service{{}}
+			fakesServiceStore.ListFunc = func() []interface{} {
+				theList := make([]interface{}, len(servicesInStore))
+				for i := range servicesInStore {
+					theList[i] = servicesInStore[i]
+				}
+				return theList
+			}
+
+			fakesServiceController.On("HasSynced").Return(true)
+
+			services, err := clt.GetServices()
+			Expect(services).To(Equal(servicesInStore))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return an error when service controller has not synced", func() {
+			fakesServiceController.On("HasSynced").Return(false)
+			services, err := clt.GetServices()
+			Expect(err).To(HaveOccurred())
+			Expect(services).To(BeNil())
+		})
+
 	})
 
 })
