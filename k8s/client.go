@@ -7,6 +7,7 @@ The types are copied from the stable api of the Kubernetes 1.3 release.
 package k8s
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -16,13 +17,20 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+// Time to handle multiple updates occurring in a short time period, such as at startup where
+// each existing endpoint / ingress produces a single update.
+const bufferedWatcherDuration = time.Millisecond * 50
 
 // Client for connecting to a Kubernetes cluster.
 // Watchers will receive a notification whenever the client connects to the API server,
 // including reconnects, to notify that there may be new ingresses that need to be retrieved.
+// Watchers do not intentionally return errors, so they can be used to setup the control loop.
 // It's intended that client code will call the getters to retrieve the current state when notified.
+// Error handling including retry mechanism is expected to be put in place around calls to getters.
 type Client interface {
 	// GetAllIngresses returns all the ingresses in the cluster.
 	GetAllIngresses() ([]*v1beta1.Ingress, error)
@@ -34,13 +42,13 @@ type Client interface {
 	GetServices() ([]*v1.Service, error)
 
 	// WatchIngresses watches for updates to ingresses and notifies the Watcher.
-	WatchIngresses() (Watcher, error)
+	WatchIngresses() Watcher
 
 	// WatchServices watches for updates to services and notifies the Watcher.
-	WatchServices() (Watcher, error)
+	WatchServices() Watcher
 
 	// WatchNamespaces watches for updates to namespaces and notifies the Watcher.
-	WatchNamespaces() (Watcher, error)
+	WatchNamespaces() Watcher
 
 	// UpdateIngressStatus updates the ingress status with the loadbalancer hostname or ip address.
 	UpdateIngressStatus(*v1beta1.Ingress) error
@@ -48,9 +56,20 @@ type Client interface {
 
 type client struct {
 	sync.Mutex
-	clientset    *kubernetes.Clientset
-	resyncPeriod time.Duration
-	store        Store
+	clientset           *kubernetes.Clientset
+	stopCh              chan struct{}
+	informerFactory     informerFactory
+	eventHandlerFactory eventHandlerFactory
+	resyncPeriod        time.Duration
+	ingressStore        cache.Store
+	ingressController   cache.Controller
+	ingressWatcher      *handlerWatcher
+	serviceStore        cache.Store
+	serviceController   cache.Controller
+	serviceWatcher      *handlerWatcher
+	namespaceStore      cache.Store
+	namespaceController cache.Controller
+	namespaceWatcher    *handlerWatcher
 }
 
 // NamespaceSelector defines the label name and value for filtering namespaces
@@ -71,12 +90,13 @@ func New(kubeconfig string, resyncPeriod time.Duration, stopCh chan struct{}) (C
 		return nil, err
 	}
 
-	c := &client{
-		clientset:    clientset,
-		resyncPeriod: resyncPeriod,
-		store:        NewStore(clientset, resyncPeriod, stopCh),
-	}
-	return c, nil
+	return &client{
+		clientset:           clientset,
+		resyncPeriod:        resyncPeriod,
+		stopCh:              stopCh,
+		informerFactory:     &cacheInformerFactory{clientset: clientset},
+		eventHandlerFactory: &bufferedEventHandlerFactory{},
+	}, nil
 }
 
 func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
@@ -84,12 +104,12 @@ func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
 }
 
 func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, error) {
-	var allIngresses []*v1beta1.Ingress
-	ingressWatchedResource, err := c.store.GetOrCreateIngressSource()
-	if err != nil {
-		return nil, err
+	if !c.namespaceController.HasSynced() {
+		return nil, errors.New("namespaces haven't synced yet")
 	}
-	for _, obj := range ingressWatchedResource.store.List() {
+
+	var allIngresses []*v1beta1.Ingress
+	for _, obj := range c.ingressStore.List() {
 		allIngresses = append(allIngresses, obj.(*v1beta1.Ingress))
 	}
 
@@ -97,11 +117,7 @@ func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, 
 		return allIngresses, nil
 	}
 
-	namespaceWatchedResource, err := c.store.GetOrCreateNamespaceSource()
-	if err != nil {
-		return nil, err
-	}
-	supportedNamespaces := supportedNamespaces(selector, toNamespaces(namespaceWatchedResource.store.List()))
+	supportedNamespaces := supportedNamespaces(selector, toNamespaces(c.namespaceStore.List()))
 
 	var filteredIngresses []*v1beta1.Ingress
 	for _, ingress := range allIngresses {
@@ -146,41 +162,82 @@ func ingressInNamespace(ingress *v1beta1.Ingress, namespaces []*v1.Namespace) bo
 	return false
 }
 
-func (c *client) WatchIngresses() (Watcher, error) {
-	ingressWatchedResource, err := c.store.GetOrCreateIngressSource()
-	if err != nil {
-		return nil, err
+func (c *client) WatchIngresses() Watcher {
+	c.createIngressSource()
+	return c.ingressWatcher
+}
+
+func (c *client) createIngressSource() {
+	c.Lock()
+	defer c.Unlock()
+	if c.ingressStore != nil {
+		return
 	}
-	return ingressWatchedResource.watcher, nil
+
+	watcher := c.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
+	store, controller := c.informerFactory.createIngressInformer(c.resyncPeriod, watcher)
+	go controller.Run(c.stopCh)
+
+	c.ingressWatcher = watcher
+	c.ingressStore = store
+	c.ingressController = controller
 }
 
 func (c *client) GetServices() ([]*v1.Service, error) {
-	var services []*v1.Service
-	serviceSource, err := c.store.GetOrCreateServiceSource()
-	if err != nil {
-		return nil, err
+	c.createServiceSource()
+
+	if !c.serviceController.HasSynced() {
+		return nil, errors.New("services haven't synced yet")
 	}
-	for _, obj := range serviceSource.store.List() {
+
+	var services []*v1.Service
+	for _, obj := range c.serviceStore.List() {
 		services = append(services, obj.(*v1.Service))
 	}
 
 	return services, nil
 }
 
-func (c *client) WatchServices() (Watcher, error) {
-	serviceSource, err := c.store.GetOrCreateServiceSource()
-	if err != nil {
-		return nil, err
-	}
-	return serviceSource.watcher, nil
+func (c *client) WatchServices() Watcher {
+	c.createServiceSource()
+	return c.serviceWatcher
 }
 
-func (c *client) WatchNamespaces() (Watcher, error) {
-	namespaceSource, err := c.store.GetOrCreateNamespaceSource()
-	if err != nil {
-		return nil, err
+func (c *client) createServiceSource() {
+	c.Lock()
+	defer c.Unlock()
+	if c.serviceStore != nil {
+		return
 	}
-	return namespaceSource.watcher, nil
+
+	watcher := c.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
+	store, controller := c.informerFactory.createServiceInformer(c.resyncPeriod, watcher)
+	go controller.Run(c.stopCh)
+
+	c.serviceWatcher = watcher
+	c.serviceStore = store
+	c.serviceController = controller
+}
+
+func (c *client) WatchNamespaces() Watcher {
+	c.createNamespaceSource()
+	return c.namespaceWatcher
+}
+
+func (c *client) createNamespaceSource() {
+	c.Lock()
+	defer c.Unlock()
+	if c.namespaceStore != nil {
+		return
+	}
+
+	watcher := c.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
+	store, controller := c.informerFactory.createNamespaceInformer(c.resyncPeriod, watcher)
+	go controller.Run(c.stopCh)
+
+	c.namespaceWatcher = watcher
+	c.namespaceStore = store
+	c.namespaceController = controller
 }
 
 func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {

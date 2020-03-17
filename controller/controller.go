@@ -136,32 +136,19 @@ func (c *controller) Start() error {
 		startedUpdaters = append(startedUpdaters, u)
 	}
 
-	err := c.watchForUpdates()
-	if err != nil {
-		return err
-	}
+	c.watchForUpdates()
 
 	c.started = true
 	return nil
 }
 
-func (c *controller) watchForUpdates() error {
-	ingressWatcher, err := c.client.WatchIngresses()
-	if err != nil {
-		return err
-	}
-	serviceWatcher, err := c.client.WatchServices()
-	if err != nil {
-		return err
-	}
-	namespaceWatcher, err := c.client.WatchNamespaces()
-	if err != nil {
-		return err
-	}
+func (c *controller) watchForUpdates() {
+	ingressWatcher := c.client.WatchIngresses()
+	serviceWatcher := c.client.WatchServices()
+	namespaceWatcher := c.client.WatchNamespaces()
 	c.watcher = k8s.CombineWatchers(ingressWatcher, serviceWatcher, namespaceWatcher)
 	c.watcherDone.Add(1)
 	go c.handleUpdates()
-	return nil
 }
 
 func (c *controller) handleUpdates() {

@@ -25,9 +25,9 @@ func (c *FakeClient) GetIngresses(selector *k8s.NamespaceSelector) ([]*v1beta1.I
 }
 
 // WatchIngresses mocks out calls to WatchIngresses
-func (c *FakeClient) WatchIngresses() (k8s.Watcher, error) {
+func (c *FakeClient) WatchIngresses() k8s.Watcher {
 	r := c.Called()
-	return r.Get(0).(k8s.Watcher), r.Error(1)
+	return r.Get(0).(k8s.Watcher)
 }
 
 // GetServices mocks out calls to GetServices
@@ -37,15 +37,15 @@ func (c *FakeClient) GetServices() ([]*v1.Service, error) {
 }
 
 // WatchServices mocks out calls to WatchServices
-func (c *FakeClient) WatchServices() (k8s.Watcher, error) {
+func (c *FakeClient) WatchServices() k8s.Watcher {
 	r := c.Called()
-	return r.Get(0).(k8s.Watcher), r.Error(1)
+	return r.Get(0).(k8s.Watcher)
 }
 
 // WatchNamespaces mocks out calls to WatchNamespaces
-func (c *FakeClient) WatchNamespaces() (k8s.Watcher, error) {
+func (c *FakeClient) WatchNamespaces() k8s.Watcher {
 	r := c.Called()
-	return r.Get(0).(k8s.Watcher), r.Error(1)
+	return r.Get(0).(k8s.Watcher)
 }
 
 // UpdateIngressStatus mocks out calls to UpdateIngressStatus
