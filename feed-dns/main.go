@@ -85,7 +85,8 @@ func main() {
 	cmd.ConfigureLogging(debug)
 	cmd.ConfigureMetrics("feed-dns", pushgatewayLabels, pushgatewayURL, pushgatewayIntervalSeconds)
 
-	client, err := k8s.New(kubeconfig, resyncPeriod)
+	stopCh := make(chan struct{})
+	client, err := k8s.New(kubeconfig, resyncPeriod, stopCh)
 	if err != nil {
 		log.Fatal("Unable to create k8s client: ", err)
 	}
@@ -99,7 +100,7 @@ func main() {
 	feedController := controller.New(controller.Config{
 		KubernetesClient: client,
 		Updaters:         []controller.Updater{dnsUpdater},
-	})
+	}, stopCh)
 
 	cmd.AddHealthMetrics(feedController, metrics.PrometheusDNSSubsystem)
 	cmd.AddHealthPort(feedController, healthPort)

@@ -16,7 +16,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -29,7 +28,9 @@ const bufferedWatcherDuration = time.Millisecond * 50
 // Client for connecting to a Kubernetes cluster.
 // Watchers will receive a notification whenever the client connects to the API server,
 // including reconnects, to notify that there may be new ingresses that need to be retrieved.
+// Watchers do not intentionally return errors, so they can be used to setup the control loop.
 // It's intended that client code will call the getters to retrieve the current state when notified.
+// Error handling including retry mechanism is expected to be put in place around calls to getters.
 type Client interface {
 	// GetAllIngresses returns all the ingresses in the cluster.
 	GetAllIngresses() ([]*v1beta1.Ingress, error)
@@ -56,6 +57,9 @@ type Client interface {
 type client struct {
 	sync.Mutex
 	clientset           *kubernetes.Clientset
+	stopCh              chan struct{}
+	informerFactory     informerFactory
+	eventHandlerFactory eventHandlerFactory
 	resyncPeriod        time.Duration
 	ingressStore        cache.Store
 	ingressController   cache.Controller
@@ -75,7 +79,7 @@ type NamespaceSelector struct {
 }
 
 // New creates a client for the kubernetes API server.
-func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
+func New(kubeconfig string, resyncPeriod time.Duration, stopCh chan struct{}) (Client, error) {
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return nil, err
@@ -86,7 +90,13 @@ func New(kubeconfig string, resyncPeriod time.Duration) (Client, error) {
 		return nil, err
 	}
 
-	return &client{clientset: clientset, resyncPeriod: resyncPeriod}, nil
+	return &client{
+		clientset:           clientset,
+		resyncPeriod:        resyncPeriod,
+		stopCh:              stopCh,
+		informerFactory:     &cacheInformerFactory{clientset: clientset},
+		eventHandlerFactory: &bufferedEventHandlerFactory{},
+	}, nil
 }
 
 func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
@@ -96,6 +106,9 @@ func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
 func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, error) {
 	if !c.namespaceController.HasSynced() {
 		return nil, errors.New("namespaces haven't synced yet")
+	}
+	if !c.ingressController.HasSynced() {
+		return nil, errors.New("ingresses haven't synced yet")
 	}
 
 	var allIngresses []*v1beta1.Ingress
@@ -164,19 +177,16 @@ func (c *client) createIngressSource() {
 		return
 	}
 
-	ingressLW := cache.NewListWatchFromClient(c.clientset.ExtensionsV1beta1().RESTClient(), "ingresses", "",
-		fields.Everything())
-	c.ingressWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
-	store, controller := cache.NewInformer(ingressLW, &v1beta1.Ingress{}, c.resyncPeriod, c.ingressWatcher)
+	watcher := c.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
+	store, controller := c.informerFactory.createIngressInformer(c.resyncPeriod, watcher)
+	go controller.Run(c.stopCh)
 
+	c.ingressWatcher = watcher
 	c.ingressStore = store
 	c.ingressController = controller
-	go controller.Run(make(chan struct{}))
 }
 
 func (c *client) GetServices() ([]*v1.Service, error) {
-	c.createServiceSource()
-
 	if !c.serviceController.HasSynced() {
 		return nil, errors.New("services haven't synced yet")
 	}
@@ -201,13 +211,13 @@ func (c *client) createServiceSource() {
 		return
 	}
 
-	serviceLW := cache.NewListWatchFromClient(c.clientset.CoreV1().RESTClient(), "services", "", fields.Everything())
-	c.serviceWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
-	store, controller := cache.NewInformer(serviceLW, &v1.Service{}, c.resyncPeriod, c.serviceWatcher)
+	watcher := c.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
+	store, controller := c.informerFactory.createServiceInformer(c.resyncPeriod, watcher)
+	go controller.Run(c.stopCh)
 
+	c.serviceWatcher = watcher
 	c.serviceStore = store
 	c.serviceController = controller
-	go controller.Run(make(chan struct{}))
 }
 
 func (c *client) WatchNamespaces() Watcher {
@@ -222,14 +232,13 @@ func (c *client) createNamespaceSource() {
 		return
 	}
 
-	namespaceLW := cache.NewListWatchFromClient(
-		c.clientset.CoreV1().RESTClient(), "namespaces", "", fields.Everything())
-	c.namespaceWatcher = &handlerWatcher{bufferedWatcher: newBufferedWatcher(bufferedWatcherDuration)}
-	store, controller := cache.NewInformer(namespaceLW, &v1.Namespace{}, c.resyncPeriod, c.namespaceWatcher)
+	watcher := c.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
+	store, controller := c.informerFactory.createNamespaceInformer(c.resyncPeriod, watcher)
+	go controller.Run(c.stopCh)
 
+	c.namespaceWatcher = watcher
 	c.namespaceStore = store
 	c.namespaceController = controller
-	go controller.Run(make(chan struct{}))
 }
 
 func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
@@ -245,28 +254,4 @@ func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
 	_, err = ingressClient.UpdateStatus(currentIng)
 
 	return err
-}
-
-// Implement cache.ResourceEventHandler
-type handlerWatcher struct {
-	*bufferedWatcher
-}
-
-func (w *handlerWatcher) notify() {
-	w.bufferUpdate()
-}
-
-func (w *handlerWatcher) OnAdd(obj interface{}) {
-	log.Debugf("OnAdd called for %v - updating watcher", obj)
-	go w.notify()
-}
-
-func (w *handlerWatcher) OnUpdate(old interface{}, new interface{}) {
-	log.Debugf("OnUpdate called for %v to %v - updating watcher", old, new)
-	go w.notify()
-}
-
-func (w *handlerWatcher) OnDelete(obj interface{}) {
-	log.Debugf("OnDelete called for %v - updating watcher", obj)
-	go w.notify()
 }

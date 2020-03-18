@@ -1,8 +1,14 @@
+# v3.1.1
+* [BUGFIX] Wait for informer cache to be fully populated before interrogating it (#218)
+
+# v3.1.0
+* Fix X-Forwarded-Host to correctly forward client Host header (#217)
+
 # v3.0.0
-* Breaking change 
-  Feed will not bind port http 8080 by default, unless `--ingress-port=XXXX` is provided   
+* Breaking change
+  Feed will not bind port http 8080 by default, unless `--ingress-port=XXXX` is provided
   * Remove http binding by default (#216)
- 
+
 # v2.3.0
 * Support IP and Instance TargetGroup attachments (#214)
 
