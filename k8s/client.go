@@ -11,7 +11,9 @@ import (
 	"sync"
 	"time"
 
+	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	clientV1Beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	log "github.com/sirupsen/logrus"
@@ -251,8 +253,39 @@ func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
 	}
 
 	currentIng.Status.LoadBalancer.Ingress = ingress.Status.LoadBalancer.Ingress
+	return c.updateIngressAndHandleConflicts(ingressClient, currentIng)
+}
 
-	_, err = ingressClient.UpdateStatus(currentIng)
+func (c *client) updateIngressAndHandleConflicts(ingressClient clientV1Beta1.IngressInterface, ingress *v1beta1.Ingress) error {
+	_, err := ingressClient.UpdateStatus(ingress)
 
-	return err
+	switch {
+	case k8errors.IsConflict(err):
+		updatedIng, getErr := ingressClient.Get(ingress.Name, metav1.GetOptions{})
+		if getErr == nil && ingressStatusEqual(updatedIng.Status.LoadBalancer.Ingress, ingress.Status.LoadBalancer.Ingress) {
+			conflictingIngressStatusUpdates.Inc()
+			return nil
+		}
+		return err
+
+	case err != nil:
+		return err
+
+	default:
+		return nil
+	}
+}
+
+func ingressStatusEqual(i1 []v1.LoadBalancerIngress, i2 []v1.LoadBalancerIngress) bool {
+	if len(i1) != len(i2) {
+		return false
+	}
+
+	for x := range i1 {
+		if i1[x] != i2[x] {
+			return false
+		}
+	}
+
+	return true
 }
