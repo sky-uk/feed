@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
+	clientV1Beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -42,7 +43,7 @@ var _ = Describe("Client", func() {
 			fakesStore = &cache.FakeCustomStore{}
 			fakesController = &fakeController{}
 			clt = &client{
-				clientset:           nil,
+				ingressGetter:       nil,
 				resyncPeriod:        resyncPeriod,
 				stopCh:              stopCh,
 				informerFactory:     fakesInformerFactory,
@@ -81,7 +82,7 @@ var _ = Describe("Client", func() {
 				existingController := &fakeController{}
 
 				clt = &client{
-					clientset:           nil,
+					ingressGetter:       nil,
 					resyncPeriod:        resyncPeriod,
 					stopCh:              stopCh,
 					informerFactory:     fakesInformerFactory,
@@ -151,7 +152,7 @@ var _ = Describe("Client", func() {
 				existingController := &fakeController{}
 
 				clt = &client{
-					clientset:           nil,
+					ingressGetter:       nil,
 					resyncPeriod:        resyncPeriod,
 					stopCh:              stopCh,
 					informerFactory:     fakesInformerFactory,
@@ -221,7 +222,7 @@ var _ = Describe("Client", func() {
 				existingController := &fakeController{}
 
 				clt = &client{
-					clientset:           nil,
+					ingressGetter:       nil,
 					resyncPeriod:        resyncPeriod,
 					stopCh:              stopCh,
 					informerFactory:     fakesInformerFactory,

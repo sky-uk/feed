@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	clientV1Beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	log "github.com/sirupsen/logrus"
@@ -56,7 +57,7 @@ type Client interface {
 
 type client struct {
 	sync.Mutex
-	clientset           *kubernetes.Clientset
+	ingressGetter       clientV1Beta1.IngressesGetter
 	stopCh              chan struct{}
 	informerFactory     informerFactory
 	eventHandlerFactory eventHandlerFactory
@@ -91,7 +92,7 @@ func New(kubeconfig string, resyncPeriod time.Duration, stopCh chan struct{}) (C
 	}
 
 	return &client{
-		clientset:           clientset,
+		ingressGetter:       clientset.ExtensionsV1beta1(),
 		resyncPeriod:        resyncPeriod,
 		stopCh:              stopCh,
 		informerFactory:     &cacheInformerFactory{clientset: clientset},
@@ -242,7 +243,7 @@ func (c *client) createNamespaceSource() {
 }
 
 func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
-	ingressClient := c.clientset.ExtensionsV1beta1().Ingresses(ingress.Namespace)
+	ingressClient := c.ingressGetter.Ingresses(ingress.Namespace)
 
 	currentIng, err := ingressClient.Get(ingress.Name, metav1.GetOptions{})
 	if err != nil {
