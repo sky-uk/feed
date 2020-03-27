@@ -3,6 +3,8 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"time"
 
 	"k8s.io/api/extensions/v1beta1"
@@ -64,6 +66,22 @@ func (e IngressEntry) validate() error {
 	if e.ServicePort == 0 {
 		return errors.New("missing service port")
 	}
+
+	var invalidAllowEntries []string
+	for _, allowEntry := range e.Allow {
+		if net.ParseIP(allowEntry) == nil {
+			if _, _, err := net.ParseCIDR(allowEntry); err != nil {
+				invalidAllowEntries = append(invalidAllowEntries, allowEntry)
+			}
+		}
+	}
+
+	if len(invalidAllowEntries) == 1 {
+		return fmt.Errorf("invalid entry in sky.uk/allow: %s", invalidAllowEntries[0])
+	} else if len(invalidAllowEntries) > 1 {
+		return fmt.Errorf("invalid entries in sky.uk/allow: %s", strings.Join(invalidAllowEntries, ","))
+	}
+
 	return nil
 }
 
