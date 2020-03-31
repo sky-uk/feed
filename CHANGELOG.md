@@ -1,3 +1,6 @@
+# v3.1.2
+* [BUGFIX] Validate `sky.uk/allow` annotation entries (#220)
+
 # v3.1.1
 * [BUGFIX] Wait for informer cache to be fully populated before interrogating it (#218)
 
