@@ -22,7 +22,7 @@ func TestSingleInvalidAllowAddressResultsInError(t *testing.T) {
 
 	// then
 	asserter.Error(err)
-	asserter.Equal(err.Error(), "invalid entry in sky.uk/allow: invalid")
+	asserter.Equal(err.Error(), "host my-host: invalid entries in sky.uk/allow: invalid")
 }
 
 func TestSingleInvalidAllowAddressAmongValidAddressesResultsInError(t *testing.T) {
@@ -41,7 +41,26 @@ func TestSingleInvalidAllowAddressAmongValidAddressesResultsInError(t *testing.T
 
 	// then
 	asserter.Error(err)
-	asserter.Equal(err.Error(), "invalid entry in sky.uk/allow: invalid")
+	asserter.Equal(err.Error(), "host my-host: invalid entries in sky.uk/allow: invalid")
+}
+
+func TestEmptyAllowAddressResultsInError(t *testing.T) {
+	// given
+	asserter := assert.New(t)
+
+	entry := IngressEntry{
+		Host:           "my-host",
+		ServiceAddress: "service",
+		ServicePort:    8080,
+		Allow:          []string{""},
+	}
+
+	// when
+	err := entry.validate()
+
+	// then
+	asserter.Error(err)
+	asserter.Equal(err.Error(), "host my-host: invalid entries in sky.uk/allow: <empty>")
 }
 
 func TestMultipleInvalidAllowAddressesResultInError(t *testing.T) {
@@ -60,7 +79,7 @@ func TestMultipleInvalidAllowAddressesResultInError(t *testing.T) {
 
 	// then
 	asserter.Error(err)
-	asserter.Equal(err.Error(), "invalid entries in sky.uk/allow: invalid,invalid-2")
+	asserter.Equal(err.Error(), "host my-host: invalid entries in sky.uk/allow: invalid,invalid-2")
 }
 
 func TestValidAllowAddressResultsInNoError(t *testing.T) {

@@ -71,15 +71,17 @@ func (e IngressEntry) validate() error {
 	for _, allowEntry := range e.Allow {
 		if net.ParseIP(allowEntry) == nil {
 			if _, _, err := net.ParseCIDR(allowEntry); err != nil {
-				invalidAllowEntries = append(invalidAllowEntries, allowEntry)
+				if allowEntry == "" {
+					invalidAllowEntries = append(invalidAllowEntries, "<empty>")
+				} else {
+					invalidAllowEntries = append(invalidAllowEntries, allowEntry)
+				}
 			}
 		}
 	}
 
-	if len(invalidAllowEntries) == 1 {
-		return fmt.Errorf("invalid entry in sky.uk/allow: %s", invalidAllowEntries[0])
-	} else if len(invalidAllowEntries) > 1 {
-		return fmt.Errorf("invalid entries in sky.uk/allow: %s", strings.Join(invalidAllowEntries, ","))
+	if len(invalidAllowEntries) > 0 {
+		return fmt.Errorf("host %s: invalid entries in sky.uk/allow: %s", e.Host, strings.Join(invalidAllowEntries, ","))
 	}
 
 	return nil
