@@ -4,7 +4,7 @@
 This project contains Kubernetes controllers for managing external ingress with
 AWS or [IPVS](https://github.com/sky-uk/merlin) load balancers.
 
-There are two controllers provided, `feed-ingress` which runs an NGINX instance, and `feed-dns` which manages Amazon Route 53 entries. 
+There are two controllers provided, `feed-ingress` which runs an NGINX instance, and `feed-dns` which manages Amazon Route 53 entries.
 They can be run independently as needed, or together to provide a full ingress solution. `feed-ingress` can be arbitrarily scaled up to support any traffic load.
 
 Feed is actively used in production and should be stable enough for general usage. We can scale to many thousands of
@@ -89,10 +89,10 @@ To upgrade, follow these steps:
 1. Replace deprecated ingress resource annotations with their replacements:
    `sky.uk/frontend-elb-scheme` becomes `sky.uk/frontend-scheme`,
    `sky.uk/backend-keepalive-seconds` becomes `sky.uk/backend-timeout-seconds`
-1. Use double dashes for all arguments 
+1. Use double dashes for all arguments
 1. Provide the mandatory argument `--ingress-class=<name>` to feed-ingress with a value matching the ELB tag.
    For migrating existing deployments, you may provide the new (but deprecated) flag `--include-classless-ingresses`
-   which instructs feed-ingress to additionally consider ingress resources that have no `kubernetes.io/ingress.class` annotation 
+   which instructs feed-ingress to additionally consider ingress resources that have no `kubernetes.io/ingress.class` annotation
 1. Instead of using the argument `-registration-frontend-type`, use instead a subcommand of `feed-ingress`
    (for example `feed-ingress -registration-frontend-type=elb <args...>` becomes `feed-ingress elb <args>`)
 1. Rename the argument `-elb-label-value` to `--elb-frontend-tag-value`
@@ -132,7 +132,7 @@ GORB exposes a REST api to interrogate and modify the IPVS configuration such as
 The configuration can be stored in a distributed key/value store.
 
 Although IPVS supports multiple packet-forwarding methods, feed currently only supports 'DR' aka Direct Server Return.
-It provides the ability to manage the loopback interface so the ingress instance can pretend to be IPVS at the IP level.  
+It provides the ability to manage the loopback interface so the ingress instance can pretend to be IPVS at the IP level.
 feed-ingress pod will need to define the `NET_ADMIN` Linux capability to be able to manage the loopback interface.
 
 ```yaml
@@ -152,6 +152,9 @@ See the [example deployment for ELB](examples/feed-ingress-deployment-elb.yml)
 
 ### Network Load Balancers (NLBs)
 See the [example deployment for NLB](examples/feed-ingress-deployment-nlb.yml)
+
+Please note that new Feed pods will not start handling requests until they have been registered with the NLB. This can
+take up to 2 minutes on some occasions.
 
 ### Application Load Balancers (ALBs)
 Feed has support for ALBs. Unfortunately, ALBs have a bug that prevents non-disruptive deployments of feed (specifically,
@@ -173,11 +176,11 @@ To enable OpenTracing, you will need to provide the following options:
 Note that the status and metrics endpoints will *not* have OpenTracing applied.
 
 ## Handling large client requests
-`feed-ingress` now supports handling of large client requests (header and body). The following are the default values for the same. 
+`feed-ingress` now supports handling of large client requests (header and body). The following are the default values for the same.
 
 ```
-client_header_buffer_size 16k; 
-client_body_buffer_size 16k; 
+client_header_buffer_size 16k;
+client_body_buffer_size 16k;
 large_client_header_buffers 4 16k
 ```
 
@@ -187,7 +190,7 @@ They can be overridden by passing the following arguments during startup.
 --nginx-client-header-buffer-size-in-kb=16
 --nginx-client-body-buffer-size-in-kb=16
 
-# Set the maximum number and size of buffers used for reading large client request header. If this value is set, 
+# Set the maximum number and size of buffers used for reading large client request header. If this value is set,
 # --nginx-client-header-buffer-size-in-kb should be passed in as well. Otherwise, this value will be ignored.
 --nginx-large-client-header-buffer-blocks=4
 ```
@@ -199,7 +202,7 @@ given ingress using the ingress status.
 
 ### AWS load balancers
 Feed will automatically discover all of your load balancers and then use the `sky.uk/frontend-scheme` annotation to
-match a load balancer label to an ingress. The updater will then set the ingress status to the load balancer's DNS name. 
+match a load balancer label to an ingress. The updater will then set the ingress status to the load balancer's DNS name.
 
 ### Merlin
 The Merlin updater is currently unable to auto-discover all hosted load balancers on a Merlin server; instead the status
@@ -231,7 +234,7 @@ ingress resources with no `kubernetes.io/ingress.class` annotation.
 
 Use the script `classless-ingresses.sh` to find ingresses without this annotation.
 
-This feature is supported by `feed-ingress` and the `elb` and `nlb` load balancer.  It is currently not supported by `feed-dns` 
+This feature is supported by `feed-ingress` and the `elb` and `nlb` load balancer.  It is currently not supported by `feed-dns`
 or any other load balancer type. PRs are welcome.
 
 # feed-dns
@@ -241,7 +244,7 @@ be run as a single instance per zone in your cluster.
 See the command line options with:
 
     docker run skycirrus/feed-dns:v2.0.0 -h
-   
+
 ## DNS records
 The feed-dns controller assumes that it can overwrite any entry in the supplied DNS zone and manages ALIAS and CNAME
 records per ingress.
@@ -270,7 +273,7 @@ Install the required tools and setup dependencies:
 Build and test with:
 
     make
-    
+
 ## Releasing
 Tag the commit in master and push it to release it. Only maintainers can do this.
 
