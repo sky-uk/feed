@@ -153,8 +153,10 @@ See the [example deployment for ELB](examples/feed-ingress-deployment-elb.yml)
 ### Network Load Balancers (NLBs)
 See the [example deployment for NLB](examples/feed-ingress-deployment-nlb.yml)
 
-Please note that new Feed pods will not start handling requests until they have been registered with the NLB. This can
-take up to 2 minutes on some occasions.
+Please note that when a new Feed pod is added as a target to the target group of an NLB, it takes some time for the
+new target to be registered and health-checked by the NLB before the NLB will send it any requests. Please see the
+"Target Health Status" section of the
+[AWS documentation on NLB target group health checks](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/target-group-health-checks.html) for more details.
 
 ### Application Load Balancers (ALBs)
 Feed has support for ALBs. Unfortunately, ALBs have a bug that prevents non-disruptive deployments of feed (specifically,
