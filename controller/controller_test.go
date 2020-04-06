@@ -506,6 +506,33 @@ func TestUpdaterIsUpdatedForIngressWithEmptyAllow(t *testing.T) {
 	})
 }
 
+func TestUpdaterIsUpdatedForIngressWithAllowContainingWhitespace(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with empty allow",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:   "127.0.0.1, 192.168.0.1,\n10.1.2.3",
+			backendTimeoutSeconds:    "10",
+			frontendSchemeAnnotation: "internal",
+			ingressClassAnnotation:   defaultIngressClass,
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressClass:          defaultIngressClass,
+			Allow:                 []string{"127.0.0.1", "192.168.0.1", "10.1.2.3"},
+			BackendTimeoutSeconds: backendTimeout,
+		}},
+		defaultConfig(),
+	})
+}
+
 func TestUpdaterIsUpdatedForIngressWithStripPathsTrue(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with strip paths set to true",

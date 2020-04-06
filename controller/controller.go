@@ -259,7 +259,11 @@ func (c *controller) updateIngresses() (err error) {
 							if allow == "" {
 								entry.Allow = []string{}
 							} else {
-								entry.Allow = strings.Split(allow, ",")
+								allowEntries := strings.Split(allow, ",")
+								for i := 0; i < len(allowEntries); i++ {
+									allowEntries[i] = strings.TrimSpace(allowEntries[i])
+								}
+								entry.Allow = allowEntries
 							}
 						}
 
