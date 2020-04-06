@@ -1,3 +1,6 @@
+# v3.1.3
+* [BUGFIX] Trim whitespace from sky.uk/allow entries (#223)
+
 # v3.1.2
 * [BUGFIX] Validate `sky.uk/allow` annotation entries (#220)
 
