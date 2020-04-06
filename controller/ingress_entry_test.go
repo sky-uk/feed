@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,6 +81,29 @@ func TestMultipleInvalidAllowAddressesResultInError(t *testing.T) {
 	// then
 	asserter.Error(err)
 	asserter.Equal(err.Error(), "host my-host: invalid entries in sky.uk/allow: invalid,invalid-2")
+}
+
+func TestWhitespaceInAllowResultsInError(t *testing.T) {
+	// given
+	asserter := assert.New(t)
+
+	multilineAllow := `127.0.0.1,127.0.0.2,
+192.168.0.1,
+`
+
+	entry := IngressEntry{
+		Host:           "my-host",
+		ServiceAddress: "service",
+		ServicePort:    8080,
+		Allow:          strings.Split(multilineAllow, ","),
+	}
+
+	// when
+	err := entry.validate()
+
+	// then
+	asserter.Error(err)
+	asserter.Equal(err.Error(), "host my-host: invalid entries in sky.uk/allow: \n192.168.0.1,\n")
 }
 
 func TestValidAllowAddressResultsInNoError(t *testing.T) {
