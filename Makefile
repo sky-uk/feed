@@ -52,6 +52,8 @@ lint :
 	done;
 
 test : build
+	@echo "== build fake nginx for tests"
+	@go build -o nginx/fake/fake_graceful_nginx nginx/fake/fake_graceful_nginx.go
 	@echo "== run tests"
 	@go test -race $(pkgs)
 
