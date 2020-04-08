@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
@@ -25,6 +27,16 @@ import (
 
 func init() {
 	metrics.SetConstLabels(make(prometheus.Labels))
+
+	fakeNginxBinary, err := os.Open(fakeNginx)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			panic(fmt.Sprintf("Fake nginx binary %s not found. Run 'make fakenginx' and re-run.", fakeNginx))
+		}
+
+		panic(fmt.Sprintf("Error locating fake ngninx binary %s: %v", fakeNginx, err))
+	}
+	fakeNginxBinary.Close()
 }
 
 const (
