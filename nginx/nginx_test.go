@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
@@ -25,11 +27,21 @@ import (
 
 func init() {
 	metrics.SetConstLabels(make(prometheus.Labels))
+
+	fakeNginxBinary, err := os.Open(fakeNginx)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			panic(fmt.Sprintf("Fake nginx binary %s not found. Run 'make fakenginx' and re-run.", fakeNginx))
+		}
+
+		panic(fmt.Sprintf("Error locating fake ngninx binary %s: %v", fakeNginx, err))
+	}
+	fakeNginxBinary.Close()
 }
 
 const (
 	port          = 9090
-	fakeNginx     = "./fake_graceful_nginx.py"
+	fakeNginx     = "./fake/fake_graceful_nginx"
 	smallWaitTime = time.Millisecond * 20
 )
 
@@ -215,7 +227,7 @@ func TestUnhealthyUntilInitialUpdate(t *testing.T) {
 
 	ts := stubHealthPort()
 	defer ts.Close()
-	conf := newConf(tmpDir, "./fake_graceful_nginx.py")
+	conf := newConf(tmpDir, fakeNginx)
 	conf.HealthPort = getPort(ts)
 	lb := newNginxWithConf(conf)
 
@@ -1277,7 +1289,7 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
+	lb := newUpdaterWithBinary(tmpDir, fakeNginx)
 
 	assert.NoError(lb.Start())
 
@@ -1309,7 +1321,7 @@ func TestRateLimitedForUpdates(t *testing.T) {
 	assert := assert.New(t)
 	tmpDir := setupWorkDir(t)
 	defer os.Remove(tmpDir)
-	lb := newUpdaterWithBinary(tmpDir, "./fake_graceful_nginx.py")
+	lb := newUpdaterWithBinary(tmpDir, fakeNginx)
 
 	assert.NoError(lb.Start())
 

@@ -11,7 +11,7 @@ files := $(shell find . -path ./vendor -prune -o -name '*.go' -print)
 build_time := $(shell date -u)
 ldflags := -X "github.com/sky-uk/feed/feed-ingress/cmd.version=$(version)" -X "github.com/sky-uk/feed/feed-ingress/cmd.buildTime=$(build_time)"
 
-.PHONY: all format test build vet lint copy docker release checkformat check clean
+.PHONY: all format test build vet lint copy docker release checkformat check clean fakenginx
 
 all : format check build
 check : vet lint test
@@ -51,7 +51,11 @@ lint :
 		golint -set_exit_status $$pkg || exit 1; \
 	done;
 
-test : build
+fakenginx:
+	@echo "== build fake nginx for tests"
+	@go build -o nginx/fake/fake_graceful_nginx nginx/fake/fake_graceful_nginx.go
+
+test : build fakenginx
 	@echo "== run tests"
 	@go test -race $(pkgs)
 
