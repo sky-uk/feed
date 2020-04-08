@@ -25,7 +25,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	startupMarkerFilename := startupMarkerFilename()
+	startupMarkerFilename := startupMarkerFilename(os.Args[2])
 	err := ioutil.WriteFile(startupMarkerFilename, []byte("started!"), os.ModePerm)
 	if err != nil {
 		panic(err)
@@ -54,8 +54,8 @@ func main() {
 	}
 }
 
-func startupMarkerFilename() string {
-	filename := strings.Split(os.Args[2], "/")
+func startupMarkerFilename(configFilePath string) string {
+	filename := strings.Split(configFilePath, "/")
 	filename = filename[:len(filename)-1]
 	filename = append(filename, "nginx-log")
 	return "/" + path.Join(filename...)
