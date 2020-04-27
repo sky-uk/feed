@@ -261,8 +261,11 @@ func (c *client) updateIngressAndHandleConflicts(ingressClient clientV1Beta1.Ing
 
 	switch {
 	case k8errors.IsConflict(err):
+		// In the event of a conflict, check whether another feed instance has already made the same ingress status
+		// change for us.
 		updatedIng, getErr := ingressClient.Get(ingress.Name, metav1.GetOptions{})
 		if getErr == nil && ingressStatusEqual(updatedIng.Status.LoadBalancer.Ingress, ingress.Status.LoadBalancer.Ingress) {
+			// Another feed instance has already made the appropriate change, no need to report an error.
 			return nil
 		}
 		return err
