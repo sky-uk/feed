@@ -1,3 +1,6 @@
+# v3.1.5
+* [BUGFIX] Generate the root path location for servers without the root ingress (#225)
+
 # v3.1.4
 * [BUGFIX] Account for concurrent status updates (#219)
 

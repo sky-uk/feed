@@ -642,6 +642,9 @@ func TestNginxIngressEntries(t *testing.T) {
 					"            \n" +
 					"            deny all;\n" +
 					"        }\n" +
+					"        location / {\n" +
+					"            return 404;\n" +
+					"        }\n" +
 					"    }",
 			},
 		},
@@ -1245,6 +1248,660 @@ func TestNginxIngressEntries(t *testing.T) {
 		if test.serverEntries != nil {
 			assertConfigEntries(t, test.name, "server", `(?sU)(# ingress:.+server.+\n    })`, test.serverEntries, configContents)
 		}
+		assert.Nil(lb.Stop())
+
+		if t.Failed() {
+			t.FailNow()
+		}
+	}
+}
+
+func TestNginxRootPathLocations(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	config := newConf(tmpDir, fakeNginx)
+
+	var tests = []struct {
+		name          string
+		entries       []controller.IngressEntry
+		serverEntries []string
+	}{
+		{
+			"Generate the root location returning '404 Not Found` code for the server without root path ingress",
+			[]controller.IngressEntry{
+				{
+					Host:           "no-root-location.com",
+					Namespace:      "core",
+					Name:           "no-root-location-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    8080,
+				},
+				{
+					Host:           "no-root-location.com",
+					Namespace:      "core",
+					Name:           "no-root-location-ingress-another",
+					Path:           "/anotherpath",
+					ServiceAddress: "anotherservice",
+					ServicePort:    6060,
+				},
+			},
+			[]string{
+				"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name no-root-location.com;\n" +
+					"\n" +
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        location /anotherpath/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /path/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.8080;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"        location / {\n" +
+					"            return 404;\n" +
+					"        }\n" +
+					"    }",
+			},
+		}, {
+			"Generate the root location according tp the root path ingress for the server with root path ingress",
+			[]controller.IngressEntry{
+				{
+					Host:           "root-location.com",
+					Namespace:      "core",
+					Name:           "root-location-ingress",
+					Path:           "/",
+					ServiceAddress: "service",
+					ServicePort:    7123,
+				},
+				{
+					Host:           "root-location.com",
+					Namespace:      "core",
+					Name:           "some-root-location-ingress",
+					Path:           "/somepath",
+					ServiceAddress: "someservice",
+					ServicePort:    7124,
+				},
+			},
+			[]string{
+				"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name root-location.com;\n" +
+					"\n" +
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        location / {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.7123;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /somepath/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.someservice.7124;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /somepath/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"    }",
+			},
+		}, {
+			"Generate the root location according to the root path ingress for the server with the exact root path ingress",
+			[]controller.IngressEntry{
+				{
+					Host:           "root-location.com",
+					Namespace:      "core",
+					Name:           "root-location-ingress",
+					Path:           "/",
+					ServiceAddress: "service",
+					ServicePort:    7123,
+					ExactPath:      true,
+				},
+				{
+					Host:           "root-location.com",
+					Namespace:      "core",
+					Name:           "some-root-location-ingress",
+					Path:           "/somepath",
+					ServiceAddress: "someservice",
+					ServicePort:    7124,
+				},
+			},
+			[]string{
+				"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name root-location.com;\n" +
+					"\n" +
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        location = / {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.7123;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /somepath/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.someservice.7124;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /somepath/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"    }",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		fmt.Printf("\n=== test: %s\n", test.name)
+
+		lb := newNginxWithConf(config)
+
+		assert.NoError(lb.Start())
+		entries := test.entries
+		err := lb.Update(entries)
+		assert.NoError(err)
+
+		config, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+		assert.NoError(err)
+		configContents := string(config)
+
+		if test.serverEntries != nil {
+			assertConfigEntries(t, test.name, "server", `(?sU)(# ingress:.+server.+\n    })`, test.serverEntries, configContents)
+		}
+		assert.Nil(lb.Stop())
+
+		if t.Failed() {
+			t.FailNow()
+		}
+	}
+}
+func TestNginxRootPathLocationsUpdates(t *testing.T) {
+	assert := assert.New(t)
+	tmpDir := setupWorkDir(t)
+	defer os.Remove(tmpDir)
+
+	ts := stubHealthPort()
+	defer ts.Close()
+
+	config := newConf(tmpDir, fakeNginx)
+	config.HealthPort = getPort(ts)
+
+	var tests = []struct {
+		name                 string
+		initialEntries       []controller.IngressEntry
+		updatedEntries       []controller.IngressEntry
+		initialServerEntries []string
+		updatedServerEntries []string
+	}{
+		{
+			"Update the root location according to the root path ingress when the root path ingress is added to the server ingresses",
+			[]controller.IngressEntry{
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "an-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    8080,
+				},
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "another-ingress",
+					Path:           "/anotherpath",
+					ServiceAddress: "anotherservice",
+					ServicePort:    6060,
+				},
+			},
+			[]controller.IngressEntry{
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "an-ingress",
+					Path:           "/",
+					ServiceAddress: "service",
+					ServicePort:    8080,
+				},
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "an-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    8080,
+				},
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "another-ingress",
+					Path:           "/anotherpath",
+					ServiceAddress: "anotherservice",
+					ServicePort:    6060,
+				},
+			},
+			[]string{
+				"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name root-path-will-be-added.com;\n" +
+					"\n" +
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        location /anotherpath/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /path/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.8080;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"        location / {\n" +
+					"            return 404;\n" +
+					"        }\n" +
+					"    }",
+			},
+			[]string{
+				"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name root-path-will-be-added.com;\n" +
+					"\n" +
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        location / {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.8080;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /anotherpath/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /path/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.8080;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"    }",
+			},
+		},
+		{
+			"Update the root location to return '404 Not Found` code when the root path ingress is removed from the server ingresses",
+
+			[]controller.IngressEntry{
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "an-ingress",
+					Path:           "/",
+					ServiceAddress: "service",
+					ServicePort:    8080,
+				},
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "an-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    8080,
+				},
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "another-ingress",
+					Path:           "/anotherpath",
+					ServiceAddress: "anotherservice",
+					ServicePort:    6060,
+				},
+			},
+			[]controller.IngressEntry{
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "an-ingress",
+					Path:           "/path",
+					ServiceAddress: "service",
+					ServicePort:    8080,
+				},
+				{
+					Host:           "root-path-will-be-added.com",
+					Namespace:      "core",
+					Name:           "another-ingress",
+					Path:           "/anotherpath",
+					ServiceAddress: "anotherservice",
+					ServicePort:    6060,
+				},
+			},
+			[]string{
+				"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name root-path-will-be-added.com;\n" +
+					"\n" +
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        location / {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.8080;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /anotherpath/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /path/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.8080;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"    }",
+			},
+			[]string{
+				"    server {\n" +
+					"        listen 9090;\n" +
+					"        server_name root-path-will-be-added.com;\n" +
+					"\n" +
+					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
+					"        client_max_body_size 0;\n" +
+					"\n" +
+					"        location /anotherpath/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /path/ {\n" +
+					"            # Keep original path when proxying.\n" +
+					"            proxy_pass http://core.service.8080;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 0s;\n" +
+					"            proxy_send_timeout 0s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"        location / {\n" +
+					"            return 404;\n" +
+					"        }\n" +
+					"    }",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		fmt.Printf("\n=== test: %s\n", test.name)
+
+		lb := newNginxWithConf(config)
+		assert.NoError(lb.Start())
+
+		initialEntries := test.initialEntries
+		err := lb.Update(initialEntries)
+		assert.NoError(err)
+
+		initialConfig, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+		assert.NoError(err)
+
+		updatedEntries := test.updatedEntries
+		err = lb.Update(updatedEntries)
+		assert.NoError(err)
+
+		updatedConfig, err := ioutil.ReadFile(tmpDir + "/nginx.conf")
+		assert.NoError(err)
+
+		assertConfigEntries(t, test.name, "server", `(?sU)(# ingress:.+server.+\n    })`, test.initialServerEntries, string(initialConfig))
+		assertConfigEntries(t, test.name, "server", `(?sU)(# ingress:.+server.+\n    })`, test.updatedServerEntries, string(updatedConfig))
+
 		assert.Nil(lb.Stop())
 
 		if t.Failed() {

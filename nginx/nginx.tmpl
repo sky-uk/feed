@@ -190,6 +190,11 @@ http {
             deny all;
         }
         {{- end }}
+        {{- if not $entry.HasRootLocation }}
+        location / {
+            return 404;
+        }
+        {{- end }}
     }
   {{- end }}
 {{- end }}

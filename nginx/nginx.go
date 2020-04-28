@@ -443,6 +443,15 @@ func upstreamID(e controller.IngressEntry) string {
 	return fmt.Sprintf("%s.%s.%d", e.Namespace, e.ServiceAddress, e.ServicePort)
 }
 
+func (s server) HasRootLocation() bool {
+	for i := range s.Locations {
+		if s.Locations[i].Path == "/" {
+			return true
+		}
+	}
+	return false
+}
+
 type servers []*server
 
 func (s servers) Len() int           { return len(s) }
