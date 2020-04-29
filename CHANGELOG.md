@@ -1,3 +1,6 @@
+# v3.1.4
+* [BUGFIX] Account for concurrent status updates (#219)
+
 # v3.1.3
 * [BUGFIX] Trim whitespace from sky.uk/allow entries (#223)
 
