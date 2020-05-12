@@ -1,3 +1,7 @@
+# v3.1.6
+* [BUGFIX] Reduce the number of DescribeTargetGroups to avoid reaching the API limits
+* [BUGFIX] Do not set the nlb updater as initialised if it failed to describe the target groups
+
 # v3.1.5
 * [BUGFIX] Generate the root path location for servers without the root ingress (#225)
 
