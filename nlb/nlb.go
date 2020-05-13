@@ -147,10 +147,14 @@ func (e *nlb) attachToFrontEnds() error {
 }
 
 func findFrontendLoadBalancers(awsElb ELBV2) (map[string]LoadBalancerDetails, []*string, error) {
+	allTgsByLbArn, err := findTargetGroups(awsElb)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to describe target groups: %v", err)
+	}
+
 	lbRequest := &elbv2.DescribeLoadBalancersInput{}
 	var lbArns []*string
 	allLbsByArn := make(map[string]LoadBalancerDetails)
-
 	for {
 		lbResp, err := awsElb.DescribeLoadBalancers(lbRequest)
 
@@ -161,7 +165,7 @@ func findFrontendLoadBalancers(awsElb ELBV2) (map[string]LoadBalancerDetails, []
 		for _, entry := range lbResp.LoadBalancers {
 			allLbsByArn[*entry.LoadBalancerArn] = LoadBalancerDetails{
 				Name:         aws.StringValue(entry.LoadBalancerArn),
-				TargetGroups: findTargetGroups(awsElb, entry),
+				TargetGroups: allTgsByLbArn[aws.StringValue(entry.LoadBalancerArn)],
 				DNSName:      aws.StringValue(entry.DNSName),
 				HostedZoneID: aws.StringValue(entry.CanonicalHostedZoneId),
 				Scheme:       aws.StringValue(entry.Scheme),
@@ -180,17 +184,31 @@ func findFrontendLoadBalancers(awsElb ELBV2) (map[string]LoadBalancerDetails, []
 	}
 }
 
-func findTargetGroups(awsElb ELBV2, loadBalancer *elbv2.LoadBalancer) []*elbv2.TargetGroup {
-	request := &elbv2.DescribeTargetGroupsInput{
-		LoadBalancerArn: loadBalancer.LoadBalancerArn,
-	}
+func findTargetGroups(awsElb ELBV2) (map[string][]*elbv2.TargetGroup, error) {
+	tgsByLbArn := make(map[string][]*elbv2.TargetGroup)
+	request := &elbv2.DescribeTargetGroupsInput{}
+	for {
+		response, err := awsElb.DescribeTargetGroups(request)
+		if err != nil {
+			log.Errorf("Could not query target groups for: %v", err)
+			return nil, err
+		}
 
-	response, err := awsElb.DescribeTargetGroups(request)
-	if err != nil {
-		log.Errorf("Could not query target groups for %s: %v", *loadBalancer.LoadBalancerArn, err)
-		return nil
+		for _, entry := range response.TargetGroups {
+			for _, awsLbArn := range entry.LoadBalancerArns {
+				lbArn := aws.StringValue(awsLbArn)
+				tgsByLbArn[lbArn] = append(tgsByLbArn[lbArn], entry)
+			}
+		}
+
+		if response.NextMarker == nil {
+			return tgsByLbArn, nil
+		}
+
+		request = &elbv2.DescribeTargetGroupsInput{
+			Marker: response.NextMarker,
+		}
 	}
-	return response.TargetGroups
 }
 
 func registerWithLoadBalancer(n *nlb, lb LoadBalancerDetails) error {

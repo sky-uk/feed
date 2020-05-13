@@ -112,14 +112,16 @@ func mockLoadBalancers(m *fakeElb, lbs ...lb) {
 type tg struct {
 	arn        string
 	targetType string
+	lbArn      string
 }
 
 func mockDescribeTargetGroups(m *fakeElb, tgs ...tg) {
 	var targetGroups []*elbv2.TargetGroup
 	for _, tg := range tgs {
 		targetGroups = append(targetGroups, &elbv2.TargetGroup{
-			TargetGroupArn: aws.String(tg.arn),
-			TargetType:     aws.String(tg.targetType),
+			TargetGroupArn:   aws.String(tg.arn),
+			TargetType:       aws.String(tg.targetType),
+			LoadBalancerArns: []*string{aws.String(tg.lbArn)},
 		})
 	}
 	m.On("DescribeTargetGroups", mock.AnythingOfType("*elbv2.DescribeTargetGroupsInput")).Return(&elbv2.DescribeTargetGroupsOutput{
@@ -219,7 +221,7 @@ func TestAttachWithSingleMatchingLoadBalancer(t *testing.T) {
 		{"other", elbInternalScheme},
 	}
 	mockLoadBalancers(mockElb, lbs...)
-	mockDescribeTargetGroups(mockElb, tg{arn: clusterFrontEndTargetGroup, targetType: targetType})
+	mockDescribeTargetGroups(mockElb, tg{arn: clusterFrontEndTargetGroup, targetType: targetType, lbArn: clusterFrontEnd})
 
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: defaultTags},
@@ -283,7 +285,7 @@ func TestNameAndDNSNameAndHostedZoneIDLoadBalancerDetailsAreExtracted(t *testing
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndTargetGroup := "cluster-frontend-tg"
 	mockLoadBalancers(mockElb, lb{name: clusterFrontEnd, scheme: elbInternalScheme})
-	mockDescribeTargetGroups(mockElb, tg{clusterFrontEndTargetGroup, elbv2.TargetTypeEnumIp})
+	mockDescribeTargetGroups(mockElb, tg{clusterFrontEndTargetGroup, elbv2.TargetTypeEnumIp, clusterFrontEnd})
 	mockClusterTags(mockElb,
 		lbTags{name: clusterFrontEnd, tags: defaultTags},
 	)
@@ -314,8 +316,8 @@ func TestAttachWithInternalAndInternetFacing(t *testing.T) {
 		lb{name: privateFrontend, scheme: elbInternalScheme},
 		lb{name: publicFrontend, scheme: elbInternetFacingScheme})
 	mockDescribeTargetGroups(mockElb,
-		tg{privateFrontendTargetGroup, targetType},
-		tg{publicFrontendTargetGroup, targetType})
+		tg{privateFrontendTargetGroup, targetType, privateFrontend},
+		tg{publicFrontendTargetGroup, targetType, publicFrontend})
 	mockClusterTags(mockElb,
 		lbTags{name: privateFrontend, tags: defaultTags},
 		lbTags{name: publicFrontend, tags: defaultTags},
@@ -348,8 +350,8 @@ func TestAttachTargetGroupsMultipleTypes(t *testing.T) {
 		lb{name: privateFrontend, scheme: elbInternalScheme},
 		lb{name: publicFrontend, scheme: elbInternetFacingScheme})
 	mockDescribeTargetGroups(mockElb,
-		tg{privateFrontendTargetGroup, elbv2.TargetTypeEnumIp},
-		tg{publicFrontendTargetGroup, elbv2.TargetTypeEnumInstance})
+		tg{privateFrontendTargetGroup, elbv2.TargetTypeEnumIp, privateFrontend},
+		tg{publicFrontendTargetGroup, elbv2.TargetTypeEnumInstance, publicFrontend})
 	mockClusterTags(mockElb,
 		lbTags{name: privateFrontend, tags: defaultTags},
 		lbTags{name: publicFrontend, tags: defaultTags},
@@ -378,10 +380,24 @@ func TestErrorGettingMetadata(t *testing.T) {
 	assert.EqualError(t, err, "unable to query ec2 metadata service for InstanceId: no metadata for you")
 }
 
+func TestErrorDescribingTargetGroups(t *testing.T) {
+	elbUpdater, mockElb, mockMetadata := setup()
+	instanceID := "cow"
+	privateIP := "192.168.0.1"
+	mockInstanceMetadata(mockMetadata, instanceID, privateIP)
+	mockElb.On("DescribeTargetGroups", mock.AnythingOfType("*elbv2.DescribeTargetGroupsInput")).
+		Return(&elbv2.DescribeTargetGroupsOutput{}, errors.New("oh dear oh dear"))
+	_ = elbUpdater.Start()
+	err := elbUpdater.Update(controller.IngressEntries{})
+
+	assert.EqualError(t, err, "unable to describe target groups: oh dear oh dear")
+}
+
 func TestErrorDescribingInstances(t *testing.T) {
 	elbUpdater, mockElb, mockMetadata := setup()
 	instanceID := "cow"
 	privateIP := "192.168.0.1"
+	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn", elbv2.TargetTypeEnumIp, "some-lb-arn"})
 	mockInstanceMetadata(mockMetadata, instanceID, privateIP)
 	mockElb.
 		On("DescribeLoadBalancers", mock.AnythingOfType("*elbv2.DescribeLoadBalancersInput")).
@@ -398,9 +414,10 @@ func TestErrorDescribingTags(t *testing.T) {
 	instanceID := "cow"
 	privateIP := "192.168.0.1"
 	targetType := elbv2.TargetTypeEnumIp
+	lbName := "one"
 	mockInstanceMetadata(mockMetadata, instanceID, privateIP)
-	mockLoadBalancers(mockElb, lb{name: "one"})
-	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn", targetType})
+	mockLoadBalancers(mockElb, lb{name: lbName})
+	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn", targetType, lbName})
 	mockElb.
 		On("DescribeTags", mock.AnythingOfType("*elbv2.DescribeTagsInput")).
 		Return(&elbv2.DescribeTagsOutput{}, errors.New("oh dear oh dear"))
@@ -420,7 +437,7 @@ func TestNoMatchingElbs(t *testing.T) {
 	loadBalancerArn := "i am not the loadbalancer you are looking for"
 	mockInstanceMetadata(mockMetadata, instanceID, privateIP)
 	mockLoadBalancers(mockElb, lb{name: loadBalancerArn, scheme: elbInternalScheme})
-	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn", targetType})
+	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn", targetType, loadBalancerArn})
 	// No cluster tags
 	mockClusterTags(mockElb, lbTags{name: loadBalancerArn, tags: []*elbv2.Tag{}})
 
@@ -441,7 +458,7 @@ func TestAttachingWithoutIngressClassTagElbs(t *testing.T) {
 	loadBalancerArn := "i am not the loadbalancer you are looking for"
 	mockInstanceMetadata(mockMetadata, instanceID, privateIP)
 	mockLoadBalancers(mockElb, lb{name: loadBalancerArn, scheme: elbInternalScheme})
-	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn", targetType})
+	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn", targetType, loadBalancerArn})
 	// No cluster tags
 	mockClusterTags(mockElb, lbTags{name: loadBalancerArn, tags: []*elbv2.Tag{
 		{Key: aws.String(frontendTag), Value: aws.String(clusterName)},
@@ -464,7 +481,7 @@ func TestAttachingWithoutFrontendTagElbs(t *testing.T) {
 	loadBalancerArn := "i am not the loadbalancer you are looking for"
 	mockInstanceMetadata(mockMetadata, instanceID, privateIP)
 	mockLoadBalancers(mockElb, lb{name: loadBalancerArn, scheme: elbInternalScheme})
-	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn", targetType})
+	mockDescribeTargetGroups(mockElb, tg{"some-target-group-arn", targetType, loadBalancerArn})
 	// No cluster tags
 	mockClusterTags(mockElb, lbTags{name: loadBalancerArn, tags: []*elbv2.Tag{
 		{Key: aws.String(ingressClassTag), Value: aws.String(ingressClass)},
@@ -498,7 +515,7 @@ func TestGetLoadBalancerPages(t *testing.T) {
 				CanonicalHostedZoneId: aws.String(canonicalHostedZoneNameID),
 			}},
 		}, nil)
-	mockDescribeTargetGroups(mockElb, tg{loadBalancerTargetGroupArn, targetType})
+	mockDescribeTargetGroups(mockElb, tg{loadBalancerTargetGroupArn, targetType, loadBalancerArn})
 	mockInstanceMetadata(mockMetadata, instanceID, privateIP)
 	mockClusterTags(mockElb, lbTags{name: loadBalancerArn, tags: defaultTags})
 	mockRegisterTargets(mockElb, loadBalancerTargetGroupArn, instanceID, privateIP, targetType)
@@ -527,8 +544,8 @@ func TestTagCallsPageV2(t *testing.T) {
 		lb{name: loadBalancerArn, scheme: elbInternalScheme},
 		lb{name: loadBalancer2Arn, scheme: elbInternetFacingScheme})
 	mockDescribeTargetGroups(mockElbV2,
-		tg{loadBalancerTargetGroupArn, targetType},
-		tg{loadBalancer2TargetGroupArn, targetType})
+		tg{loadBalancerTargetGroupArn, targetType, loadBalancerArn},
+		tg{loadBalancer2TargetGroupArn, targetType, loadBalancer2Arn})
 	mockClusterTags(mockElbV2,
 		lbTags{name: loadBalancerArn, tags: defaultTags},
 		lbTags{name: loadBalancer2Arn, tags: defaultTags})
@@ -561,8 +578,8 @@ func TestDeregistersWithAttachedELBsV2(t *testing.T) {
 		lb{name: clusterFrontEnd2, scheme: elbInternetFacingScheme},
 		lb{name: "other", scheme: elbInternalScheme})
 	mockDescribeTargetGroups(mockElbV2,
-		tg{clusterFrontEndTargetGroupArn, targetType},
-		tg{clusterFrontEnd2TargetGroupArn, targetType})
+		tg{clusterFrontEndTargetGroupArn, targetType, clusterFrontEnd},
+		tg{clusterFrontEnd2TargetGroupArn, targetType, clusterFrontEnd2})
 	mockClusterTags(mockElbV2,
 		lbTags{name: clusterFrontEnd, tags: defaultTags},
 		lbTags{name: clusterFrontEnd2, tags: defaultTags},
@@ -610,8 +627,8 @@ func TestDeregistersWithAttachedTargetGroupsMultipleTypes(t *testing.T) {
 		lb{name: clusterFrontEnd2, scheme: elbInternetFacingScheme},
 		lb{name: "other", scheme: elbInternalScheme})
 	mockDescribeTargetGroups(mockElbV2,
-		tg{clusterFrontEndTargetGroupArn, elbv2.TargetTypeEnumIp},
-		tg{clusterFrontEnd2TargetGroupArn, elbv2.TargetTypeEnumInstance})
+		tg{clusterFrontEndTargetGroupArn, elbv2.TargetTypeEnumIp, clusterFrontEnd},
+		tg{clusterFrontEnd2TargetGroupArn, elbv2.TargetTypeEnumInstance, clusterFrontEnd2})
 	mockClusterTags(mockElbV2,
 		lbTags{name: clusterFrontEnd, tags: defaultTags},
 		lbTags{name: clusterFrontEnd2, tags: defaultTags},
@@ -652,7 +669,7 @@ func TestRegisterInstanceErrorV2(t *testing.T) {
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndTargetGroup := "cluster-frontend-tg"
 	mockLoadBalancers(mockElbV2, lb{name: clusterFrontEnd, scheme: elbInternalScheme})
-	mockDescribeTargetGroups(mockElbV2, tg{arn: clusterFrontEndTargetGroup, targetType: targetType})
+	mockDescribeTargetGroups(mockElbV2, tg{arn: clusterFrontEndTargetGroup, targetType: targetType, lbArn: clusterFrontEnd})
 	mockClusterTags(mockElbV2,
 		lbTags{name: clusterFrontEnd, tags: defaultTags},
 	)
@@ -677,7 +694,7 @@ func TestRegisterInstanceInvalidTypeError(t *testing.T) {
 	clusterFrontEnd := "cluster-frontend"
 	clusterFrontEndTargetGroup := "cluster-frontend-tg"
 	mockLoadBalancers(mockElbV2, lb{name: clusterFrontEnd, scheme: elbInternalScheme})
-	mockDescribeTargetGroups(mockElbV2, tg{arn: clusterFrontEndTargetGroup, targetType: targetType})
+	mockDescribeTargetGroups(mockElbV2, tg{arn: clusterFrontEndTargetGroup, targetType: targetType, lbArn: clusterFrontEnd})
 	mockClusterTags(mockElbV2,
 		lbTags{name: clusterFrontEnd, tags: defaultTags},
 	)
@@ -703,7 +720,7 @@ func TestDeRegisterInstanceErrorV2(t *testing.T) {
 	clusterFrontEndTargetGroup := "cluster-frontend-tg"
 	mockLoadBalancers(mockElbV2,
 		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
-	mockDescribeTargetGroups(mockElbV2, tg{arn: clusterFrontEndTargetGroup, targetType: targetType})
+	mockDescribeTargetGroups(mockElbV2, tg{arn: clusterFrontEndTargetGroup, targetType: targetType, lbArn: clusterFrontEnd})
 	mockClusterTags(mockElbV2,
 		lbTags{name: clusterFrontEnd, tags: defaultTags},
 	)
@@ -730,7 +747,7 @@ func TestRetriesUpdateIfFirstAttemptFailsV2(t *testing.T) {
 	clusterFrontEnd := "cluster-frontend"
 	mockLoadBalancers(mockElbV2,
 		lb{name: clusterFrontEnd, scheme: elbInternalScheme})
-	mockDescribeTargetGroups(mockElbV2, tg{"some-target-group-arn", targetType})
+	mockDescribeTargetGroups(mockElbV2, tg{"some-target-group-arn", targetType, clusterFrontEnd})
 	mockClusterTags(mockElbV2,
 		lbTags{
 			name: clusterFrontEnd,
