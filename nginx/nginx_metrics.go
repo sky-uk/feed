@@ -142,8 +142,8 @@ func updateIngressMetrics(metrics VTSMetrics) {
 			}
 
 			strs := strings.Split(zone, "::")
-			if len(strs) != 2 {
-				log.Warnf("filter name not formatted as expected for %s, got %s without a '::' split", host, zone)
+			if len(strs) != 2 || strs[1] == "" {
+				log.Warnf("filter name not formatted as expected for %s, got %s without a valid '::' split", host, zone)
 				continue
 			}
 			path := strs[0]

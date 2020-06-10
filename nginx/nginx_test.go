@@ -2044,6 +2044,12 @@ func TestUpdatesMetricsFromNginxStatusPage(t *testing.T) {
 	assertIngressRequestCounters(t,
 		"heapster.sandbox.cosmic.sky", "/",
 		2012.0, 1099.0, 0.0, 7.0, 0.0, 0.0, 0.0)
+	assertIngressRequestCounters(t,
+		"duplicate-path.sandbox.cosmic.sky", "/path/",
+		5000.0, 2000.0, 0.0, 5.0, 0.0, 0.0, 0.0)
+	assertIngressRequestCounters(t,
+		"misconfigured-ingress.sandbox.cosmic.sky", "/bad/",
+		0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 	assertEndpointRequestCounters(t,
 		"kube-system.10.254.201.199.80", "10.254.201.199:80",
 		2910.0, 1570.0, 1.0, 10.0, 9.0, 2.0, 3.0)
@@ -2267,6 +2273,84 @@ var statusResponseBody = []byte(`{
         "scarce": 0
       }
     },
+    "duplicate-path.sandbox.cosmic.sky": {
+      "requestCounter": 5,
+      "inBytes": 5000,
+      "outBytes": 2000,
+      "responses": {
+        "1xx": 0,
+        "2xx": 5,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      },
+      "overCounts": {
+        "maxIntegerSize": 18446744073709551615,
+        "requestCounter": 0,
+        "inBytes": 0,
+        "outBytes": 0,
+        "1xx": 0,
+        "2xx": 0,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      }
+    },
+    "misconfigured-ingress.sandbox.cosmic.sky": {
+      "requestCounter": 10,
+      "inBytes": 10,
+      "outBytes": 5,
+      "responses": {
+        "1xx": 0,
+        "2xx": 0,
+        "3xx": 10,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      },
+      "overCounts": {
+        "maxIntegerSize": 18446744073709551615,
+        "requestCounter": 0,
+        "inBytes": 0,
+        "outBytes": 0,
+        "1xx": 0,
+        "2xx": 0,
+        "3xx": 0,
+        "4xx": 0,
+        "5xx": 0,
+        "miss": 0,
+        "bypass": 0,
+        "expired": 0,
+        "stale": 0,
+        "updating": 0,
+        "revalidated": 0,
+        "hit": 0,
+        "scarce": 0
+      }
+    },
     "*": {
       "requestCounter": 10,
       "inBytes": 2910,
@@ -2357,6 +2441,127 @@ var statusResponseBody = []byte(`{
         "responses": {
           "1xx": 0,
           "2xx": 7,
+          "3xx": 0,
+          "4xx": 0,
+          "5xx": 0,
+          "miss": 0,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        },
+        "overCounts": {
+          "maxIntegerSize": 18446744073709551615,
+          "requestCounter": 0,
+          "inBytes": 0,
+          "outBytes": 0,
+          "1xx": 0,
+          "2xx": 0,
+          "3xx": 0,
+          "4xx": 0,
+          "5xx": 0,
+          "miss": 0,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        }
+      }
+    },
+    "duplicate-path.sandbox.cosmic.sky": {
+      "/path/::some-app.10.254.204.100.8080": {
+        "requestCounter": 10,
+        "inBytes": 5000,
+        "outBytes": 2000,
+        "responses": {
+          "1xx": 0,
+          "2xx": 5,
+          "3xx": 0,
+          "4xx": 0,
+          "5xx": 0,
+          "miss": 0,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        },
+        "overCounts": {
+          "maxIntegerSize": 18446744073709551615,
+          "requestCounter": 0,
+          "inBytes": 0,
+          "outBytes": 0,
+          "1xx": 0,
+          "2xx": 0,
+          "3xx": 0,
+          "4xx": 0,
+          "5xx": 0,
+          "miss": 0,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        }
+      },
+      "/path/::": {
+        "requestCounter": 50,
+        "inBytes": 50,
+        "outBytes": 50,
+        "responses": {
+          "1xx": 50,
+          "2xx": 50,
+          "3xx": 50,
+          "4xx": 50,
+          "5xx": 50,
+          "miss": 50,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        },
+        "overCounts": {
+          "maxIntegerSize": 18446744073709551615,
+          "requestCounter": 0,
+          "inBytes": 0,
+          "outBytes": 0,
+          "1xx": 0,
+          "2xx": 0,
+          "3xx": 0,
+          "4xx": 0,
+          "5xx": 0,
+          "miss": 0,
+          "bypass": 0,
+          "expired": 0,
+          "stale": 0,
+          "updating": 0,
+          "revalidated": 0,
+          "hit": 0,
+          "scarce": 0
+        }
+      }      
+    },
+    "misconfigured-ingress.sandbox.cosmic.sky": {
+      "/bad::": {
+        "requestCounter": 10,
+        "inBytes": 10,
+        "outBytes": 5,
+        "responses": {
+          "1xx": 0,
+          "2xx": 10,
           "3xx": 0,
           "4xx": 0,
           "5xx": 0,
