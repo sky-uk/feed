@@ -1,3 +1,6 @@
+# v3.1.7
+* [BUGFIX] Do not generate Prometheus metrics for invalid nginx-vts entries
+
 # v3.1.6
 * [BUGFIX] Reduce the number of DescribeTargetGroups to avoid reaching the API limits
 * [BUGFIX] Do not set the nlb updater as initialised if it failed to describe the target groups
