@@ -2044,15 +2044,18 @@ func TestUpdatesMetricsFromNginxStatusPage(t *testing.T) {
 	assertIngressRequestCounters(t,
 		"heapster.sandbox.cosmic.sky", "/",
 		2012.0, 1099.0, 0.0, 7.0, 0.0, 0.0, 0.0)
-	assertIngressRequestCounters(t,
-		"duplicate-path.sandbox.cosmic.sky", "/path/",
-		5000.0, 2000.0, 0.0, 5.0, 0.0, 0.0, 0.0)
-	assertIngressRequestCounters(t,
-		"misconfigured-ingress.sandbox.cosmic.sky", "/bad/",
-		0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 	assertEndpointRequestCounters(t,
 		"kube-system.10.254.201.199.80", "10.254.201.199:80",
 		2910.0, 1570.0, 1.0, 10.0, 9.0, 2.0, 3.0)
+
+	// Assert that hosts with both valid and invalid entries for the same path generate metrics for the correct, valid VTS entry
+	assertIngressRequestCounters(t,
+		"ingress-with-valid-duplicate-path.sandbox.cosmic.sky", "/path/",
+		5000.0, 2000.0, 0.0, 5.0, 0.0, 0.0, 0.0)
+	// Assert that invalid paths do not generate metrics, even if the VTS data shows hits (e.g. 3xx's)
+	assertIngressRequestCounters(t,
+		"ingress-with-invalid-path.sandbox.cosmic.sky", "/bad/",
+		0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 }
 
 func assertIngressRequestCounters(t *testing.T, host, path string, in, out, ones, twos, threes, fours, fives float64) {
@@ -2273,7 +2276,7 @@ var statusResponseBody = []byte(`{
         "scarce": 0
       }
     },
-    "duplicate-path.sandbox.cosmic.sky": {
+    "ingress-with-valid-duplicate-path.sandbox.cosmic.sky": {
       "requestCounter": 5,
       "inBytes": 5000,
       "outBytes": 2000,
@@ -2312,7 +2315,7 @@ var statusResponseBody = []byte(`{
         "scarce": 0
       }
     },
-    "misconfigured-ingress.sandbox.cosmic.sky": {
+    "ingress-with-invalid-path.sandbox.cosmic.sky": {
       "requestCounter": 10,
       "inBytes": 10,
       "outBytes": 5,
@@ -2474,7 +2477,7 @@ var statusResponseBody = []byte(`{
         }
       }
     },
-    "duplicate-path.sandbox.cosmic.sky": {
+    "ingress-with-valid-duplicate-path.sandbox.cosmic.sky": {
       "/path/::some-app.10.254.204.100.8080": {
         "requestCounter": 10,
         "inBytes": 5000,
@@ -2554,7 +2557,7 @@ var statusResponseBody = []byte(`{
         }
       }      
     },
-    "misconfigured-ingress.sandbox.cosmic.sky": {
+    "ingress-with-invalid-path.sandbox.cosmic.sky": {
       "/bad::": {
         "requestCounter": 10,
         "inBytes": 10,
