@@ -828,6 +828,37 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendConnectionKeepAlive(t *t
 	})
 }
 
+func TestUpdaterSkipsEntriesForIngressWithInvalidBackendConnectionKeepAliveAndBackendMaxRequestsPerConnection(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with overridden backend max requests per connection",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:          "",
+			stripPathAnnotation:             "false",
+			frontendSchemeAnnotation:        "internal",
+			ingressClassAnnotation:          defaultIngressClass,
+			backendConnectionKeepalive:      "50a",
+			backendMaxRequestsPerConnection: "-1",
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:             ingressNamespace,
+			Name:                  ingressName,
+			Host:                  ingressHost,
+			Path:                  ingressPath,
+			ServiceAddress:        serviceIP,
+			ServicePort:           ingressSvcPort,
+			LbScheme:              "internal",
+			IngressClass:          defaultIngressClass,
+			Allow:                 []string{},
+			StripPaths:            false,
+			BackendTimeoutSeconds: 10,
+			BackendMaxConnections: defaultMaxConnections,
+		}},
+		defaultConfig(),
+	})
+}
+
 func TestUpdaterIsUpdatedForIngressWithDefaultBackendMaxConnections(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with default backend max connections",

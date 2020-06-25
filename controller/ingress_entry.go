@@ -45,7 +45,7 @@ type IngressEntry struct {
 	// BackendKeepaliveTimeout timeout for idle connections to upstream
 	BackendKeepaliveTimeout time.Duration
 	// BackendMaxRequestsPerConnection max requests per connection to upstream, after which it will be closed
-	BackendMaxRequestsPerConnection int
+	BackendMaxRequestsPerConnection uint64
 	// Ingress creation time
 	CreationTimestamp time.Time
 	// Ingress resource

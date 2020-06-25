@@ -32,8 +32,10 @@ const (
 	stripPathAnnotation = "sky.uk/strip-path"
 	exactPathAnnotation = "sky.uk/exact-path"
 
-	backendTimeoutSeconds           = "sky.uk/backend-timeout-seconds"
-	backendConnectionKeepalive      = "sky.uk/backend-connection-keepalive"
+	backendTimeoutSeconds = "sky.uk/backend-timeout-seconds"
+	// sets keepalive_timeout on nginx upstream (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#keepalive)
+	backendConnectionKeepalive = "sky.uk/backend-connection-keepalive"
+	// sets keepalive_requests on nginx upstream (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#keepalive)
 	backendMaxRequestsPerConnection = "sky.uk/backend-max-requests-per-connection"
 	proxyBufferSizeAnnotation       = "sky.uk/proxy-buffer-size-in-kb"
 	proxyBufferBlocksAnnotation     = "sky.uk/proxy-buffer-blocks"
@@ -308,13 +310,21 @@ func (c *controller) updateIngresses() (err error) {
 						}
 
 						if maxRequestsPerConnection, ok := ingress.Annotations[backendMaxRequestsPerConnection]; ok {
-							intVal, _ := strconv.Atoi(maxRequestsPerConnection)
-							entry.BackendMaxRequestsPerConnection = intVal
+							intVal, err := strconv.ParseUint(maxRequestsPerConnection, 10, 64)
+							if err != nil {
+								log.Warnf("invalid value %v set for annotation for %q. Will continue with defaults", maxRequestsPerConnection, backendMaxRequestsPerConnection)
+							} else {
+								entry.BackendMaxRequestsPerConnection = intVal
+							}
 						}
 
 						if connectionKeepalive, ok := ingress.Annotations[backendConnectionKeepalive]; ok {
-							keepaliveTimeout, _ := time.ParseDuration(connectionKeepalive)
-							entry.BackendKeepaliveTimeout = keepaliveTimeout
+							keepaliveTimeout, err := time.ParseDuration(connectionKeepalive)
+							if err != nil {
+								log.Warnf("invalid value %v set for annotation for %q. Will continue with defaults", connectionKeepalive, backendConnectionKeepalive)
+							} else {
+								entry.BackendKeepaliveTimeout = keepaliveTimeout
+							}
 						}
 
 						if proxyBufferSizeString, ok := ingress.Annotations[proxyBufferSizeAnnotation]; ok {

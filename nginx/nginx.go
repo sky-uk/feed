@@ -22,7 +22,7 @@ import (
 const (
 	nginxStartDelay                         = time.Millisecond * 100
 	metricsUpdateInterval                   = time.Second * 10
-	defaultMaxRequestsPerUpstreamConnection = 1024
+	defaultMaxRequestsPerUpstreamConnection = uint64(1024)
 )
 
 // Port configuration
@@ -135,7 +135,7 @@ type upstream struct {
 	Server            string
 	MaxConnections    int
 	KeepaliveTimeout  string
-	KeepaliveRequests int
+	KeepaliveRequests uint64
 }
 
 type location struct {
@@ -431,7 +431,7 @@ func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 		}
 		keepaliveTimeout := ""
 		if ingressEntry.BackendKeepaliveTimeout != 0 {
-			keepaliveTimeout = fmt.Sprintf("%ds", int64(ingressEntry.BackendKeepaliveTimeout.Seconds()))
+			keepaliveTimeout = fmt.Sprintf("%ds", uint64(ingressEntry.BackendKeepaliveTimeout.Seconds()))
 		}
 		upstream := &upstream{
 			ID:                upstreamID(ingressEntry),
