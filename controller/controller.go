@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"
@@ -31,9 +32,11 @@ const (
 	stripPathAnnotation = "sky.uk/strip-path"
 	exactPathAnnotation = "sky.uk/exact-path"
 
-	backendTimeoutSeconds       = "sky.uk/backend-timeout-seconds"
-	proxyBufferSizeAnnotation   = "sky.uk/proxy-buffer-size-in-kb"
-	proxyBufferBlocksAnnotation = "sky.uk/proxy-buffer-blocks"
+	backendTimeoutSeconds           = "sky.uk/backend-timeout-seconds"
+	backendConnectionKeepalive      = "sky.uk/backend-connection-keepalive"
+	backendMaxRequestsPerConnection = "sky.uk/backend-max-requests-per-connection"
+	proxyBufferSizeAnnotation       = "sky.uk/proxy-buffer-size-in-kb"
+	proxyBufferBlocksAnnotation     = "sky.uk/proxy-buffer-blocks"
 
 	maxAllowedProxyBufferSize   = 32
 	maxAllowedProxyBufferBlocks = 8
@@ -302,6 +305,16 @@ func (c *controller) updateIngresses() (err error) {
 						if maxConnections, ok := ingress.Annotations[backendMaxConnections]; ok {
 							tmp, _ := strconv.Atoi(maxConnections)
 							entry.BackendMaxConnections = tmp
+						}
+
+						if maxRequestsPerConnection, ok := ingress.Annotations[backendMaxRequestsPerConnection]; ok {
+							intVal, _ := strconv.Atoi(maxRequestsPerConnection)
+							entry.BackendMaxRequestsPerConnection = intVal
+						}
+
+						if connectionKeepalive, ok := ingress.Annotations[backendConnectionKeepalive]; ok {
+							keepaliveTimeout, _ := time.ParseDuration(connectionKeepalive)
+							entry.BackendKeepaliveTimeout = keepaliveTimeout
 						}
 
 						if proxyBufferSizeString, ok := ingress.Annotations[proxyBufferSizeAnnotation]; ok {

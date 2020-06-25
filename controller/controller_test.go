@@ -766,6 +766,68 @@ func TestUpdaterIsUpdatedForIngressWithOverriddenBackendMaxConnections(t *testin
 	})
 }
 
+func TestUpdaterIsUpdatedForIngressWithOverriddenBackendMaxRequestsPerConnection(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with overridden backend max requests per connection",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:          "",
+			stripPathAnnotation:             "false",
+			frontendSchemeAnnotation:        "internal",
+			ingressClassAnnotation:          defaultIngressClass,
+			backendMaxRequestsPerConnection: "100",
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:                       ingressNamespace,
+			Name:                            ingressName,
+			Host:                            ingressHost,
+			Path:                            ingressPath,
+			ServiceAddress:                  serviceIP,
+			ServicePort:                     ingressSvcPort,
+			LbScheme:                        "internal",
+			IngressClass:                    defaultIngressClass,
+			Allow:                           []string{},
+			StripPaths:                      false,
+			BackendTimeoutSeconds:           10,
+			BackendMaxConnections:           defaultMaxConnections,
+			BackendMaxRequestsPerConnection: 100,
+		}},
+		defaultConfig(),
+	})
+}
+
+func TestUpdaterIsUpdatedForIngressWithOverriddenBackendConnectionKeepAlive(t *testing.T) {
+	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
+		"ingress with overridden backend max requests per connection",
+		createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
+			ingressAllowAnnotation:     "",
+			stripPathAnnotation:        "false",
+			frontendSchemeAnnotation:   "internal",
+			ingressClassAnnotation:     defaultIngressClass,
+			backendConnectionKeepalive: "5m",
+		}, ingressPath),
+		createDefaultServices(),
+		createDefaultNamespaces(),
+		[]IngressEntry{{
+			Namespace:               ingressNamespace,
+			Name:                    ingressName,
+			Host:                    ingressHost,
+			Path:                    ingressPath,
+			ServiceAddress:          serviceIP,
+			ServicePort:             ingressSvcPort,
+			LbScheme:                "internal",
+			IngressClass:            defaultIngressClass,
+			Allow:                   []string{},
+			StripPaths:              false,
+			BackendTimeoutSeconds:   10,
+			BackendMaxConnections:   defaultMaxConnections,
+			BackendKeepaliveTimeout: 5 * time.Minute,
+		}},
+		defaultConfig(),
+	})
+}
+
 func TestUpdaterIsUpdatedForIngressWithDefaultBackendMaxConnections(t *testing.T) {
 	runAndAssertUpdates(t, expectGetAllIngresses, testSpec{
 		"ingress with default backend max connections",
@@ -1329,6 +1391,10 @@ func createIngressesFixture(namespace string, host string, serviceName string, s
 			annotations[proxyBufferBlocksAnnotation] = annotationVal
 		case ingressClassAnnotation:
 			annotations[ingressClassAnnotation] = annotationVal
+		case backendConnectionKeepalive:
+			annotations[backendConnectionKeepalive] = annotationVal
+		case backendMaxRequestsPerConnection:
+			annotations[backendMaxRequestsPerConnection] = annotationVal
 		}
 	}
 

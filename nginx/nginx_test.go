@@ -555,9 +555,9 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:                  "chris.com",
+					Host:                  "foo.com",
 					Namespace:             "core",
-					Name:                  "chris-ingress",
+					Name:                  "foo-ingress",
 					Path:                  "/path",
 					ServiceAddress:        "service",
 					ServicePort:           8080,
@@ -567,33 +567,38 @@ func TestNginxIngressEntries(t *testing.T) {
 					BackendTimeoutSeconds: 1,
 				},
 				{
-					Host:                  "chris.com",
-					Namespace:             "core",
-					Name:                  "chris-ingress-another",
-					Path:                  "/anotherpath",
-					ServiceAddress:        "anotherservice",
-					ServicePort:           6060,
-					Allow:                 []string{"10.86.0.0/16"},
-					StripPaths:            false,
-					ExactPath:             false,
-					BackendTimeoutSeconds: 10,
-					BackendMaxConnections: 1024,
+					Host:                            "foo.com",
+					Namespace:                       "core",
+					Name:                            "foo-ingress-another",
+					Path:                            "/anotherpath",
+					ServiceAddress:                  "anotherservice",
+					ServicePort:                     6060,
+					Allow:                           []string{"10.86.0.0/16"},
+					StripPaths:                      false,
+					ExactPath:                       false,
+					BackendTimeoutSeconds:           10,
+					BackendMaxRequestsPerConnection: 100,
+					BackendKeepaliveTimeout:         5 * time.Minute,
+					BackendMaxConnections:           1024,
 				},
 			},
 			[]string{
 				"    upstream core.anotherservice.6060 {\n" +
 					"        server anotherservice:6060 max_conns=1024;\n" +
 					"        keepalive 1024;\n" +
+					"        keepalive_requests 100;\n" +
+					"        keepalive_timeout 300s;\n" +
 					"    }",
 				"    upstream core.service.8080 {\n" +
 					"        server service:8080 max_conns=0;\n" +
 					"        keepalive 1024;\n" +
+					"        keepalive_requests 1024;\n" +
 					"    }",
 			},
 			[]string{
 				"    server {\n" +
 					"        listen 9090;\n" +
-					"        server_name chris.com;\n" +
+					"        server_name foo.com;\n" +
 					"\n" +
 					"        # disable any limits to avoid HTTP 413 for large uploads\n" +
 					"        client_max_body_size 0;\n" +
@@ -653,9 +658,9 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris.com",
+					Host:           "foo.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "/path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
@@ -674,9 +679,9 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris.com",
+					Host:           "foo.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "/path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
@@ -886,41 +891,41 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris-0.com",
+					Host:           "foo-0.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "",
 					ServiceAddress: "service",
 					ServicePort:    9090,
 				},
 				{
-					Host:           "chris-1.com",
+					Host:           "foo-1.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "/prefix-with-slash/",
 					ServiceAddress: "service",
 					ServicePort:    9090,
 				},
 				{
-					Host:           "chris-2.com",
+					Host:           "foo-2.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "prefix-without-preslash/",
 					ServiceAddress: "service",
 					ServicePort:    9090,
 				},
 				{
-					Host:           "chris-3.com",
+					Host:           "foo-3.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "/prefix-without-postslash",
 					ServiceAddress: "service",
 					ServicePort:    9090,
 				},
 				{
-					Host:           "chris-4.com",
+					Host:           "foo-4.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "prefix-without-anyslash",
 					ServiceAddress: "service",
 					ServicePort:    9090,
@@ -940,9 +945,9 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris-0.com",
+					Host:           "foo-0.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "/a/test/path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
@@ -959,9 +964,9 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris.com",
+					Host:           "foo.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "",
 					ServiceAddress: "service",
 					ServicePort:    9090,
@@ -982,18 +987,18 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris.com",
+					Host:           "foo.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "/my-path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
 				},
 
 				{
-					Host:           "chris.com",
+					Host:           "foo.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "/my-path2",
 					ServiceAddress: "service",
 					ServicePort:    9090,
@@ -1004,6 +1009,7 @@ func TestNginxIngressEntries(t *testing.T) {
 				"    upstream core.service.9090 {\n" +
 					"        server service:9090 max_conns=0;\n" +
 					"        keepalive 1024;\n" +
+					"        keepalive_requests 1024;\n" +
 					"    }",
 			},
 			nil,
@@ -1013,18 +1019,18 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris.com",
+					Host:           "foo.com",
 					Namespace:      "core",
-					Name:           "02chris-ingress",
+					Name:           "02foo-ingress",
 					Path:           "/my-path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
 				},
 
 				{
-					Host:           "chris.com",
+					Host:           "foo.com",
 					Namespace:      "core",
-					Name:           "01chris-ingress",
+					Name:           "01foo-ingress",
 					Path:           "/my-path2",
 					ServiceAddress: "service",
 					ServicePort:    9090,
@@ -1032,7 +1038,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			},
 			nil,
 			[]string{
-				"# ingress: core/01chris-ingress core/02chris-ingress",
+				"# ingress: core/01foo-ingress core/02foo-ingress",
 			},
 		},
 		{
@@ -1040,9 +1046,9 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris.com",
+					Host:           "foo.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "/path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
@@ -1058,9 +1064,9 @@ func TestNginxIngressEntries(t *testing.T) {
 			enableProxyProtocolConf,
 			[]controller.IngressEntry{
 				{
-					Host:           "chris.com",
+					Host:           "foo.com",
 					Namespace:      "core",
-					Name:           "chris-ingress",
+					Name:           "foo-ingress",
 					Path:           "/path",
 					ServiceAddress: "service",
 					ServicePort:    9090,
@@ -1076,27 +1082,27 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
-					Host:                  "chris.com",
+					Host:                  "foo.com",
 					Namespace:             "core",
-					Name:                  "chris-ingress",
+					Name:                  "foo-ingress",
 					Path:                  "",
 					ServiceAddress:        "service",
 					ServicePort:           9090,
 					BackendTimeoutSeconds: 28,
 				},
 				{
-					Host:                  "chris.com",
+					Host:                  "foo.com",
 					Namespace:             "core",
-					Name:                  "chris-ingress",
+					Name:                  "foo-ingress",
 					Path:                  "/lala",
 					ServiceAddress:        "service",
 					ServicePort:           9090,
 					BackendTimeoutSeconds: 28,
 				},
 				{
-					Host:                  "chris.com",
+					Host:                  "foo.com",
 					Namespace:             "core",
-					Name:                  "chris-ingress",
+					Name:                  "foo-ingress",
 					Path:                  "/01234-hi",
 					ServiceAddress:        "service",
 					ServicePort:           9090,
@@ -1952,7 +1958,7 @@ func TestDoesNotUpdateIfConfigurationHasNotChanged(t *testing.T) {
 
 	entries := []controller.IngressEntry{
 		{
-			Host:           "chris.com",
+			Host:           "foo.com",
 			Path:           "/path",
 			ServiceAddress: "service",
 			ServicePort:    9090,
@@ -1984,7 +1990,7 @@ func TestRateLimitedForUpdates(t *testing.T) {
 
 	entries := []controller.IngressEntry{
 		{
-			Host:           "chris.com",
+			Host:           "foo.com",
 			Path:           "/path",
 			ServiceAddress: "service",
 			ServicePort:    9090,
@@ -1993,7 +1999,7 @@ func TestRateLimitedForUpdates(t *testing.T) {
 
 	updatedEntries := []controller.IngressEntry{
 		{
-			Host:           "chris.com",
+			Host:           "foo.com",
 			Path:           "/path",
 			ServiceAddress: "somethingdifferent",
 			ServicePort:    9090,
@@ -2161,7 +2167,7 @@ func TestFailsToUpdateIfConfigurationIsBroken(t *testing.T) {
 
 	entries := []controller.IngressEntry{
 		{
-			Host:           "chris.com",
+			Host:           "foo.com",
 			Path:           "/path",
 			ServiceAddress: "service",
 			ServicePort:    9090,
