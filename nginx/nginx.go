@@ -453,7 +453,7 @@ func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 }
 
 func upstreamID(e controller.IngressEntry) string {
-	return fmt.Sprintf("%s.%s.%d", e.Namespace, e.ServiceAddress, e.ServicePort)
+	return fmt.Sprintf("%s.%s.%s.%d", e.Namespace, e.Name, e.ServiceAddress, e.ServicePort)
 }
 
 func (s server) HasRootLocation() bool {

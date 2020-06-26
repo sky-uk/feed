@@ -555,10 +555,25 @@ func TestNginxIngressEntries(t *testing.T) {
 			defaultConf,
 			[]controller.IngressEntry{
 				{
+					Host:                            "foo.com",
+					Namespace:                       "core",
+					Name:                            "foo-ingress",
+					Path:                            "/path",
+					ServiceAddress:                  "service",
+					ServicePort:                     8080,
+					Allow:                           []string{"10.82.0.0/16"},
+					StripPaths:                      true,
+					ExactPath:                       false,
+					BackendTimeoutSeconds:           1,
+					BackendKeepaliveTimeout:         2 * time.Minute,
+					BackendMaxConnections:           300,
+					BackendMaxRequestsPerConnection: 2000,
+				},
+				{
 					Host:                  "foo.com",
 					Namespace:             "core",
-					Name:                  "foo-ingress",
-					Path:                  "/path",
+					Name:                  "foo-ingress-different-path",
+					Path:                  "/same-service-different-path",
 					ServiceAddress:        "service",
 					ServicePort:           8080,
 					Allow:                 []string{"10.82.0.0/16"},
@@ -583,16 +598,22 @@ func TestNginxIngressEntries(t *testing.T) {
 				},
 			},
 			[]string{
-				"    upstream core.anotherservice.6060 {\n" +
+				"    upstream core.foo-ingress-another.anotherservice.6060 {\n" +
 					"        server anotherservice:6060 max_conns=1024;\n" +
 					"        keepalive 1024;\n" +
 					"        keepalive_requests 100;\n" +
 					"        keepalive_timeout 300s;\n" +
 					"    }",
-				"    upstream core.service.8080 {\n" +
+				"    upstream core.foo-ingress-different-path.service.8080 {\n" +
 					"        server service:8080 max_conns=0;\n" +
 					"        keepalive 1024;\n" +
 					"        keepalive_requests 1024;\n" +
+					"    }",
+				"    upstream core.foo-ingress.service.8080 {\n" +
+					"        server service:8080 max_conns=300;\n" +
+					"        keepalive 1024;\n" +
+					"        keepalive_requests 2000;\n" +
+					"        keepalive_timeout 120s;\n" +
 					"    }",
 			},
 			[]string{
@@ -605,7 +626,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					"\n" +
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"            proxy_pass http://core.foo-ingress-another.anotherservice.6060;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
@@ -628,10 +649,33 @@ func TestNginxIngressEntries(t *testing.T) {
 					"        location /path/ {\n" +
 					"            # Strip location path when proxying.\n" +
 					"            # Beware this can cause issues with url encoded characters.\n" +
-					"            proxy_pass http://core.service.8080/;\n" +
+					"            proxy_pass http://core.foo-ingress.service.8080/;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
+					"\n" +
+					"            # Close proxy connections after backend keepalive time.\n" +
+					"            proxy_read_timeout 1s;\n" +
+					"            proxy_send_timeout 1s;\n" +
+					"            proxy_buffer_size 0k;\n" +
+					"            proxy_buffers 0 0k;\n" +
+					"\n" +
+					"            # Allow localhost for debugging\n" +
+					"            allow 127.0.0.1;\n" +
+					"\n" +
+					"            # Restrict clients\n" +
+					"            allow 10.82.0.0/16;\n" +
+					"            \n" +
+					"            deny all;\n" +
+					"        }\n" +
+					"\n" +
+					"        location /same-service-different-path/ {\n" +
+					"            # Strip location path when proxying.\n" +
+					"            # Beware this can cause issues with url encoded characters.\n" +
+					"            proxy_pass http://core.foo-ingress-different-path.service.8080/;\n" +
+					"\n" +
+					"            # Set display name for vhost stats.\n" +
+					"            vhost_traffic_status_filter_by_set_key /same-service-different-path/::$proxy_host $server_name;\n" +
 					"\n" +
 					"            # Close proxy connections after backend keepalive time.\n" +
 					"            proxy_read_timeout 1s;\n" +
@@ -808,7 +852,7 @@ func TestNginxIngressEntries(t *testing.T) {
 				"\n" +
 				"        location / {\n" +
 				"            # Keep original path when proxying.\n" +
-				"            proxy_pass http://core.foo.8080;\n" +
+				"            proxy_pass http://core.0-first-ingress.foo.8080;\n" +
 				"\n" +
 				"            # Set display name for vhost stats.\n" +
 				"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
@@ -856,7 +900,7 @@ func TestNginxIngressEntries(t *testing.T) {
 				},
 			},
 			nil,
-			[]string{"proxy_pass http://core.service-1.8080"},
+			[]string{"proxy_pass http://core.ingress.service-1.8080"},
 		},
 		{
 			"Duplicate host/path entries are ignored, the first one is kept order by Port",
@@ -884,7 +928,7 @@ func TestNginxIngressEntries(t *testing.T) {
 				},
 			},
 			nil,
-			[]string{"proxy_pass http://core.service.1"},
+			[]string{"proxy_pass http://core.ingress.service.1"},
 		},
 		{
 			"Check path slashes are added correctly",
@@ -1006,7 +1050,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			},
 
 			[]string{
-				"    upstream core.service.9090 {\n" +
+				"    upstream core.foo-ingress.service.9090 {\n" +
 					"        server service:9090 max_conns=0;\n" +
 					"        keepalive 1024;\n" +
 					"        keepalive_requests 1024;\n" +
@@ -1056,7 +1100,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			},
 			nil,
 			[]string{
-				"    proxy_pass http://core.service.9090;\n",
+				"    proxy_pass http://core.foo-ingress.service.9090;\n",
 			},
 		},
 		{
@@ -1113,7 +1157,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]string{
 				"        location / {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.9090;\n" +
+					"            proxy_pass http://core.foo-ingress.service.9090;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
@@ -1134,7 +1178,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					"\n" +
 					"        location /01234-hi/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.9090;\n" +
+					"            proxy_pass http://core.foo-ingress.service.9090;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /01234-hi/::$proxy_host $server_name;\n" +
@@ -1155,7 +1199,7 @@ func TestNginxIngressEntries(t *testing.T) {
 					"\n" +
 					"        location /lala/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.9090;\n" +
+					"            proxy_pass http://core.foo-ingress.service.9090;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /lala/::$proxy_host $server_name;\n" +
@@ -1212,7 +1256,7 @@ func TestNginxIngressEntries(t *testing.T) {
 			[]string{
 				"        location /some-path/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.9090;\n" +
+					"            proxy_pass http://core.some-ingress.service.9090;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /some-path/::$proxy_host $server_name;\n" +
@@ -1304,7 +1348,7 @@ func TestNginxRootPathLocations(t *testing.T) {
 					"\n" +
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"            proxy_pass http://core.no-root-location-ingress-another.anotherservice.6060;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
@@ -1325,7 +1369,7 @@ func TestNginxRootPathLocations(t *testing.T) {
 					"\n" +
 					"        location /path/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.8080;\n" +
+					"            proxy_pass http://core.no-root-location-ingress.service.8080;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
@@ -1378,7 +1422,7 @@ func TestNginxRootPathLocations(t *testing.T) {
 					"\n" +
 					"        location / {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.7123;\n" +
+					"            proxy_pass http://core.root-location-ingress.service.7123;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
@@ -1399,7 +1443,7 @@ func TestNginxRootPathLocations(t *testing.T) {
 					"\n" +
 					"        location /somepath/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.someservice.7124;\n" +
+					"            proxy_pass http://core.some-root-location-ingress.someservice.7124;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /somepath/::$proxy_host $server_name;\n" +
@@ -1450,7 +1494,7 @@ func TestNginxRootPathLocations(t *testing.T) {
 					"\n" +
 					"        location = / {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.7123;\n" +
+					"            proxy_pass http://core.root-location-ingress.service.7123;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
@@ -1471,7 +1515,7 @@ func TestNginxRootPathLocations(t *testing.T) {
 					"\n" +
 					"        location /somepath/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.someservice.7124;\n" +
+					"            proxy_pass http://core.some-root-location-ingress.someservice.7124;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /somepath/::$proxy_host $server_name;\n" +
@@ -1592,7 +1636,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"            proxy_pass http://core.another-ingress.anotherservice.6060;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
@@ -1613,7 +1657,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location /path/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.8080;\n" +
+					"            proxy_pass http://core.an-ingress.service.8080;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
@@ -1646,7 +1690,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location / {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.8080;\n" +
+					"            proxy_pass http://core.an-ingress.service.8080;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
@@ -1667,7 +1711,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"            proxy_pass http://core.another-ingress.anotherservice.6060;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
@@ -1688,7 +1732,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location /path/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.8080;\n" +
+					"            proxy_pass http://core.an-ingress.service.8080;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
@@ -1766,7 +1810,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location / {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.8080;\n" +
+					"            proxy_pass http://core.an-ingress.service.8080;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /::$proxy_host $server_name;\n" +
@@ -1787,7 +1831,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"            proxy_pass http://core.another-ingress.anotherservice.6060;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
@@ -1808,7 +1852,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location /path/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.8080;\n" +
+					"            proxy_pass http://core.an-ingress.service.8080;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
@@ -1838,7 +1882,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location /anotherpath/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.anotherservice.6060;\n" +
+					"            proxy_pass http://core.another-ingress.anotherservice.6060;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /anotherpath/::$proxy_host $server_name;\n" +
@@ -1859,7 +1903,7 @@ func TestNginxRootPathLocationsUpdates(t *testing.T) {
 					"\n" +
 					"        location /path/ {\n" +
 					"            # Keep original path when proxying.\n" +
-					"            proxy_pass http://core.service.8080;\n" +
+					"            proxy_pass http://core.an-ingress.service.8080;\n" +
 					"\n" +
 					"            # Set display name for vhost stats.\n" +
 					"            vhost_traffic_status_filter_by_set_key /path/::$proxy_host $server_name;\n" +
