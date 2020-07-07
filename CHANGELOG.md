@@ -1,3 +1,10 @@
+# v4.0.0
+* Support latest backend config for nginx upstream module
+  * Support setting keepalive_requests and keepalive_timeout for nginx upstream module
+  * Support annotations on ingress to be able to set the values in nginx config for each upstream
+* Build upstream id including ingress name (This might increase the number of virtual host entries)
+  * Needed to be able to configure an upstream for ingresses which has same hostname and backend service but with a different path. This is so that the configuration won't be overwritten in this scenario.
+
 # v3.1.7
 * [BUGFIX] Do not generate Prometheus metrics for invalid nginx-vts entries
 
