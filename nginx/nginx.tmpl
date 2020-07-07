@@ -130,6 +130,10 @@ http {
     upstream {{ $upstream.ID }} {
         server {{ $upstream.Server }} max_conns={{ $upstream.MaxConnections }};
         keepalive {{ $keepalive }};
+        keepalive_requests {{ $upstream.KeepaliveRequests }};
+        {{- if ne $upstream.KeepaliveTimeout "" }}
+        keepalive_timeout {{ $upstream.KeepaliveTimeout}};
+        {{- end }}
     }
 {{ end }}
 

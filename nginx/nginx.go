@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	nginxStartDelay       = time.Millisecond * 100
-	metricsUpdateInterval = time.Second * 10
+	nginxStartDelay                         = time.Millisecond * 100
+	metricsUpdateInterval                   = time.Second * 10
+	defaultMaxRequestsPerUpstreamConnection = uint64(1024)
 )
 
 // Port configuration
@@ -130,9 +131,11 @@ type server struct {
 }
 
 type upstream struct {
-	ID             string
-	Server         string
-	MaxConnections int
+	ID                string
+	Server            string
+	MaxConnections    int
+	KeepaliveTimeout  string
+	KeepaliveRequests uint64
 }
 
 type location struct {
@@ -422,10 +425,20 @@ func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 	idToUpstream := make(map[string]*upstream)
 
 	for _, ingressEntry := range entries {
+		maxRequestsPerConnection := defaultMaxRequestsPerUpstreamConnection
+		if ingressEntry.BackendMaxRequestsPerConnection != 0 {
+			maxRequestsPerConnection = ingressEntry.BackendMaxRequestsPerConnection
+		}
+		keepaliveTimeout := ""
+		if ingressEntry.BackendKeepaliveTimeout != 0 {
+			keepaliveTimeout = fmt.Sprintf("%ds", uint64(ingressEntry.BackendKeepaliveTimeout.Seconds()))
+		}
 		upstream := &upstream{
-			ID:             upstreamID(ingressEntry),
-			Server:         fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
-			MaxConnections: ingressEntry.BackendMaxConnections,
+			ID:                upstreamID(ingressEntry),
+			Server:            fmt.Sprintf("%s:%d", ingressEntry.ServiceAddress, ingressEntry.ServicePort),
+			MaxConnections:    ingressEntry.BackendMaxConnections,
+			KeepaliveRequests: maxRequestsPerConnection,
+			KeepaliveTimeout:  keepaliveTimeout,
 		}
 		idToUpstream[upstream.ID] = upstream
 	}
@@ -440,7 +453,7 @@ func createUpstreamEntries(entries controller.IngressEntries) []*upstream {
 }
 
 func upstreamID(e controller.IngressEntry) string {
-	return fmt.Sprintf("%s.%s.%d", e.Namespace, e.ServiceAddress, e.ServicePort)
+	return fmt.Sprintf("%s.%s.%s.%d", e.Namespace, e.Name, e.ServiceAddress, e.ServicePort)
 }
 
 func (s server) HasRootLocation() bool {

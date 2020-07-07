@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/sky-uk/feed/k8s"
@@ -31,9 +32,13 @@ const (
 	stripPathAnnotation = "sky.uk/strip-path"
 	exactPathAnnotation = "sky.uk/exact-path"
 
-	backendTimeoutSeconds       = "sky.uk/backend-timeout-seconds"
-	proxyBufferSizeAnnotation   = "sky.uk/proxy-buffer-size-in-kb"
-	proxyBufferBlocksAnnotation = "sky.uk/proxy-buffer-blocks"
+	backendTimeoutSeconds = "sky.uk/backend-timeout-seconds"
+	// sets keepalive_timeout on nginx upstream (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#keepalive)
+	backendConnectionKeepalive = "sky.uk/backend-connection-keepalive"
+	// sets keepalive_requests on nginx upstream (http://nginx.org/en/docs/http/ngx_http_upstream_module.html#keepalive)
+	backendMaxRequestsPerConnection = "sky.uk/backend-max-requests-per-connection"
+	proxyBufferSizeAnnotation       = "sky.uk/proxy-buffer-size-in-kb"
+	proxyBufferBlocksAnnotation     = "sky.uk/proxy-buffer-blocks"
 
 	maxAllowedProxyBufferSize   = 32
 	maxAllowedProxyBufferBlocks = 8
@@ -302,6 +307,24 @@ func (c *controller) updateIngresses() (err error) {
 						if maxConnections, ok := ingress.Annotations[backendMaxConnections]; ok {
 							tmp, _ := strconv.Atoi(maxConnections)
 							entry.BackendMaxConnections = tmp
+						}
+
+						if maxRequestsPerConnection, ok := ingress.Annotations[backendMaxRequestsPerConnection]; ok {
+							intVal, err := strconv.ParseUint(maxRequestsPerConnection, 10, 64)
+							if err != nil {
+								log.Warnf("invalid value %v set for annotation for %q. Will continue with defaults", maxRequestsPerConnection, backendMaxRequestsPerConnection)
+							} else {
+								entry.BackendMaxRequestsPerConnection = intVal
+							}
+						}
+
+						if connectionKeepalive, ok := ingress.Annotations[backendConnectionKeepalive]; ok {
+							keepaliveTimeout, err := time.ParseDuration(connectionKeepalive)
+							if err != nil {
+								log.Warnf("invalid value %v set for annotation for %q. Will continue with defaults", connectionKeepalive, backendConnectionKeepalive)
+							} else {
+								entry.BackendKeepaliveTimeout = keepaliveTimeout
+							}
 						}
 
 						if proxyBufferSizeString, ok := ingress.Annotations[proxyBufferSizeAnnotation]; ok {
