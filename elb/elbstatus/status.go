@@ -19,6 +19,7 @@ import (
 // Config for creating a new ELB status updater.
 type Config struct {
 	Region              string
+	Endpoint            string
 	FrontendTagValue    string
 	IngressNameTagValue string
 	KubernetesClient    k8s.Client
@@ -26,7 +27,7 @@ type Config struct {
 
 // New creates a new ELB frontend status updater.
 func New(conf Config) (controller.Updater, error) {
-	awsSession, err := session.NewSession(&aws.Config{Region: &conf.Region})
+	awsSession, err := session.NewSession(&aws.Config{Region: aws.String(conf.Region), Endpoint: aws.String(conf.Endpoint)})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create ELB status updater: %v", err)
 	}

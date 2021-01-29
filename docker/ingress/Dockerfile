@@ -41,7 +41,7 @@ RUN chown -R feed:feed /nginx /var/cache/nginx
 
 COPY feed-ingress /
 # For binding VIP for merlin.
-RUN setcap "cap_net_admin=+ep" /feed-ingress
+#RUN setcap "cap_net_admin=+ep" /feed-ingress
 
 COPY nginx.tmpl /nginx/
 RUN chown feed:feed /nginx/nginx.tmpl
