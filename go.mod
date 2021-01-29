@@ -59,14 +59,19 @@ require (
 	github.com/ugorji/go v1.1.7 // indirect
 	github.com/vishvananda/netlink v1.0.0
 	github.com/vishvananda/netns v0.0.0-20190625233234-7109fa855b0f // indirect
+	github.com/yuin/goldmark v1.3.1 // indirect
 	go.etcd.io/bbolt v1.3.3 // indirect
-	golang.org/x/crypto v0.0.0-20191029031824-8986dd9e96cf // indirect
+	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect
 	golang.org/x/image v0.0.0-20190828090100-23ea20f87cfc // indirect
-	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
+	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
 	golang.org/x/mobile v0.0.0-20190826170111-cafc553e1ac5 // indirect
-	golang.org/x/mod v0.3.0 // indirect
-	golang.org/x/sys v0.0.0-20191104094858-e8c54fb511f6 // indirect
-	golang.org/x/tools v0.0.0-20200626171337-aa94e735be7f // indirect
+	golang.org/x/mod v0.4.1 // indirect
+	golang.org/x/net v0.0.0-20210119194325-5f4716e94777 // indirect
+	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a // indirect
+	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c // indirect
+	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf // indirect
+	golang.org/x/text v0.3.5 // indirect
+	golang.org/x/tools v0.1.0 // indirect
 	google.golang.org/api v0.9.0 // indirect
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55 // indirect
 	google.golang.org/grpc v1.23.0
