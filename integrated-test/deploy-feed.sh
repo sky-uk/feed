@@ -262,6 +262,18 @@ spec:
     targetPort: 8081
   selector:
     app: feed-ingress
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feed-ingress
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: feed-ingress
 EOF
 }
 
@@ -324,7 +336,9 @@ EOF
 }
 
 function run_tests() {
-  local feed_endpoint=$1
+  local feed_admin_endpoint=$1
+  local feed_endpoint=$2
+  local target_backend=$3
   kubectl --context $CONTEXT -n $NAMESPACE delete job/feed-ingress-test --ignore-not-found
   cat <<EOF | kubectl --context $CONTEXT -n $NAMESPACE apply -f -
 apiVersion: batch/v1
@@ -347,9 +361,10 @@ spec:
           command:
             - sh
             - -ce
-            - 'echo "=== Checking basic_status ==="; curl -I ${feed_endpoint}/basic_status; \
-               echo "=== Checking status ==="; curl -I ${feed_endpoint}/status; \
-               echo "=== Checking health ==="; curl -I ${feed_endpoint}/health'
+            - 'echo "=== Checking basic_status ==="; curl -I ${feed_admin_endpoint}/basic_status; \
+               echo "=== Checking status ==="; curl -I ${feed_admin_endpoint}/status; \
+               echo "=== Checking health ==="; curl -I ${feed_admin_endpoint}/health; \
+               echo "=== Checking ingress ==="; curl -I ${feed_endpoint} -H "Host: ${target_backend}"'
           imagePullPolicy: Always
       restartPolicy: Never
 EOF
@@ -380,4 +395,4 @@ create_namespace
 deploy_fake_aws ${fake_aws_image}
 deploy_feed ${feed_image} "http://fake-aws.${NAMESPACE}" ${ingress_class}
 create_fake_ingress ${ingress_class}
-run_tests "http://feed-ingress-admin.${NAMESPACE}"
+run_tests "http://feed-ingress-admin.${NAMESPACE}" "http://feed-ingress.${NAMESPACE}" "fake-ingress.kind.local"
