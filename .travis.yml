@@ -6,11 +6,17 @@ addons:
 
 language: go
 
+sudo: required
+
 go:
 - 1.13
 
 services:
 - docker
+
+before_install:
+  - wget https://github.com/aquasecurity/trivy/releases/download/v0.15.0/trivy_0.15.0_Linux-64bit.tar.gz
+  - sudo tar -C /usr/local/bin -zxf trivy_0.15.0_Linux-64bit.tar.gz
 
 install:
 - make setup

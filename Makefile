@@ -19,11 +19,11 @@ else ifeq ("$(os)", "Darwin")
 endif
 GOARCH ?= amd64
 
-.PHONY: all format test build vet lint copy docker release checkformat check clean fakenginx
+.PHONY: all format test build vet lint copy docker release checkformat check clean fakenginx check-vulnerabilities
 
 all : format check build
 check : vet lint test
-travis : checkformat check docker
+travis : checkformat check docker check-vulnerabilities
 
 setup:
 	@echo "== setup"
@@ -98,3 +98,7 @@ else
 	docker push $(image_prefix)-dns:$(git_tag)
 	docker push $(image_prefix)-dns:latest
 endif
+
+check-vulnerabilities:
+	@echo "== Checking for vulnerabilities in the docker image"
+	trivy image --exit-code=1 --severity="HIGH,CRITICAL" $(image_prefix)-ingress:latest
