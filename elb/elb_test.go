@@ -137,7 +137,7 @@ func mockInstanceMetadata(mockMd *fakeMetadata, instanceID string) {
 }
 
 func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
-	e, _ := New(region, "", clusterName, ingressName, 1, 0)
+	e, _ := New(region, clusterName, ingressName, 1, 0)
 	mockElb := &fakeElb{}
 	mockMetadata := &fakeMetadata{}
 	e.(*elb).awsElb = mockElb
@@ -147,7 +147,7 @@ func setup() (controller.Updater, *fakeElb, *fakeMetadata) {
 
 func TestMetricsRegisteredCorrectly(t *testing.T) {
 	//when
-	_, _ = New(region, "", clusterName, ingressName, 1, 0)
+	_, _ = New(region, clusterName, ingressName, 1, 0)
 
 	//then
 	assert.Equal(t, "feed_ingress_frontends_attached", metricName(attachedFrontendGauge))
@@ -164,7 +164,7 @@ func metricName(c prometheus.Collector) string {
 
 func TestCanNotCreateUpdaterWithoutFrontEndTagValue(t *testing.T) {
 	//when
-	_, err := New(region, "", "", ingressName, 1, 0)
+	_, err := New(region, "", ingressName, 1, 0)
 
 	//then
 	assert.Error(t, err)
@@ -172,7 +172,7 @@ func TestCanNotCreateUpdaterWithoutFrontEndTagValue(t *testing.T) {
 
 func TestCanNotCreateUpdaterWithoutIngressNameTagValue(t *testing.T) {
 	//when
-	_, err := New(region, "", clusterName, "", 1, 0)
+	_, err := New(region, clusterName, "", 1, 0)
 
 	//then
 	assert.Error(t, err)

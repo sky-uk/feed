@@ -25,7 +25,7 @@ const FrontendTag = "sky.uk/KubernetesClusterFrontend"
 const IngressClassTag = "sky.uk/KubernetesClusterIngressClass"
 
 // New creates a new ELB frontend
-func New(region string, elbEndpoint string, frontendTagValue string, ingressClassTagValue string, expectedNumber int, drainDelay time.Duration) (controller.Updater, error) {
+func New(region string, frontendTagValue string, ingressClassTagValue string, expectedNumber int, drainDelay time.Duration) (controller.Updater, error) {
 	if frontendTagValue == "" {
 		return nil, fmt.Errorf("unable to create ELB updater: missing value for the tag %v", FrontendTag)
 	}
@@ -36,7 +36,7 @@ func New(region string, elbEndpoint string, frontendTagValue string, ingressClas
 	initMetrics()
 	log.Infof("ELB Front end region: %s, cluster: %s, expected frontends: %d, ingress controller: %s", region, frontendTagValue, expectedNumber, ingressClassTagValue)
 
-	awsSession, err := session.NewSession(&aws.Config{Region: aws.String(region), Endpoint: aws.String(elbEndpoint)})
+	awsSession, err := session.NewSession(&aws.Config{Region: &region})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create ELB updater: %v", err)
 	}

@@ -12,7 +12,6 @@ import (
 
 var (
 	region                         string
-	elbEndpoint                    string
 	elbFrontendTagValue            string
 	elbExpectedNumber              int
 	drainDelay                     time.Duration
@@ -39,8 +38,6 @@ var elbCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(elbCmd)
 
-	elbCmd.Flags().StringVar(&elbEndpoint, "elb-endpoint", "",
-		"An optional endpoint URL for the AWS stack. Set this to `\"\"` to use the default generated endpoint.")
 	elbCmd.Flags().StringVar(&region, "region", defaultRegion,
 		"AWS region for frontend attachment.")
 	elbCmd.Flags().StringVar(&elbFrontendTagValue, "elb-frontend-tag-value", defaultLbFrontendTagValue,
@@ -53,7 +50,7 @@ func init() {
 }
 
 func appendElbIngressUpdaters(kubernetesClient k8s.Client, updaters []controller.Updater) ([]controller.Updater, error) {
-	elbUpdater, err := elb.New(region, elbEndpoint, elbFrontendTagValue, ingressClassName, elbExpectedNumber, drainDelay)
+	elbUpdater, err := elb.New(region, elbFrontendTagValue, ingressClassName, elbExpectedNumber, drainDelay)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +58,6 @@ func appendElbIngressUpdaters(kubernetesClient k8s.Client, updaters []controller
 
 	statusConfig := elbstatus.Config{
 		Region:              region,
-		Endpoint:            elbEndpoint,
 		FrontendTagValue:    elbFrontendTagValue,
 		IngressNameTagValue: ingressClassName,
 		KubernetesClient:    kubernetesClient,
