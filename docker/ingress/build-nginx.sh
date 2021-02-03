@@ -1,16 +1,30 @@
-#!/bin/bash
+#!/usr/bin/env sh
 
 set -ex
 
-apt-get update
-apt-get install --no-install-suggests --no-install-recommends -y \
-    build-essential \
-    cmake automake autogen autoconf libtool \
-    libc6 libc6-dev \
-    libpcre3 libpcre3-dev libpcrecpp0v5 \
-    zlib1g zlib1g-dev \
-    libaio1 libaio-dev \
-    sudo libssl-dev
+# From https://github.com/nginxinc/docker-nginx/blob/master/mainline/alpine/Dockerfile
+# Build dependencies
+apk add --no-cache --virtual .build-deps \
+    gcc \
+    libc-dev \
+    make \
+    openssl-dev \
+    pcre-dev \
+    zlib-dev \
+    linux-headers \
+    libxslt-dev \
+    gd-dev \
+    geoip-dev \
+    perl-dev \
+    libedit-dev \
+    mercurial \
+    bash \
+    alpine-sdk \
+    findutils \
+    cmake
+
+# Runtime dependencies
+apk add --no-cache pcre
 
 echo "--- Downloading NGINX and modules"
 mkdir /tmp/nginx
@@ -27,12 +41,13 @@ opentracing_nginx_tarball="nginx-opentracing-${OPENTRACING_NGINX_VERSION}.tar.gz
 opentracing_cpp_tarball="opentracing-cpp-${OPENTRACING_CPP_VERSION}.tar.gz"
 jaeger_tarball="jaeger-client-cpp-${JAEGER_VERSION}.tar.gz"
 
+# 2 spaces required between hash and filename
 touch hashes
-echo "${NGINX_SHA256} ${nginx_tarball}" >> hashes
-echo "${VTS_SHA256} ${vts_tarball}" >> hashes
-echo "${OPENTRACING_NGINX_SHA256} ${opentracing_nginx_tarball}" >> hashes
-echo "${OPENTRACING_CPP_SHA256} ${opentracing_cpp_tarball}" >> hashes
-echo "${JAEGER_SHA256} ${jaeger_tarball}" >> hashes
+echo "${NGINX_SHA256}  ${nginx_tarball}" >> hashes
+echo "${VTS_SHA256}  ${vts_tarball}" >> hashes
+echo "${OPENTRACING_NGINX_SHA256}  ${opentracing_nginx_tarball}" >> hashes
+echo "${OPENTRACING_CPP_SHA256}  ${opentracing_cpp_tarball}" >> hashes
+echo "${JAEGER_SHA256}  ${jaeger_tarball}" >> hashes
 if ! sha256sum -c hashes; then
     echo "sha256 hashes do not match downloaded files"
     exit 1
@@ -110,6 +125,5 @@ mkdir -p /nginx/modules
 cp objs/ngx_http_opentracing_module.so /nginx/modules/
 
 echo "--- Cleaning up"
-apt-get purge -y build-essential ca-certificates libc6-dev libpcre3-dev zlib1g-dev libaio-dev gcc-5 cmake automake autogen autoconf libtool
-apt-get clean -y
-rm -rf /var/lib/apt/lists/* /tmp/* /root/.hunter
+apk del .build-deps
+rm -rf /tmp/* /root/.hunter

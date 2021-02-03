@@ -11,6 +11,14 @@ files := $(shell find . -path ./vendor -prune -o -name '*.go' -print)
 build_time := $(shell date -u)
 ldflags := -X "github.com/sky-uk/feed/feed-ingress/cmd.version=$(version)" -X "github.com/sky-uk/feed/feed-ingress/cmd.buildTime=$(build_time)"
 
+os := $(shell uname)
+ifeq ("$(os)", "Linux")
+	GOOS = linux
+else ifeq ("$(os)", "Darwin")
+	GOOS = darwin
+endif
+GOARCH ?= amd64
+
 .PHONY: all format test build vet lint copy docker release checkformat check clean fakenginx
 
 all : format check build
@@ -29,7 +37,7 @@ format :
 
 build :
 	@echo "== build"
-	@go install -v ./feed-ingress/... ./feed-dns/...
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go install -v ./feed-ingress/... ./feed-dns/...
 
 unformatted = $(shell goimports -l $(files))
 
