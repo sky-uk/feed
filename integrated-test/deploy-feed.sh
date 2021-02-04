@@ -164,7 +164,7 @@ spec:
         - --nginx-update-period=5m
         - --access-log
         - --access-log-dir=/var/log/nginx
-        - --nginx-opentracing-plugin-path=/usr/local/lib64/libjaegertracing.so
+        - --nginx-opentracing-plugin-path=/usr/local/lib64/libjaegertracing.so #for alpine based images
         - --nginx-opentracing-config-path=/etc/opentracing/jaeger-nginx-config.json
 
         # Controller health determines readiness.
@@ -395,7 +395,7 @@ metadata:
   name: feed-tests-script
   namespace: $NAMESPACE
 data:
-  feed-ingress-tests.sh: |2
+  feed-ingress-tests.sh: |
     #!/bin/sh
     set -e
 
@@ -425,7 +425,7 @@ data:
 
     echo "=== Checking traces ==="
     traces=\$(curl -sSf ${jaeger_api_endpoint}/api/traces?service=${jaeger_service} | jq -r ".data[].traceID")
-    traces_count=\$(echo $traces | wc -l)
+    traces_count=\$(echo \$traces | wc -l)
     if [[ "\$traces_count" == "0" ]];then
        echo "No traces found"
        exit 1
