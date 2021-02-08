@@ -1,3 +1,6 @@
+# v4.1.0
+* Switch feed-ingress base image to alpine to reduce the number of vulnerabilities
+
 # v4.0.0
 * Support latest backend config for nginx upstream module
   * Support setting keepalive_requests and keepalive_timeout for nginx upstream module

@@ -11,11 +11,19 @@ files := $(shell find . -path ./vendor -prune -o -name '*.go' -print)
 build_time := $(shell date -u)
 ldflags := -X "github.com/sky-uk/feed/feed-ingress/cmd.version=$(version)" -X "github.com/sky-uk/feed/feed-ingress/cmd.buildTime=$(build_time)"
 
-.PHONY: all format test build vet lint copy docker release checkformat check clean fakenginx
+os := $(shell uname)
+ifeq ("$(os)", "Linux")
+	GOOS = linux
+else ifeq ("$(os)", "Darwin")
+	GOOS = darwin
+endif
+GOARCH ?= amd64
+
+.PHONY: all format test build vet lint copy docker release checkformat check clean fakenginx check-vulnerabilities
 
 all : format check build
 check : vet lint test
-travis : checkformat check docker
+travis : checkformat check docker check-vulnerabilities
 
 setup:
 	@echo "== setup"
@@ -29,7 +37,7 @@ format :
 
 build :
 	@echo "== build"
-	@go install -v ./feed-ingress/... ./feed-dns/...
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go install -v ./feed-ingress/... ./feed-dns/...
 
 unformatted = $(shell goimports -l $(files))
 
@@ -90,3 +98,7 @@ else
 	docker push $(image_prefix)-dns:$(git_tag)
 	docker push $(image_prefix)-dns:latest
 endif
+
+check-vulnerabilities:
+	@echo "== Checking for vulnerabilities in the docker image"
+	trivy image --exit-code=1 --severity="HIGH,CRITICAL" $(image_prefix)-ingress:latest

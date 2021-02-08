@@ -1,19 +1,14 @@
-FROM debian:stretch-slim
+FROM alpine:3.13
 
 # Install useful diagnostic packages
-RUN apt-get update \
-    && apt-get dist-upgrade -y \
-    && apt-get install --no-install-suggests --no-install-recommends -y \
-        libcap2-bin \
+RUN apk add --no-cache \
+        libcap \
         curl \
         ca-certificates \
-        dnsutils \
-        vim-tiny \
+        bind-tools \
+        vim \
         lsof \
-        iproute2 \
-    && apt-get clean -y \
-    && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/* /tmp/*
+        iproute2
 
 # Install NGINX
 
@@ -35,7 +30,7 @@ RUN /tmp/build-nginx.sh
 RUN setcap "cap_net_bind_service=+ep" /usr/sbin/nginx
 
 # Setup feed controller
-RUN useradd -s /sbin/nologin feed
+RUN adduser --shell /sbin/nologin --disabled-password feed
 RUN mkdir -p /nginx /var/cache/nginx
 RUN chown -R feed:feed /nginx /var/cache/nginx
 

@@ -170,7 +170,7 @@ To enable OpenTracing, you will need to provide the following options:
 
 ```bash
 # Define the path to the OpenTracing vendor plugin
---nginx-opentracing-plugin-path=/usr/local/lib/libjaegertracing_plugin.linux_amd64.so
+--nginx-opentracing-plugin-path=/usr/local/lib64/libjaegertracing.so
 # Define the path to the config for the vendor plugin
 --nginx-opentracing-config-path=/etc/jaeger-nginx-config.json
 ```
