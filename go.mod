@@ -60,13 +60,12 @@ require (
 	github.com/vishvananda/netlink v1.0.0
 	github.com/vishvananda/netns v0.0.0-20190625233234-7109fa855b0f // indirect
 	go.etcd.io/bbolt v1.3.3 // indirect
-	golang.org/x/crypto v0.0.0-20191029031824-8986dd9e96cf // indirect
 	golang.org/x/image v0.0.0-20190828090100-23ea20f87cfc // indirect
-	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
+	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
 	golang.org/x/mobile v0.0.0-20190826170111-cafc553e1ac5 // indirect
-	golang.org/x/mod v0.3.0 // indirect
-	golang.org/x/sys v0.0.0-20191104094858-e8c54fb511f6 // indirect
-	golang.org/x/tools v0.0.0-20200626171337-aa94e735be7f // indirect
+	golang.org/x/mod v0.4.1 // indirect
+	golang.org/x/sys v0.0.0-20210218155724-8ebf48af031b // indirect
+	golang.org/x/tools v0.1.0 // indirect
 	google.golang.org/api v0.9.0 // indirect
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55 // indirect
 	google.golang.org/grpc v1.23.0

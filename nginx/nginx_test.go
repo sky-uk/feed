@@ -60,6 +60,7 @@ func newConf(tmpDir string, binary string) Conf {
 		VhostStatsSharedMemory:       1,
 		OpenTracingPlugin:            "",
 		OpenTracingConfig:            "",
+		HTTPConf:                     HTTPConf{NginxSetRealIPFromHeader: "Some-Header-Name-From-Flag"},
 	}
 }
 
@@ -300,6 +301,7 @@ func TestNginxConfig(t *testing.T) {
 	httpConf.ClientHeaderBufferSize = 16
 	httpConf.ClientBodyBufferSize = 16
 	httpConf.LargeClientHeaderBufferBlocks = 4
+	httpConf.NginxSetRealIPFromHeader = "Some-Header-Name-From-Flag"
 
 	incorrectLargeClientHeaderBufferConf := defaultConf
 	incorrectLargeClientHeaderBufferConf.LargeClientHeaderBufferBlocks = 4
@@ -366,10 +368,10 @@ func TestNginxConfig(t *testing.T) {
 			},
 		},
 		{
-			"PROXY protocol disabled uses X-Forwarded-For header for real_ip",
+			"PROXY protocol disabled uses the header name passed in the flags for real_ip",
 			defaultConf,
 			[]string{
-				"real_ip_header X-Forwarded-For;",
+				"real_ip_header Some-Header-Name-From-Flag;",
 			},
 		},
 		{
@@ -2605,7 +2607,7 @@ var statusResponseBody = []byte(`{
           "hit": 0,
           "scarce": 0
         }
-      }      
+      }
     },
     "ingress-with-invalid-path.sandbox.cosmic.sky": {
       "/bad::": {
