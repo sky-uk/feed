@@ -1,3 +1,7 @@
+# v4.2.0
+* Add flag `set-real-ip-from-header` to specify the name of the request header for the [real ip module](http://nginx.org/en/docs/http/ngx_http_realip_module.html) to use
+  * The name of the header will be used by the real ip module in the `set_real_ip_from` directive.
+
 # v4.1.0
 * Switch feed-ingress base image to alpine to reduce the number of vulnerabilities
 

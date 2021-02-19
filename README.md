@@ -197,6 +197,10 @@ They can be overridden by passing the following arguments during startup.
 --nginx-large-client-header-buffer-blocks=4
 ```
 
+## Deriving client address from the request header
+A flag `set-real-ip-from-header` can be used to specify the name of the request header for the [real ip module](http://nginx.org/en/docs/http/ngx_http_realip_module.html) to use in the `set_real_ip_from` directive.
+The default value of this flag would be `X-Forwarded-For`
+
 ## Ingress status
 When using the [ELB](#elb), [NLB](#nlb) or [Merlin](#merlin) updaters, the ingress status will be updated with relevant
 load balancer information. This can then be used with other controllers such as `external-dns` which can set DNS for any
