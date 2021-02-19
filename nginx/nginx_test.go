@@ -60,6 +60,7 @@ func newConf(tmpDir string, binary string) Conf {
 		VhostStatsSharedMemory:       1,
 		OpenTracingPlugin:            "",
 		OpenTracingConfig:            "",
+		HTTPConf:                     HTTPConf{NginxSetRealIPFromHeader: "Some-Header-Name-From-Flag"},
 	}
 }
 
