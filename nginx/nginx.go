@@ -65,6 +65,7 @@ type HTTPConf struct {
 	ClientHeaderBufferSize        int
 	ClientBodyBufferSize          int
 	LargeClientHeaderBufferBlocks int
+	NginxSetRealIPFromHeader	 string
 }
 
 type nginx struct {

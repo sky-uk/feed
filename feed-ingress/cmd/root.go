@@ -91,6 +91,7 @@ const (
 	defaultClientHeaderBufferSize            = 16
 	defaultClientBodyBufferSize              = 16
 	defaultLargeClientHeaderBufferBlocks     = 4
+	defaultSetRealIpFromHeader				 = "X-Forwarded-For"
 
 	defaultIngressClassName                   = ""
 	defaultIncludeUnnamedIngresses            = false
@@ -218,6 +219,7 @@ func configureNginxFlags() {
 	rootCmd.PersistentFlags().IntVar(&nginxConfig.ClientHeaderBufferSize, "nginx-client-header-buffer-size-in-kb", defaultClientHeaderBufferSize, "Sets buffer size for reading client request header")
 	rootCmd.PersistentFlags().IntVar(&nginxConfig.ClientBodyBufferSize, "nginx-client-body-buffer-size-in-kb", defaultClientBodyBufferSize, "Sets buffer size for reading client request body")
 	rootCmd.PersistentFlags().IntVar(&nginxConfig.LargeClientHeaderBufferBlocks, "nginx-large-client-header-buffer-blocks", defaultLargeClientHeaderBufferBlocks, "Sets the maximum number of buffers used for reading large client request header")
+	rootCmd.PersistentFlags().StringVar(&nginxConfig.NginxSetRealIPFromHeader, "set-real-ip-from-header", defaultSetRealIpFromHeader, "Sets the name of the header to use to derive real ip for allow/deny")
 }
 
 func configurePrometheusFlags() {
