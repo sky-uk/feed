@@ -91,7 +91,7 @@ const (
 	defaultClientHeaderBufferSize            = 16
 	defaultClientBodyBufferSize              = 16
 	defaultLargeClientHeaderBufferBlocks     = 4
-	defaultSetRealIpFromHeader				 = "X-Forwarded-For"
+	defaultSetRealIpFromHeader               = "X-Forwarded-For"
 
 	defaultIngressClassName                   = ""
 	defaultIncludeUnnamedIngresses            = false
