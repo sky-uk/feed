@@ -45,9 +45,10 @@ var (
 	nginxOpenTracingPluginPath  string
 	nginxOpenTracingConfigPath  string
 
-	ingressClassName        string
-	includeUnnamedIngresses bool
-	namespaceSelector       string
+	ingressClassName           string
+	includeUnnamedIngresses    bool
+	namespaceSelectors         []string
+	matchAllNamespaceSelectors bool
 
 	pushgatewayURL             string
 	pushgatewayIntervalSeconds int
@@ -93,17 +94,16 @@ const (
 	defaultLargeClientHeaderBufferBlocks     = 4
 	defaultSetRealIPFromHeader               = "X-Forwarded-For"
 
-	defaultIngressClassName                   = ""
-	defaultIncludeUnnamedIngresses            = false
-	defaultIngressControllerNamespaceSelector = ""
-
+	defaultIngressClassName           = ""
+	defaultIncludeUnnamedIngresses    = false
 	defaultPushgatewayIntervalSeconds = 60
 )
 
 const (
-	ingressClassFlag                       = "ingress-class"
-	includeClasslessIngressesFlag          = "include-classless-ingresses"
-	ingressControllerNamespaceSelectorFlag = "ingress-controller-namespace-selector"
+	ingressClassFlag                        = "ingress-class"
+	includeClasslessIngressesFlag           = "include-classless-ingresses"
+	ingressControllerNamespaceSelectorsFlag = "ingress-controller-namespace-selectors"
+	matchAllNamespaceSelectorFlags          = "match-all-namespace-selectors"
 
 	ingressClassAnnotation = "kubernetes.io/ingress.class"
 )
@@ -148,8 +148,10 @@ func configureGeneralFlags() {
 		fmt.Sprintf("The name of this instance. It will consider only ingress resources with matching %s annotation values.", ingressClassAnnotation))
 	rootCmd.PersistentFlags().BoolVar(&includeUnnamedIngresses, includeClasslessIngressesFlag, defaultIncludeUnnamedIngresses,
 		fmt.Sprintf("In addition to ingress resources with matching %s annotations, also consider those with no such annotation.", ingressClassAnnotation))
-	rootCmd.PersistentFlags().StringVar(&namespaceSelector, ingressControllerNamespaceSelectorFlag, defaultIngressControllerNamespaceSelector,
-		"Only consider ingresses within namespaces having labels matching this selector (e.g. app=loadtest).")
+	rootCmd.PersistentFlags().StringSliceVar(&namespaceSelectors, ingressControllerNamespaceSelectorsFlag, []string{},
+		"Only consider ingresses within namespaces having labels matching the selectors (e.g. app=loadtest).")
+	rootCmd.PersistentFlags().BoolVar(&matchAllNamespaceSelectors, matchAllNamespaceSelectorFlags, false,
+		fmt.Sprintf("Use only those namespaces containing all the labels passed in %s flag. Default is any i.e or match of labels", ingressControllerNamespaceSelectorsFlag))
 
 	_ = rootCmd.PersistentFlags().MarkDeprecated(includeClasslessIngressesFlag,
 		fmt.Sprintf("please annotate ingress resources explicitly with %s", ingressClassAnnotation))

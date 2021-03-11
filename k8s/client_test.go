@@ -337,6 +337,128 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("GetIngresses", func() {
+		var (
+			fakesIngressStore        *cache.FakeCustomStore
+			fakesNamespaceStore      *cache.FakeCustomStore
+			fakesNamespaceController *fakeController
+			fakesIngressController   *fakeController
+			clt                      *client
+		)
+
+		BeforeEach(func() {
+			fakesNamespaceController = &fakeController{}
+			fakesIngressController = &fakeController{}
+			fakesIngressStore = &cache.FakeCustomStore{}
+			fakesNamespaceStore = &cache.FakeCustomStore{}
+			clt = &client{
+				namespaceController: fakesNamespaceController,
+				ingressController:   fakesIngressController,
+				ingressStore:        fakesIngressStore,
+				namespaceStore:      fakesNamespaceStore,
+			}
+			fakesNamespaceController.On("HasSynced").Return(true)
+			fakesIngressController.On("HasSynced").Return(true)
+		})
+
+		It("should match all provided labels on ingress namespace", func() {
+			// given
+			namespaceSelectors := []*NamespaceSelector{
+				{
+					LabelName:  "some-label-name",
+					LabelValue: "some-value",
+				},
+				{
+					LabelName:  "team",
+					LabelValue: "some-team-name",
+				},
+			}
+			fakesIngressStore.ListFunc = func() []interface{} {
+				ingresses := make([]interface{}, 2)
+				ingresses[0] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+					Namespace: "matching-namespace",
+				}}
+				ingresses[1] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+					Namespace: "non-matching-namespace",
+				}}
+				return ingresses
+			}
+
+			fakesNamespaceStore.ListFunc = func() []interface{} {
+				namespaces := make([]interface{}, 2)
+				namespaces[0] = &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
+					Name: "matching-namespace",
+					Labels: map[string]string{
+						"some-label-name": "some-value",
+						"team":            "some-team-name",
+					},
+				}}
+				namespaces[1] = &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
+					Name: "non-matching-namespace",
+					Labels: map[string]string{
+						"team": "some-team-name",
+					},
+				}}
+				return namespaces
+			}
+
+			// when
+			ingresses, err := clt.GetIngresses(namespaceSelectors, true)
+			Expect(err).To(BeNil())
+			Expect(len(ingresses)).To(Equal(1))
+			Expect(ingresses[0].Namespace).To(Equal("matching-namespace"))
+		})
+
+		It("should match any provided labels on ingress namespace", func() {
+			// given
+			namespaceSelectors := []*NamespaceSelector{
+				{
+					LabelName:  "team",
+					LabelValue: "some-team-1",
+				},
+				{
+					LabelName:  "team",
+					LabelValue: "some-team-2",
+				},
+			}
+			fakesIngressStore.ListFunc = func() []interface{} {
+				ingresses := make([]interface{}, 2)
+				ingresses[0] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+					Namespace: "matching-namespace-one",
+				}}
+				ingresses[1] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+					Namespace: "matching-namespace-two",
+				}}
+				return ingresses
+			}
+
+			fakesNamespaceStore.ListFunc = func() []interface{} {
+				namespaces := make([]interface{}, 2)
+				namespaces[0] = &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
+					Name: "matching-namespace-one",
+					Labels: map[string]string{
+						"some-label-name": "some-value",
+						"team":            "some-team-1",
+					},
+				}}
+				namespaces[1] = &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
+					Name: "matching-namespace-two",
+					Labels: map[string]string{
+						"team": "some-team-2",
+					},
+				}}
+				return namespaces
+			}
+
+			// when
+			ingresses, err := clt.GetIngresses(namespaceSelectors, false)
+			Expect(err).To(BeNil())
+			Expect(len(ingresses)).To(Equal(2))
+			Expect(ingresses[0].Namespace).To(Equal("matching-namespace-one"))
+			Expect(ingresses[1].Namespace).To(Equal("matching-namespace-two"))
+		})
+	})
+
 	Describe("GetServices", func() {
 		var (
 			fakesServiceStore      *cache.FakeCustomStore

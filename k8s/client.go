@@ -39,7 +39,7 @@ type Client interface {
 	GetAllIngresses() ([]*v1beta1.Ingress, error)
 
 	// GetIngresses returns ingresses in namespaces with matching labels
-	GetIngresses(*NamespaceSelector) ([]*v1beta1.Ingress, error)
+	GetIngresses([]*NamespaceSelector, bool) ([]*v1beta1.Ingress, error)
 
 	// GetServices returns all the services in the cluster.
 	GetServices() ([]*v1.Service, error)
@@ -103,10 +103,10 @@ func New(kubeconfig string, resyncPeriod time.Duration, stopCh chan struct{}) (C
 }
 
 func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
-	return c.GetIngresses(nil)
+	return c.GetIngresses(nil, false)
 }
 
-func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, error) {
+func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllNamespaceSelectors bool) ([]*v1beta1.Ingress, error) {
 	if !c.namespaceController.HasSynced() {
 		return nil, errors.New("namespaces haven't synced yet")
 	}
@@ -119,11 +119,11 @@ func (c *client) GetIngresses(selector *NamespaceSelector) ([]*v1beta1.Ingress, 
 		allIngresses = append(allIngresses, obj.(*v1beta1.Ingress))
 	}
 
-	if selector == nil {
+	if namespaceSelectors == nil {
 		return allIngresses, nil
 	}
 
-	supportedNamespaces := supportedNamespaces(selector, toNamespaces(c.namespaceStore.List()))
+	supportedNamespaces := supportedNamespaces(toNamespaces(c.namespaceStore.List()), namespaceSelectors, matchAllNamespaceSelectors)
 
 	var filteredIngresses []*v1beta1.Ingress
 	for _, ingress := range allIngresses {
@@ -142,19 +142,51 @@ func toNamespaces(interfaces []interface{}) []*v1.Namespace {
 	return namespaces
 }
 
-func supportedNamespaces(selector *NamespaceSelector, namespaces []*v1.Namespace) []*v1.Namespace {
-	if selector == nil {
+func supportedNamespaces(namespaces []*v1.Namespace, namespaceSelectors []*NamespaceSelector, matchAllNamespaceSelectors bool) []*v1.Namespace {
+	if namespaceSelectors == nil {
 		return namespaces
 	}
 
 	var filteredNamespaces []*v1.Namespace
+
+	if matchAllNamespaceSelectors {
+		for _, namespace := range namespaces {
+			filteredNamespaces = safeAppend(filteredNamespaces, filterNamespacesMatchingAllLabels(namespace, namespaceSelectors))
+		}
+
+		log.Debugf("Found %d of %d namespaces that match the passed in namespace selectors", len(filteredNamespaces), len(namespaces))
+		return filteredNamespaces
+	}
+
+	for _, namespaceSelector := range namespaceSelectors {
+		filteredNamespaces = safeAppend(filteredNamespaces, filterNamespacesMatchingAnyLabel(namespaces, namespaceSelector)...)
+	}
+	return filteredNamespaces
+}
+
+func filterNamespacesMatchingAllLabels(namespace *v1.Namespace, namespaceSelectors []*NamespaceSelector) *v1.Namespace {
+	allMatch := true
+	for _, namespaceSelector := range namespaceSelectors {
+		_, ok := namespace.Labels[namespaceSelector.LabelName]
+		allMatch = allMatch && ok
+	}
+
+	if allMatch {
+		return namespace
+	}
+	return nil
+}
+
+func filterNamespacesMatchingAnyLabel(namespaces []*v1.Namespace, namespaceSelector *NamespaceSelector) []*v1.Namespace {
+	var filteredNamespaces []*v1.Namespace
 	for _, namespace := range namespaces {
-		if val, ok := namespace.Labels[selector.LabelName]; ok && val == selector.LabelValue {
+		if val, ok := namespace.Labels[namespaceSelector.LabelName]; ok && val == namespaceSelector.LabelValue {
 			filteredNamespaces = append(filteredNamespaces, namespace)
 		}
 	}
+
 	log.Debugf("Found %d of %d namespaces that match the selector %s=%s",
-		len(filteredNamespaces), len(namespaces), selector.LabelName, selector.LabelValue)
+		len(filteredNamespaces), len(namespaces), namespaceSelector.LabelName, namespaceSelector.LabelValue)
 
 	return filteredNamespaces
 }
@@ -290,4 +322,15 @@ func ingressStatusEqual(i1 []v1.LoadBalancerIngress, i2 []v1.LoadBalancerIngress
 	}
 
 	return true
+}
+
+func safeAppend(arr []*v1.Namespace, elem ...*v1.Namespace) []*v1.Namespace {
+	if elem != nil {
+		for i := 0; i < len(elem); i++ {
+			if elem[i] != nil {
+				arr = append(arr, elem[i])
+			}
+		}
+	}
+	return arr
 }
