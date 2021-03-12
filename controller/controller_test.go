@@ -78,7 +78,7 @@ func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 	namespaceWatcher, _ := createFakeWatcher()
 
 	client.On("GetAllIngresses").Return([]*v1beta1.Ingress{}, nil)
-	client.On("GetIngresses", mock.Anything).Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetIngresses", mock.Anything, mock.AnythingOfType("bool")).Return([]*v1beta1.Ingress{}, nil)
 	client.On("GetServices").Return([]*v1.Service{}, nil)
 	client.On("WatchIngresses").Return(ingressWatcher)
 	client.On("WatchServices").Return(serviceWatcher)
@@ -1161,7 +1161,7 @@ func TestUpdaterIsUpdatedForIngressClassSetToTestInIngressAndConfig(t *testing.T
 	})
 }
 
-func TestNamespaceSelectorIsUsedToGetIngresses(t *testing.T) {
+func TestNamespaceSelectorsIsUsedToGetIngresses(t *testing.T) {
 	asserter := assert.New(t)
 
 	client := new(fake.FakeClient)
@@ -1171,7 +1171,8 @@ func TestNamespaceSelectorIsUsedToGetIngresses(t *testing.T) {
 		DefaultAllow:                 ingressDefaultAllow,
 		DefaultBackendTimeoutSeconds: backendTimeout,
 		Name:                         defaultIngressClass,
-		NamespaceSelector:            &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"},
+		NamespaceSelectors:           []*k8s.NamespaceSelector{{LabelName: "team", LabelValue: "theteam"}},
+		MatchAllNamespaceSelectors:   false,
 	}
 
 	config.KubernetesClient = client
@@ -1183,8 +1184,8 @@ func TestNamespaceSelectorIsUsedToGetIngresses(t *testing.T) {
 	updater.On("Stop").Return(nil)
 	updater.On("Health").Return(nil)
 
-	// The purpose of this test is to ensure that the NamespaceSelector is passed to GetIngresses
-	client.On("GetIngresses", &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"}).Return([]*v1beta1.Ingress{}, nil)
+	// The purpose of this test is to ensure that the NamespaceSelectors is passed to GetIngresses
+	client.On("GetIngresses", config.NamespaceSelectors, config.MatchAllNamespaceSelectors).Return([]*v1beta1.Ingress{}, nil)
 
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()
@@ -1546,7 +1547,7 @@ func TestUpdateFailsWhenK8sClientReturnsNoIngresses(t *testing.T) {
 
 func TestUpdateFailsWhenK8sClientReturnsNoNamespaceIngresses(t *testing.T) {
 
-	namespaceSelector := &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"}
+	namespaceSelectors := []*k8s.NamespaceSelector{{LabelName: "team", LabelValue: "theteam"}}
 
 	test := testSpec{
 		"ingress without rules definition",
@@ -1558,7 +1559,8 @@ func TestUpdateFailsWhenK8sClientReturnsNoNamespaceIngresses(t *testing.T) {
 			DefaultAllow:                 ingressDefaultAllow,
 			DefaultBackendTimeoutSeconds: backendTimeout,
 			Name:                         defaultIngressClass,
-			NamespaceSelector:            namespaceSelector,
+			NamespaceSelectors:           namespaceSelectors,
+			MatchAllNamespaceSelectors:   false,
 		},
 	}
 
@@ -1579,7 +1581,7 @@ func TestUpdateFailsWhenK8sClientReturnsNoNamespaceIngresses(t *testing.T) {
 	updater.On("Health").Return(nil)
 
 	// This is the call we are testing (by returning an empty array of ingresses)
-	client.On("GetIngresses", namespaceSelector).Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetIngresses", namespaceSelectors, false).Return([]*v1beta1.Ingress{}, nil)
 
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()

@@ -19,8 +19,8 @@ func (c *FakeClient) GetAllIngresses() ([]*v1beta1.Ingress, error) {
 }
 
 // GetIngresses mocks out calls to GetIngresses
-func (c *FakeClient) GetIngresses(selector *k8s.NamespaceSelector) ([]*v1beta1.Ingress, error) {
-	r := c.Called(selector)
+func (c *FakeClient) GetIngresses(selectors []*k8s.NamespaceSelector, matchAllSelectors bool) ([]*v1beta1.Ingress, error) {
+	r := c.Called(selectors, matchAllSelectors)
 	return r.Get(0).([]*v1beta1.Ingress), r.Error(1)
 }
 

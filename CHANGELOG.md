@@ -1,3 +1,9 @@
+# v4.3.0
+* Provide support for multiple labels for namespace selection
+  * Remove flag `--ingress-controller-namespace-selector`
+  * Add flag `--ingress-controller-namespace-selectors` - which can accept comma separated or repeated inputs
+  * Add flag `--match-all-namespace-selectors` - for how to match the above provided labels
+
 # v4.2.0
 * Add flag `set-real-ip-from-header` to specify the name of the request header for the [real ip module](http://nginx.org/en/docs/http/ngx_http_realip_module.html) to use
   * The name of the header will be used by the real ip module in the `set_real_ip_from` directive.

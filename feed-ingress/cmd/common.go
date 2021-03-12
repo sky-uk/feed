@@ -37,10 +37,11 @@ func runCmd(appender appendIngressUpdaters) {
 		log.Fatal("Unable to create ingress updaters: ", err)
 	}
 
-	controllerConfig.NamespaceSelector, err = parseNamespaceSelector(namespaceSelector)
+	controllerConfig.NamespaceSelectors, err = parseNamespaceSelector(namespaceSelectors)
 	if err != nil {
-		log.Fatalf("invalid format for --%s (%s)", ingressControllerNamespaceSelectorFlag, namespaceSelector)
+		log.Fatalf("invalid format for --%s (%s)", ingressControllerNamespaceSelectorsFlag, namespaceSelectors)
 	}
+	controllerConfig.MatchAllNamespaceSelectors = matchAllNamespaceSelectors
 
 	feedController := controller.New(controllerConfig, stopCh)
 
@@ -91,14 +92,19 @@ func createPortsConfig(ingressPort int, ingressHTTPSPort int) []nginx.Port {
 	return ports
 }
 
-func parseNamespaceSelector(nameValueStr string) (*k8s.NamespaceSelector, error) {
-	if len(nameValueStr) == 0 {
+func parseNamespaceSelector(nameValueStringSlice []string) ([]*k8s.NamespaceSelector, error) {
+	if len(nameValueStringSlice) == 0 {
 		return nil, nil
 	}
 
-	nameValue := strings.SplitN(nameValueStr, "=", 2)
-	if len(nameValue) != 2 {
-		log.Errorf("expecting name=value but was (%s)", nameValueStr)
+	var namespaceSelectors []*k8s.NamespaceSelector
+	for _, nameValueStr := range nameValueStringSlice {
+		nameValue := strings.SplitN(nameValueStr, "=", 2)
+		namespaceSelectors = append(namespaceSelectors, &k8s.NamespaceSelector{LabelName: nameValue[0], LabelValue: nameValue[1]})
+		if len(nameValue) != 2 {
+			log.Errorf("expecting name=value but was (%s)", nameValueStringSlice)
+		}
 	}
-	return &k8s.NamespaceSelector{LabelName: nameValue[0], LabelValue: nameValue[1]}, nil
+
+	return namespaceSelectors, nil
 }

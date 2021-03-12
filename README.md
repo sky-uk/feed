@@ -201,6 +201,22 @@ They can be overridden by passing the following arguments during startup.
 A flag `set-real-ip-from-header` can be used to specify the name of the request header for the [real ip module](http://nginx.org/en/docs/http/ngx_http_realip_module.html) to use in the `set_real_ip_from` directive.
 The default value of this flag would be `X-Forwarded-For`
 
+## Namespace selectors
+Namespace selectors can be used for the feed-ingress instance to only process ingress definitions from only those namespaces which have labels matching the ones passed in the input.
+The following 2 flags help facilitate this
+
+1. `ingress-controller-namespace-selectors` - This flag will either be a repeated or comma separated value of namespace labels.
+
+```
+Examples:
+
+1. --ingress-controller-namespace-selectors=app=some-app,team=some-team
+2. --ingress-controller-namespace-selectors=app=some-app --ingress-controller-namespace-selectors=team=some-team
+```
+
+2. `match-all-namespace-selectors` - This flag is to determine how the above flags should be used for matching on the namespace labels. This would be false by default which would mean that a namespace matching any of the above labels will be picked.
+If this flag is set, the namespace on which the ingress is defined should have all of the passed in labels.
+
 ## Ingress status
 When using the [ELB](#elb), [NLB](#nlb) or [Merlin](#merlin) updaters, the ingress status will be updated with relevant
 load balancer information. This can then be used with other controllers such as `external-dns` which can set DNS for any

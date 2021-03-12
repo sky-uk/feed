@@ -75,9 +75,10 @@ type controller struct {
 	started                      bool
 	updatesHealth                util.SafeError
 	sync.Mutex
-	name                      string
-	includeClasslessIngresses bool
-	namespaceSelector         *k8s.NamespaceSelector
+	name                       string
+	includeClasslessIngresses  bool
+	namespaceSelectors         []*k8s.NamespaceSelector
+	matchAllNamespaceSelectors bool
 }
 
 // Config for creating a new ingress controller.
@@ -93,7 +94,8 @@ type Config struct {
 	DefaultProxyBufferBlocks     int
 	Name                         string
 	IncludeClasslessIngresses    bool
-	NamespaceSelector            *k8s.NamespaceSelector
+	NamespaceSelectors           []*k8s.NamespaceSelector
+	MatchAllNamespaceSelectors   bool
 }
 
 // New creates an ingress controller.
@@ -111,7 +113,8 @@ func New(conf Config, stopCh chan struct{}) Controller {
 		stopCh:                       stopCh,
 		name:                         conf.Name,
 		includeClasslessIngresses:    conf.IncludeClasslessIngresses,
-		namespaceSelector:            conf.NamespaceSelector,
+		namespaceSelectors:           conf.NamespaceSelectors,
+		matchAllNamespaceSelectors:   conf.MatchAllNamespaceSelectors,
 	}
 }
 
@@ -185,10 +188,10 @@ func (c *controller) updateIngresses() (err error) {
 	// Get ingresses
 	var ingresses []*v1beta1.Ingress
 
-	if c.namespaceSelector == nil {
+	if c.namespaceSelectors == nil {
 		ingresses, err = c.client.GetAllIngresses()
 	} else {
-		ingresses, err = c.client.GetIngresses(c.namespaceSelector)
+		ingresses, err = c.client.GetIngresses(c.namespaceSelectors, c.matchAllNamespaceSelectors)
 	}
 
 	log.Debugf("Found %d ingresses", len(ingresses))
