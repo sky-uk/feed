@@ -1,7 +1,7 @@
 FROM alpine:3.13
 
 # Install useful diagnostic packages
-RUN apk add --no-cache \
+RUN apk add --upgrade --no-cache \
         libcap \
         curl \
         ca-certificates \
