@@ -69,7 +69,7 @@ type nlb struct {
 	expectedNumber       int
 	instanceID           string
 	privateIPAddress     string
-	elbs                 map[string]LoadBalancerDetails
+	loadBalancers        map[string]LoadBalancerDetails
 	registeredFrontends  util.SafeInt
 	initialised          initialised
 	drainDelay           time.Duration
@@ -122,7 +122,7 @@ func (e *nlb) attachToFrontEnds() error {
 
 	// Save these now so we can always know what we might have done
 	// up until this point we have only read data
-	e.elbs = clusterFrontEnds
+	e.loadBalancers = clusterFrontEnds
 	e.instanceID = instanceID
 	e.privateIPAddress = privateIP
 	registered := 0
@@ -342,54 +342,53 @@ func generateTargetDescriptionFromTargetType(targetType, instanceID, privateIP s
 
 // Stop removes this instance from all the front end NLBs
 func (e *nlb) Stop() error {
-	var failed = false
-	for _, elb := range e.elbs {
-		log.Infof("Deregistering instance %s with nlb %s", e.privateIPAddress, elb.Name)
-		err := deregisterFromLoadBalancer(e, elb)
-		if err != nil {
-			log.Warnf("unable to deregister instance %s (%s) with nlb %s: %v", e.instanceID, e.privateIPAddress, elb.Name, err)
-			failed = true
+	failedCount := 0
+	successCount := 0
+
+	for _, loadBalancer := range e.loadBalancers {
+		for _, targetGroup := range loadBalancer.TargetGroups {
+			log.Infof("De-registering instance %q from targetGroup %q of nlb %q", e.instanceID, aws.StringValue(targetGroup.TargetGroupName), loadBalancer.Name)
+			err := deregisterFromLoadBalancer(e, targetGroup)
+			if err != nil {
+				log.Warnf("de-registering instance %q from targetGroup %q of nlb %q resulted in an error: %v", e.instanceID, aws.StringValue(targetGroup.TargetGroupName), loadBalancer.Name, err)
+				failedCount++
+			} else {
+				successCount++
+			}
 		}
 	}
-	if failed {
-		return errors.New("at least one NLB failed to detach")
+
+	if successCount > 0 {
+		log.Infof("Waiting %v to finish NLB deregistration", e.drainDelay)
+		time.Sleep(e.drainDelay)
 	}
 
-	log.Infof("Waiting %v to finish NLB deregistration", e.drainDelay)
-	time.Sleep(e.drainDelay)
+	if failedCount > 0 {
+		return errors.New("at least one NLB failed to detach")
+	}
 
 	return nil
 }
 
-func deregisterFromLoadBalancer(n *nlb, lb LoadBalancerDetails) error {
-	var failedArns []string
+func deregisterFromLoadBalancer(n *nlb, tg *elbv2.TargetGroup) error {
 	instanceID := n.instanceID
 	privateIP := n.privateIPAddress
 
-	for _, tg := range lb.TargetGroups {
-		targetGroupArn := *tg.TargetGroupArn
-		targetType := *tg.TargetType
+	targetGroupArn := *tg.TargetGroupArn
+	targetType := *tg.TargetType
 
-		targetDescription, err := generateTargetDescriptionFromTargetType(targetType, instanceID, privateIP)
-		if err != nil {
-			log.Errorf("Could not deregister instance %s (%s) from target group %v: %v", instanceID, privateIP, targetGroupArn, err)
-			failedArns = append(failedArns, targetGroupArn)
-			continue
-		}
-
-		log.Infof("Deregistering instance %s (%s) from target group %s", n.instanceID, n.privateIPAddress, targetGroupArn)
-		_, err = n.awsElb.DeregisterTargets(&elbv2.DeregisterTargetsInput{
-			Targets:        targetDescription,
-			TargetGroupArn: tg.TargetGroupArn,
-		})
-		if err != nil {
-			log.Errorf("Could not deregister instance %s (%s) from target group %s: %v", n.instanceID, n.privateIPAddress, targetGroupArn, err)
-			failedArns = append(failedArns, targetGroupArn)
-		}
+	targetDescription, err := generateTargetDescriptionFromTargetType(targetType, instanceID, privateIP)
+	if err != nil {
+		return fmt.Errorf("could not deregister instance %s (%s) from target group %v: %v", instanceID, privateIP, targetGroupArn, err)
 	}
 
-	if failedArns != nil {
-		return fmt.Errorf("could not deregister target group(s) from instance %s (%s): %v", n.instanceID, n.privateIPAddress, failedArns)
+	log.Infof("De-registering instance %s (%s) from target group %s", n.instanceID, n.privateIPAddress, targetGroupArn)
+	_, err = n.awsElb.DeregisterTargets(&elbv2.DeregisterTargetsInput{
+		Targets:        targetDescription,
+		TargetGroupArn: tg.TargetGroupArn,
+	})
+	if err != nil {
+		return fmt.Errorf("could not deregister target group(s) from instance %s (%s)", n.instanceID, n.privateIPAddress)
 	}
 
 	return nil

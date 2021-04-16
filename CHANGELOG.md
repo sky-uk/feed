@@ -1,3 +1,7 @@
+# v4.3.1
+* [BUGFIX] Fix issue with feed not waiting for the drain duration despite having at least one successful call to de-register from the list of registered target groups.
+    * Feed instance can attach to multiple target groups belonging to the load balancer having a tag matching the value in the flag `ingress-class`. The fix is for feed instance to wait for the drain duration even if the de-register call succeeds to at least one of those target groups.
+
 # v4.3.0
 * Provide support for multiple labels for namespace selection
   * Remove flag `--ingress-controller-namespace-selector`
