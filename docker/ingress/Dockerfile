@@ -1,5 +1,8 @@
 FROM alpine:3.13
 
+# Update list of available packages and upgrade installed packages
+RUN apk -U upgrade
+
 # Install useful diagnostic packages
 RUN apk add --no-cache \
         libcap \

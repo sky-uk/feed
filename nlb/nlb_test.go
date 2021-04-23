@@ -610,6 +610,54 @@ func TestDeregistersWithAttachedELBsV2(t *testing.T) {
 		"Drain time should have caused stop to take at least 50ms.")
 }
 
+func TestStopWaitsForDrainTimeIfDeregisterCallFailsOnSomeOfTheAttachedTargetGroups(t *testing.T) {
+	// given
+	targetGroups := []*elbv2.TargetGroup{
+		{
+			TargetGroupArn: aws.String("valid-tg"),
+			TargetType:     aws.String(elbv2.TargetTypeEnumIp),
+		},
+		{
+			TargetGroupArn: aws.String("absent-tg"),
+			TargetType:     aws.String(elbv2.TargetTypeEnumInstance),
+		},
+	}
+	loadBalancers := map[string]LoadBalancerDetails{
+		"key1": {
+			Name:         "test-loadbalancer",
+			TargetGroups: targetGroups,
+		},
+	}
+	mockElbV2 := &fakeElb{}
+
+	testNlb := &nlb{
+		awsElb:           mockElbV2,
+		loadBalancers:    loadBalancers,
+		instanceID:       "some-instance",
+		privateIPAddress: "192.168.0.1",
+		drainDelay:       time.Millisecond * 500,
+	}
+
+	mockElbV2.On("DeregisterTargets", &elbv2.DeregisterTargetsInput{
+		Targets:        []*elbv2.TargetDescription{{Id: aws.String("192.168.0.1")}},
+		TargetGroupArn: aws.String("valid-tg"),
+	}).Return(&elbv2.DeregisterTargetsOutput{}, nil)
+	mockElbV2.On("DeregisterTargets", &elbv2.DeregisterTargetsInput{
+		Targets:        []*elbv2.TargetDescription{{Id: aws.String("some-instance")}},
+		TargetGroupArn: aws.String("absent-tg"),
+	}).Return(&elbv2.DeregisterTargetsOutput{}, errors.New("target group no longer present"))
+
+	//when
+	beforeStop := time.Now()
+	stopError := testNlb.Stop()
+	stopDuration := time.Now().Sub(beforeStop)
+
+	//then
+	assert.EqualError(t, stopError, "at least one NLB failed to detach")
+	assert.True(t, stopDuration.Nanoseconds() > time.Millisecond.Nanoseconds()*500,
+		"Drain time should have caused stop to take at least 500ms.")
+}
+
 func TestDeregistersWithAttachedTargetGroupsMultipleTypes(t *testing.T) {
 	// given
 	elbUpdaterV2, mockElbV2, mockMetadata := setup()

@@ -101,4 +101,4 @@ endif
 
 check-vulnerabilities:
 	@echo "== Checking for vulnerabilities in the docker image"
-	trivy image --exit-code=1 --severity="HIGH,CRITICAL" $(image_prefix)-ingress:latest
+	trivy image --exit-code=1 --severity="HIGH,CRITICAL" --ignorefile=trivy-ignore-file.txt $(image_prefix)-ingress:latest
