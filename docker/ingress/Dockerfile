@@ -1,17 +1,24 @@
-FROM alpine:3.13
+FROM alpine:3.13 as os-image
 
 # Update list of available packages and upgrade installed packages
 RUN apk -U upgrade
 
 # Install useful diagnostic packages
 RUN apk add --no-cache \
-        libcap \
-        curl \
-        ca-certificates \
-        bind-tools \
-        vim \
-        lsof \
-        iproute2
+    libcap \
+    ca-certificates \
+    pcre \
+    curl \
+    bind-tools \
+    lsof \
+    iproute2 \
+    vim
+
+FROM scratch as builder
+
+# Copy the os-image -- this is to ensure we have an identical version of
+# runtime dependencies (as of now: pcre) across the build and runtime images
+COPY --from=os-image / /
 
 # Install NGINX
 
@@ -29,6 +36,36 @@ ENV JAEGER_SHA256 21257af93a64fee42c04ca6262d292b2e4e0b7b0660c511db357b32fd42ef5
 COPY build-nginx.sh /tmp
 RUN chmod 755 /tmp/build-nginx.sh
 RUN /tmp/build-nginx.sh
+
+FROM scratch
+
+# Copy the up-to-date alpine image
+COPY --from=os-image / /
+
+# Copy the built binaries and libs
+
+# Nginx
+COPY --from=builder /nginx /nginx
+COPY --from=builder /usr/sbin/nginx /usr/sbin/nginx
+# Opentracing-cpp
+COPY --from=builder \
+    /usr/local/lib/libopentracing.so.1.4.2 \
+    /usr/local/lib/libopentracing.so.1 \
+    /usr/local/lib/libopentracing.so \
+    /usr/local/lib/libopentracing.a \
+    /usr/local/lib/libopentracing_mocktracer.so.1.4.2 \
+    /usr/local/lib/libopentracing_mocktracer.so.1 \
+    /usr/local/lib/libopentracing_mocktracer.so \
+    /usr/local/lib/libopentracing_mocktracer.a \
+    /usr/local/lib/
+# Jaeger
+COPY --from=builder \
+    /usr/local/lib64/libjaegertracing.so.0.4.2 \
+    /usr/local/lib64/libjaegertracing.so.0 \
+    /usr/local/lib64/libjaegertracing.so \
+    /usr/local/lib64/libjaegertracing.a \
+    /usr/local/lib64/
+
 # For binding to privileged ports in NGINX.
 RUN setcap "cap_net_bind_service=+ep" /usr/sbin/nginx
 

@@ -9,7 +9,7 @@ language: go
 sudo: required
 
 go:
-- 1.13
+- 1.16
 
 services:
 - docker
@@ -19,7 +19,7 @@ before_install:
   - sudo tar -C /usr/local/bin -zxf trivy_0.15.0_Linux-64bit.tar.gz
 
 install:
-- make setup
+- go mod download all
 
 script:
 - make travis

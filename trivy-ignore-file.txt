@@ -1,2 +1,0 @@
-# The bind-libs version which has this vulnerability fixed is not yet available for alpine. Hence ignoring for now.
-CVE-2020-8625
