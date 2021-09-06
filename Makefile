@@ -25,38 +25,36 @@ all : format check build
 check : vet lint test
 travis : checkformat check docker check-vulnerabilities
 
-setup:
-	@echo "== setup"
-	go get -u golang.org/x/lint/golint
-	go get -u golang.org/x/tools/cmd/goimports
-
 format :
 	@echo "== format"
-	@goimports -w $(files)
+	@go run golang.org/x/tools/cmd/goimports -w $(files)
 	@sync
 
-build :
-	@echo "== build"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go install -v ./feed-ingress/... ./feed-dns/...
+dist/feed-ingress : $(files)
+	mkdir -p dist
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o dist/feed-ingress ./feed-ingress
 
-unformatted = $(shell goimports -l $(files))
+dist/feed-dns : $(files)
+	mkdir -p dist
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o dist/feed-dns ./feed-dns
+
+build : dist/feed-ingress dist/feed-dns
 
 checkformat :
 	@echo "== check formatting"
-ifneq "$(unformatted)" ""
-	@echo "needs formatting: $(unformatted)"
-	@echo "run make format"
-	@exit 1
-endif
+	@unformatted=`go run golang.org/x/tools/cmd/goimports -l $(files)`; if [ "$$unformatted" != "" ]; then \
+	    echo "needs formatting: $$unformatted"; \
+	    exit 1; \
+	fi
 
-vet : build
+vet :
 	@echo "== vet"
 	@go vet $(pkgs)
 
 lint :
 	@echo "== lint"
 	@for pkg in $(pkgs); do \
-		golint -set_exit_status $$pkg || exit 1; \
+		go run golang.org/x/lint/golint -set_exit_status $$pkg || exit 1; \
 	done;
 
 fakenginx:
@@ -75,8 +73,8 @@ image_prefix := $(REGISTRY)/feed
 
 docker : test
 	@echo "== build docker images"
-	cp $(GOPATH)/bin/feed-dns docker/dns
-	cp $(GOPATH)/bin/feed-ingress docker/ingress
+	cp dist/feed-dns docker/dns
+	cp dist/feed-ingress docker/ingress
 	cp nginx/nginx.tmpl docker/ingress
 	docker build -t $(image_prefix)-ingress:latest docker/ingress/
 	docker build -t $(image_prefix)-dns:latest docker/dns/

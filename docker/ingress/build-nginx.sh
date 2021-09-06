@@ -23,9 +23,6 @@ apk add --no-cache --virtual .build-deps \
     findutils \
     cmake
 
-# Runtime dependencies
-apk add --no-cache pcre
-
 echo "--- Downloading NGINX and modules"
 mkdir /tmp/nginx
 cd /tmp/nginx
@@ -123,7 +120,3 @@ make modules
 
 mkdir -p /nginx/modules
 cp objs/ngx_http_opentracing_module.so /nginx/modules/
-
-echo "--- Cleaning up"
-apk del .build-deps
-rm -rf /tmp/* /root/.hunter
