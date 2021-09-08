@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/sky-uk/feed/controller"
+	"github.com/sky-uk/feed/external"
 	"github.com/sky-uk/feed/k8s"
 	"github.com/spf13/cobra"
 )
@@ -20,5 +21,16 @@ func init() {
 }
 
 func empty(kubernetesClient k8s.Client, updaters []controller.Updater) ([]controller.Updater, error) {
-	return updaters, nil
+
+	config := external.Config{
+		InternalHostname: "internal.core.europe-west1.dev-gcp.skyott.com.",
+		ExternalHostname: "external.core.europe-west1.dev-gcp.skyott.com.",
+		KubernetesClient: kubernetesClient,
+	}
+	statusUpdater, err := external.New(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(updaters, statusUpdater), nil
 }
