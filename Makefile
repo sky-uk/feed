@@ -17,9 +17,6 @@ ifeq ("$(os)", "Linux")
 else ifeq ("$(os)", "Darwin")
 	GOOS = darwin
 endif
-# FIXME, the docker build should build in docker with a multi stage build, otherwise on mac you end up with
-# a docker image running linux with a mac binary
-GOOS = linux
 GOARCH ?= amd64
 
 .PHONY: all format test build vet lint copy docker release checkformat check clean fakenginx check-vulnerabilities
@@ -40,7 +37,7 @@ format :
 
 build :
 	@echo "== build"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go install -v ./feed-ingress/...
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go install -v ./feed-ingress/... ./feed-dns/...
 
 unformatted = $(shell goimports -l $(files))
 
@@ -76,14 +73,14 @@ git_tag := $(shell git tag --points-at=$(git_rev))
 REGISTRY ?= skycirrus
 image_prefix := $(REGISTRY)/feed
 
-docker: build
+docker : test
 	@echo "== build docker images"
-	#fix me this won't work if we're on the same os/arch as the docker image
-	cp $(GOPATH)/bin/$(GOOS)_$(GOARCH)/feed-ingress docker/ingress
+	cp $(GOPATH)/bin/feed-dns docker/dns
+	cp $(GOPATH)/bin/feed-ingress docker/ingress
 	cp nginx/nginx.tmpl docker/ingress
 	docker build -t $(image_prefix)-ingress:latest docker/ingress/
-	docker tag  skycirrus/feed-ingress:latest europe-west1-docker.pkg.dev/core-platform-dev-poc348b/core-gcp/feed-ingress:latest
-	docker push europe-west1-docker.pkg.dev/core-platform-dev-poc348b/core-gcp/feed-ingress
+	docker build -t $(image_prefix)-dns:latest docker/dns/
+	rm -f docker/dns/feed-dns
 	rm -f docker/ingress/feed-ingress
 	rm -f docker/ingress/nginx.tmpl
 
@@ -95,8 +92,11 @@ else
 	@echo "releasing $(image)-(dns|ingress):$(git_tag)"
 	@docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 	docker tag $(image_prefix)-ingress:latest $(image_prefix)-ingress:$(git_tag)
+	docker tag $(image_prefix)-dns:latest $(image_prefix)-dns:$(git_tag)
 	docker push $(image_prefix)-ingress:$(git_tag)
 	docker push $(image_prefix)-ingress:latest
+	docker push $(image_prefix)-dns:$(git_tag)
+	docker push $(image_prefix)-dns:latest
 endif
 
 check-vulnerabilities:

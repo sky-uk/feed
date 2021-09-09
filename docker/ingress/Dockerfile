@@ -30,7 +30,7 @@ COPY build-nginx.sh /tmp
 RUN chmod 755 /tmp/build-nginx.sh
 RUN /tmp/build-nginx.sh
 # For binding to privileged ports in NGINX.
-#RUN setcap "cap_net_bind_service=+ep" /usr/sbin/nginx
+RUN setcap "cap_net_bind_service=+ep" /usr/sbin/nginx
 
 # Setup feed controller
 RUN adduser --shell /sbin/nologin --disabled-password feed
@@ -39,7 +39,7 @@ RUN chown -R feed:feed /nginx /var/cache/nginx
 
 COPY feed-ingress /
 # For binding VIP for merlin.
-#RUN setcap "cap_net_admin=+ep" /feed-ingress
+RUN setcap "cap_net_admin=+ep" /feed-ingress
 
 COPY nginx.tmpl /nginx/
 RUN chown feed:feed /nginx/nginx.tmpl

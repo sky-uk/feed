@@ -7,6 +7,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	externalHostname string
+	internalHostName string
+)
+
 var externalCmd = &cobra.Command{
 	Use:   "external",
 	Short: "Don't attach to any external load balancers",
@@ -18,13 +23,18 @@ var externalCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(externalCmd)
 
+	externalCmd.Flags().StringVar(&externalHostname, "external-hostname", "",
+		"Hostname for external ingress")
+	externalCmd.Flags().StringVar(&internalHostName, "internal-hostname", "",
+		"Hostname for internal ingress")
+
 }
 
 func empty(kubernetesClient k8s.Client, updaters []controller.Updater) ([]controller.Updater, error) {
 
 	config := external.Config{
-		InternalHostname: "internal.core.europe-west1.dev-gcp.skyott.com",
-		ExternalHostname: "external.core.europe-west1.dev-gcp.skyott.com",
+		InternalHostname: internalHostName,
+		ExternalHostname: externalHostname,
 		KubernetesClient: kubernetesClient,
 	}
 	statusUpdater, err := external.New(config)
