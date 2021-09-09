@@ -23,8 +23,8 @@ func init() {
 func empty(kubernetesClient k8s.Client, updaters []controller.Updater) ([]controller.Updater, error) {
 
 	config := external.Config{
-		InternalHostname: "internal.core.europe-west1.dev-gcp.skyott.com.",
-		ExternalHostname: "external.core.europe-west1.dev-gcp.skyott.com.",
+		InternalHostname: "internal.core.europe-west1.dev-gcp.skyott.com",
+		ExternalHostname: "external.core.europe-west1.dev-gcp.skyott.com",
 		KubernetesClient: kubernetesClient,
 	}
 	statusUpdater, err := external.New(config)

@@ -27,8 +27,10 @@ func GenerateLoadBalancerStatus(endpoints []string) v1.LoadBalancerStatus {
 
 // Update ingresses with current status where unchanged statuses are ignored.
 func Update(ingresses controller.IngressEntries, lbs map[string]v1.LoadBalancerStatus, k8sClient k8s.Client) error {
+	fmt.Println("Updating ingress ", lbs, ingresses)
 	var updateErrors []error
 	for _, ingress := range ingresses {
+		fmt.Println("Doing ingress: ", ingress.LbScheme)
 		if lb, ok := lbs[ingress.LbScheme]; ok {
 			if statusUnchanged(ingress.Ingress.Status.LoadBalancer.Ingress, lb.Ingress) {
 				continue

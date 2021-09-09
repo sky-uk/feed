@@ -8,6 +8,7 @@ package k8s
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -289,6 +290,7 @@ func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
 }
 
 func (c *client) updateIngressAndHandleConflicts(ingressClient clientV1Beta1.IngressInterface, ingress *v1beta1.Ingress) error {
+	fmt.Print("updating ingress", ingress)
 	_, err := ingressClient.UpdateStatus(ingress)
 
 	switch {
@@ -296,6 +298,7 @@ func (c *client) updateIngressAndHandleConflicts(ingressClient clientV1Beta1.Ing
 		// In the event of a conflict, check whether another feed instance has already made the same ingress status
 		// change for us.
 		updatedIng, getErr := ingressClient.Get(ingress.Name, metav1.GetOptions{})
+		fmt.Print("conflict", updatedIng)
 		if getErr == nil && ingressStatusEqual(updatedIng.Status.LoadBalancer.Ingress, ingress.Status.LoadBalancer.Ingress) {
 			// Another feed instance has already made the appropriate change, no need to report an error.
 			return nil
