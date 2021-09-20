@@ -27,12 +27,14 @@ echo "--- Downloading NGINX and modules"
 mkdir /tmp/nginx
 cd /tmp/nginx
 curl -O http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
+curl -JLO https://github.com/openresty/headers-more-nginx-module/archive/v${MORE_HEADERS_VERSION}.tar.gz
 curl -JLO https://github.com/vozlt/nginx-module-vts/archive/v${VTS_VERSION}.tar.gz
 curl -JLO https://github.com/opentracing-contrib/nginx-opentracing/archive/${OPENTRACING_NGINX_VERSION}.tar.gz
 curl -JLO https://github.com/opentracing/opentracing-cpp/archive/v${OPENTRACING_CPP_VERSION}.tar.gz
 curl -JLO https://github.com/jaegertracing/jaeger-client-cpp/archive/v${JAEGER_VERSION}.tar.gz
 
 nginx_tarball="nginx-${NGINX_VERSION}.tar.gz"
+headers_more_tarball="headers-more-nginx-module-${MORE_HEADERS_VERSION}.tar.gz"
 vts_tarball="nginx-module-vts-${VTS_VERSION}.tar.gz"
 opentracing_nginx_tarball="nginx-opentracing-${OPENTRACING_NGINX_VERSION}.tar.gz"
 opentracing_cpp_tarball="opentracing-cpp-${OPENTRACING_CPP_VERSION}.tar.gz"
@@ -41,6 +43,7 @@ jaeger_tarball="jaeger-client-cpp-${JAEGER_VERSION}.tar.gz"
 # 2 spaces required between hash and filename
 touch hashes
 echo "${NGINX_SHA256}  ${nginx_tarball}" >> hashes
+echo "${MORE_HEADERS_SHA256}  ${headers_more_tarball}" >> hashes
 echo "${VTS_SHA256}  ${vts_tarball}" >> hashes
 echo "${OPENTRACING_NGINX_SHA256}  ${opentracing_nginx_tarball}" >> hashes
 echo "${OPENTRACING_CPP_SHA256}  ${opentracing_cpp_tarball}" >> hashes
@@ -55,6 +58,7 @@ tar xzf ${vts_tarball}
 tar xzf ${opentracing_nginx_tarball}
 tar xzf ${opentracing_cpp_tarball}
 tar xzf ${jaeger_tarball}
+tar xzf ${headers_more_tarball}
 
 echo "--- Build OpenTracing dependencies"
 cd /tmp/nginx/opentracing-cpp-${OPENTRACING_CPP_VERSION}
@@ -113,6 +117,7 @@ echo "--- Building dynamic modules"
     --with-ipv6 \
     --with-debug \
     --with-http_ssl_module \
+    --add-dynamic-module=/tmp/nginx/headers-more-nginx-module-${MORE_HEADERS_VERSION} \
     --add-dynamic-module=/tmp/nginx/nginx-opentracing-${OPENTRACING_NGINX_VERSION}/opentracing \
     --with-cc-opt="-I$HUNTER_INSTALL_DIR/include" \
     --with-ld-opt="-L$HUNTER_INSTALL_DIR/lib"
@@ -120,3 +125,4 @@ make modules
 
 mkdir -p /nginx/modules
 cp objs/ngx_http_opentracing_module.so /nginx/modules/
+cp objs/ngx_http_headers_more_filter_module.so /nginx/modules/
