@@ -1,3 +1,9 @@
+# v4.4.0
+
+* Upgrade to nginx version 1.21.3 from 1.15.7
+* Configure and add a dynamic module which will suppress the `Server` response header. This will add to the existing
+  feature of suppressing the nginx version and build information in the response headers.
+
 # v4.3.2
 
 * Refine the docker build process to pull in newer packages from Alpine
