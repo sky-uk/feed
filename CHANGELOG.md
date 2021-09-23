@@ -1,3 +1,16 @@
+# v4.4.0
+
+* Upgrade to nginx version 1.21.3 from 1.15.7
+* Configure and add a dynamic module which will suppress the `Server` response header. This will add to the existing
+  feature of suppressing the nginx version and build information in the response headers.
+
+# v4.3.2
+
+* Refine the docker build process to pull in newer packages from Alpine
+  and eliminate trivy security warnings for the resulting docker images
+* Bump the version of the go `crypto` library to pull in the fix for a
+  trivy-reported security warning.
+
 # v4.3.1
 * [BUGFIX] Fix issue with feed not waiting for the drain duration despite having at least one successful call to de-register from the list of registered target groups.
     * Feed instance can attach to multiple target groups belonging to the load balancer having a tag matching the value in the flag `ingress-class`. The fix is for feed instance to wait for the drain duration even if the de-register call succeeds to at least one of those target groups.

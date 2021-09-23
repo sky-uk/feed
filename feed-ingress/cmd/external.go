@@ -14,7 +14,7 @@ var (
 
 var externalCmd = &cobra.Command{
 	Use:   "external",
-	Short: "Don't attach to any external load balancers",
+	Short: "Attaching to load balancers happens external to feed",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCmd(empty)
 	},
