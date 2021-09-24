@@ -13,8 +13,8 @@ var (
 )
 
 var externalCmd = &cobra.Command{
-	Use:   "external",
-	Short: "Attaching to load balancers happens external to feed",
+	Use:   "static",
+	Short: "Static hostname set for internal and external ingress",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCmd(empty)
 	},

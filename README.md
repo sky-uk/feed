@@ -218,7 +218,7 @@ Examples:
 If this flag is set, the namespace on which the ingress is defined should have all of the passed in labels.
 
 ## Ingress status
-When using the [ELB](#elb), [NLB](#nlb) or [Merlin](#merlin) updaters, the ingress status will be updated with relevant
+When using the [ELB](#elb), [NLB](#nlb), [Static](#static) or [Merlin](#merlin) updaters, the ingress status will be updated with relevant
 load balancer information. This can then be used with other controllers such as `external-dns` which can set DNS for any
 given ingress using the ingress status.
 
@@ -232,6 +232,12 @@ updater supports two different types: `internal` and `internet-facing`. These tw
 `merlin-internal-hostname` and `merlin-internet-facing-hostname` flags respectively.
 
 An ingress can select which load balancer it wants to be associated with by setting the `sky.uk/frontend-scheme`
+annotation to either `internal` or `internet-facing`.
+
+### Static
+The static updater sets an Ingress's status hostname to a static value.
+Two values are supported: `external-hostname` and `internal-hostname`.
+An ingress can select which hostname it wants to be associated with by setting the `sky.uk/frontend-scheme`
 annotation to either `internal` or `internet-facing`.
 
 ## Running feed-ingress on privileged ports
