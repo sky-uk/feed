@@ -1,3 +1,7 @@
+# v4.5.0
+
+* New static mode which sets ingress status to a static hostname [#238](https://github.com/sky-uk/feed/pull/238)
+
 # v4.4.0
 
 * Upgrade to nginx version 1.21.3 from 1.15.7
