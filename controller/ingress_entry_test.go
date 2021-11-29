@@ -182,4 +182,3 @@ func TestIngressDisallowsPathWithSpace(t *testing.T) {
 	err := e.validate()
 	asserter.Error(err)
 }
-
