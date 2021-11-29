@@ -158,3 +158,27 @@ func TestNoAllowAddressesResultInNoError(t *testing.T) {
 	// then
 	asserter.NoError(err)
 }
+
+func TestIngressAllowsLegalPath(t *testing.T) {
+	asserter := assert.New(t)
+	e := IngressEntry{
+		Host:           "x",
+		Path:           "/foo",
+		ServiceAddress: "x",
+		ServicePort:    1,
+	}
+	err := e.validate()
+	asserter.NoError(err)
+}
+
+func TestIngressDisallowsPathWithSpace(t *testing.T) {
+	asserter := assert.New(t)
+	e := IngressEntry{
+		Host:           "x",
+		Path:           "/ foo",
+		ServiceAddress: "x",
+		ServicePort:    1,
+	}
+	err := e.validate()
+	asserter.Error(err)
+}
