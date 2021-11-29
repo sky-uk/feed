@@ -56,6 +56,38 @@ type IngressEntry struct {
 	ProxyBufferBlocks int
 }
 
+// Borrowed from the go stdlib, net/url:shouldEscape()
+func isPathValid(path string) bool {
+	for i := 0; i < len(path); i++ {
+		// RFC 3986, Appendix A.
+		// pchar = unreserved / pct-encoded / sub-delims / ":" / "@".
+		switch path[i] {
+		case '-', '_', '.', '~':
+			// ok - unreserved characters
+			continue
+		case '%':
+			// ok - percent encoded
+			continue
+		case '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=':
+			// ok - subdelims
+			continue
+		case ':', '@':
+			// ok - specicfically allowed
+			continue
+		case '/':
+			// ok - path delimiter
+			continue
+		}
+		// ok - alphanumeric
+		if 'a' <= path[i] && path[i] <= 'z' || 'A' <= path[i] && path[i] <= 'Z' || '0' <= path[i] && path[i] <= '9' {
+			continue
+		}
+		// anything not marked previously as ok is not ok
+		return false
+	}
+	return true
+}
+
 // validate returns error if entry has invalid fields.
 func (e IngressEntry) validate() error {
 	if e.Host == "" {
@@ -69,6 +101,9 @@ func (e IngressEntry) validate() error {
 	}
 	if e.ServicePort == 0 {
 		return errors.New("missing service port")
+	}
+	if !isPathValid(e.Path) {
+		return fmt.Errorf("path '%s' contains illegal characters", e.Path)
 	}
 
 	var invalidAllowEntries []string
