@@ -1,3 +1,28 @@
+# v5.0.0
+
+* [SECURITY] Previous versions of feed did not validate that the format of
+  the path field on an ingress object (as received from the k8s API) was
+  formatted in a way that feed/nginx would expect.  This would allow an
+  attacker to inject nginx configuration constructs into the path field of
+  the ingress object.  This could lead to a denial of service (by injecting
+  constructs that make the configuration invalid, rendering nginx unable to
+  process future configuration updates).  Itʼs theoretically possible that
+  an attacker could inject config to allow themselves to steal
+  information from the nginx pod
+  or seize control of nginx itself, although we currently do not see an
+  avenue to exploit the vulnerability in this way.
+
+  The fix is to enforce that the path field only contains legal characters
+  for the path of a URL, according to RFC 3986.  Because this narrows the
+  definition of what is acceptable in the path field of an ingress, it is
+  technically a breaking change.
+
+  It is recommended that all users upgrade to this new version
+  immediately to benefit from the security fix.  (It is worth noting
+  that this vulnerability is only exploitable by actors with the
+  permission to create kubernetes ingresses – itʼs not exploitable
+  merely by hitting the ingress with traffic from outside the cluster.)
+
 # v4.5.0
 
 * New static mode which sets ingress status to a static hostname [#238](https://github.com/sky-uk/feed/pull/238)
