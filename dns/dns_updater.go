@@ -62,6 +62,10 @@ func (u *updater) Health() error {
 	return nil
 }
 
+func (u *updater) Readiness() error {
+	return nil
+}
+
 func (u *updater) Update(entries controller.IngressEntries) error {
 	route53Records, err := u.r53.GetRecords()
 	if err != nil {

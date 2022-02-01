@@ -50,6 +50,11 @@ func (lb *fakeUpdater) Health() error {
 	return r.Error(0)
 }
 
+func (lb *fakeUpdater) Readiness() error {
+	r := lb.Called()
+	return r.Error(0)
+}
+
 func (lb *fakeUpdater) String() string {
 	return "FakeUpdater"
 }
