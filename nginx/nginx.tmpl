@@ -31,6 +31,9 @@ http {
     # Track extended virtual host stats.
     vhost_traffic_status_zone shared:vhost_traffic_status:{{ .VhostStatsSharedMemory }}m;
 
+    # Define response time histogram buckets for virtual host stats.
+    {{ if .VhostStatsRequestBuckets }}vhost_traffic_status_histogram_buckets {{ range $i, $el := .VhostStatsRequestBuckets }}{{ if $i }} {{ end }}{{ $el }}{{ end }};{{ end }}
+
     # Server names hash bucket sizes. Set based on NGINX log messages.
     {{ if gt .ServerNamesHashBucketSize 0 }}server_names_hash_bucket_size {{ .ServerNamesHashBucketSize }};{{ end }}
     {{ if gt .ServerNamesHashMaxSize 0 }}server_names_hash_max_size {{ .ServerNamesHashMaxSize }};{{ end }}

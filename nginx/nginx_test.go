@@ -58,6 +58,7 @@ func newConf(tmpDir string, binary string) Conf {
 		ServerNamesHashBucketSize:    -1,
 		UpdatePeriod:                 time.Second,
 		VhostStatsSharedMemory:       1,
+		VhostStatsRequestBuckets:     []string{"0.005", "0.01", "0.05", "0.1", "0.5", "1", "10"},
 		OpenTracingPlugin:            "",
 		OpenTracingConfig:            "",
 		HTTPConf:                     HTTPConf{NginxSetRealIPFromHeader: "Some-Header-Name-From-Flag"},
@@ -309,6 +310,9 @@ func TestNginxConfig(t *testing.T) {
 	workerShutdowntimeoutConf := defaultConf
 	workerShutdowntimeoutConf.WorkerShutdownTimeoutSeconds = 10
 
+	noVhostStatsRequestBucketsConf := defaultConf
+	noVhostStatsRequestBucketsConf.VhostStatsRequestBuckets = nil
+
 	var tests = []struct {
 		name             string
 		conf             Conf
@@ -505,6 +509,18 @@ func TestNginxConfig(t *testing.T) {
 			workerShutdowntimeoutConf,
 			[]string{
 				"worker_shutdown_timeout 10;",
+			},
+		},
+		{
+			"Vhost stats request buckets set if provided",
+			defaultConf,
+			[]string{"vhost_traffic_status_histogram_buckets 0.005 0.01 0.05 0.1 0.5 1 10;"},
+		},
+		{
+			"Vhost stats request buckets not set if not provided",
+			noVhostStatsRequestBucketsConf,
+			[]string {
+				"!vhost_traffic_status_histogram_buckets",
 			},
 		},
 	}

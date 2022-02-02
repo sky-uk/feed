@@ -37,13 +37,14 @@ var (
 	controllerConfig  controller.Config
 	healthPort        int
 
-	nginxConfig                 nginx.Conf
-	nginxLogHeaders             []string
-	nginxTrustedFrontends       []string
-	nginxSSLPath                string
-	nginxVhostStatsSharedMemory int
-	nginxOpenTracingPluginPath  string
-	nginxOpenTracingConfigPath  string
+	nginxConfig                   nginx.Conf
+	nginxLogHeaders               []string
+	nginxTrustedFrontends         []string
+	nginxSSLPath                  string
+	nginxVhostStatsSharedMemory   int
+	nginxVhostStatsRequestBuckets []string
+	nginxOpenTracingPluginPath    string
+	nginxOpenTracingConfigPath    string
 
 	ingressClassName           string
 	includeUnnamedIngresses    bool
@@ -214,6 +215,8 @@ func configureNginxFlags() {
 		"Set default ssl path + name file without extension.  Feed expects two files: one ending in .crt (the CA) and the other in .key (the private key).")
 	rootCmd.PersistentFlags().IntVar(&nginxVhostStatsSharedMemory, "nginx-vhost-stats-shared-memory", defaultNginxVhostStatsSharedMemory,
 		"Memory (in MiB) which should be allocated for use by the vhost statistics module")
+	rootCmd.PersistentFlags().StringSliceVar(&nginxVhostStatsRequestBuckets, "nginx-vhost-stats-request-buckets", []string{},
+		"Comma separated list of request latency histogram buckets, specified in seconds (e.g. 0.005 = 5ms)")
 	rootCmd.PersistentFlags().StringVar(&nginxOpenTracingPluginPath, "nginx-opentracing-plugin-path", defaultNginxOpenTracingPluginPath,
 		"Path to OpenTracing plugin on disk (eg. /usr/local/lib/libjaegertracing_plugin.so)")
 	rootCmd.PersistentFlags().StringVar(&nginxOpenTracingConfigPath, "nginx-opentracing-config-path", defaultNginxOpenTracingConfigPath,
