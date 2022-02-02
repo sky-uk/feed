@@ -519,7 +519,7 @@ func TestNginxConfig(t *testing.T) {
 		{
 			"Vhost stats request buckets not set if not provided",
 			noVhostStatsRequestBucketsConf,
-			[]string {
+			[]string{
 				"!vhost_traffic_status_histogram_buckets",
 			},
 		},

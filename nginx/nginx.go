@@ -55,7 +55,7 @@ type Conf struct {
 	UpdatePeriod                 time.Duration
 	SSLPath                      string
 	VhostStatsSharedMemory       int
-	VhostStatsRequestBuckets	 []string
+	VhostStatsRequestBuckets     []string
 	OpenTracingPlugin            string
 	OpenTracingConfig            string
 	HTTPConf
