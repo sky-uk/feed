@@ -92,6 +92,7 @@ func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 	updater.On("Stop").Return(nil)
 	updater.On("Update", mock.Anything).Return(nil)
 	updater.On("Health").Return(nil)
+	updater.On("Readiness").Return(nil)
 
 	return updater, client
 }
@@ -215,6 +216,21 @@ func TestControllerIsUnhealthyUntilStarted(t *testing.T) {
 	asserter.Error(controller.Health(), "should be unhealthy after stopped")
 }
 
+func TestControllerIsUnreadyUntilStarted(t *testing.T) {
+	// given
+	asserter := assert.New(t)
+	controller := newController(createDefaultStubs())
+
+	// expect
+	asserter.Error(controller.Readiness(), "should be unready until started")
+	asserter.NoError(controller.Start())
+	time.Sleep(smallWaitTime)
+	asserter.NoError(controller.Readiness(), "should be ready after started")
+	asserter.NoError(controller.Stop())
+	time.Sleep(smallWaitTime)
+	asserter.Error(controller.Readiness(), "should be unready after stopped")
+}
+
 func TestControllerIsUnhealthyIfUpdaterIsUnhealthy(t *testing.T) {
 	asserter := assert.New(t)
 	_, client := createDefaultStubs()
@@ -232,6 +248,28 @@ func TestControllerIsUnhealthyIfUpdaterIsUnhealthy(t *testing.T) {
 	asserter.NoError(controller.Start())
 	asserter.NoError(controller.Health())
 	asserter.Equal(lbErr, controller.Health())
+
+	_ = controller.Stop()
+}
+
+func TestControllerIsUnreadyIfUpdaterIsUnready(t *testing.T) {
+	asserter := assert.New(t)
+	_, client := createDefaultStubs()
+	updater := new(fakeUpdater)
+	controller := newController(updater, client)
+
+	updater.On("Start").Return(nil)
+	updater.On("Stop").Return(nil)
+	updater.On("Update", mock.Anything).Return(nil)
+	// first return healthy, then unhealthy for lb
+	updater.On("Health").Return(nil)
+	updater.On("Readiness").Return(nil).Once()
+	lbErr := fmt.Errorf("FakeUpdater: dead")
+	updater.On("Readiness").Return(fmt.Errorf("dead")).Once()
+
+	asserter.NoError(controller.Start())
+	asserter.NoError(controller.Readiness())
+	asserter.Equal(lbErr, controller.Readiness())
 
 	_ = controller.Stop()
 }

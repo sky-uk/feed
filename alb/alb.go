@@ -125,6 +125,9 @@ func (a *alb) Health() error {
 }
 
 func (a *alb) Readiness() error {
+	if !a.readyForHealthCheck.Get() {
+		return errors.New("ALB registration not attempted yet")
+	}
 	return a.Health()
 }
 

@@ -271,6 +271,9 @@ func (e *elb) Health() error {
 }
 
 func (e *elb) Readiness() error {
+	if !e.readyForHealthCheck.Get() {
+		return errors.New("ELB registration not attempted yet")
+	}
 	return e.Health()
 }
 
