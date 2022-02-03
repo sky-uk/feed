@@ -1,3 +1,16 @@
+# v5.1.0
+
+* A readiness endpoint is added to feed.  This is useful for kubernetes
+  rolling deployments, to prevent proceeding with deployments before a
+  feed replica has registered itslef with an AWS LB target group.  Itʼs
+  particularly useful for NLB type load balancers, where there is a
+  delay of several minutes between the registration API call to AWS and
+  the initial traffic sent to the feed replica.
+* The nginx VTS module is updated to the most recent upstream version.
+  The new version exposes prometheus histograms for the latency of
+  requests transiting feed.  This behavior can be controlled with the
+  `--nginx-vhost-stats-request-buckets` command line option.
+
 # v5.0.0
 
 * [SECURITY] Previous versions of feed did not validate that the format of
