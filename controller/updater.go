@@ -12,4 +12,7 @@ type Updater interface {
 	// Health returns nil if healthy, otherwise an error. Should be fast to respond, as it
 	// may be called often. Any long running checks should be done separately.
 	Health() error
+	// Readiness returns nil if ready, otherwise an error. Should be fast to respond, as it
+	// may be called often. Any long running checks should be done separately.
+	Readiness() error
 }

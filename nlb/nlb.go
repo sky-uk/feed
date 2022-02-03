@@ -74,6 +74,7 @@ type nlb struct {
 	initialised          initialised
 	drainDelay           time.Duration
 	readyForHealthCheck  util.SafeBool
+	isReady              util.SafeBool
 }
 
 type initialised struct {
@@ -142,6 +143,16 @@ func (e *nlb) attachToFrontEnds() error {
 	if e.expectedNumber > 0 && registered != e.expectedNumber {
 		return fmt.Errorf("expected NLBs: %d actual: %d", e.expectedNumber, registered)
 	}
+
+	// Mark ourself as ready after 5 minutes, to account for the NLB
+	// registration delay.  From the AWS docs:
+	// > It can take a few minutes for the registration process to complete
+	// > and health checks to start.
+	// https://docs.aws.amazon.com/elasticloadbalancing/latest/network/target-group-register-targets.html
+	go func() {
+		time.Sleep(5 * time.Minute)
+		e.isReady.Set(true)
+	}()
 
 	return nil
 }
@@ -400,6 +411,18 @@ func (e *nlb) Health() error {
 	}
 
 	return fmt.Errorf("expected NLBs: %d actual: %d", e.expectedNumber, e.registeredFrontends.Get())
+}
+
+func (e *nlb) Readiness() error {
+	err := e.Health()
+	if err != nil {
+		// We can't be ready if we're not healthy
+		return err
+	}
+	if e.isReady.Get() {
+		return nil
+	}
+	return errors.New("initial NLB provisioning time not yet complete")
 }
 
 func (e *nlb) Update(controller.IngressEntries) error {

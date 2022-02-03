@@ -204,6 +204,10 @@ func (g *gorb) Health() error {
 	return nil
 }
 
+func (g *gorb) Readiness() error {
+	return g.Health()
+}
+
 func (g *gorb) Update(controller.IngressEntries) error {
 	var errorArr *multierror.Error
 	if g.config.ManageLoopback {

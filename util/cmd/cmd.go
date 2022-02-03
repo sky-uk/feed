@@ -19,10 +19,12 @@ import (
 	"github.com/sky-uk/feed/util/metrics"
 )
 
-// Pulse represents something alive whose health can be checked.
+// Pulse represents something alive whose health and readiness can be checked.
 type Pulse interface {
 	// Health returns the current health, nil if healthy.
 	Health() error
+	// Readiness returns the current readiness, nil if ready
+	Readiness() error
 	// Stop the thing that's alive.
 	Stop() error
 }
@@ -30,6 +32,7 @@ type Pulse interface {
 // AddHealthPort is used to expose the health over http.
 func AddHealthPort(pulse Pulse, healthPort int) {
 	http.HandleFunc("/health", healthHandler(pulse))
+	http.HandleFunc("/readiness", readinessHandler(pulse))
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/alive", okHandler)
 
@@ -40,9 +43,22 @@ func AddHealthPort(pulse Pulse, healthPort int) {
 	}()
 }
 
-func healthHandler(pulse Pulse) func(w http.ResponseWriter, r *http.Request) {
+func healthHandler(pulse Pulse) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := pulse.Health(); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, fmt.Sprintf("%v\n", err))
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "ok\n")
+	}
+}
+
+func readinessHandler(pulse Pulse) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := pulse.Readiness(); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = io.WriteString(w, fmt.Sprintf("%v\n", err))
 			return

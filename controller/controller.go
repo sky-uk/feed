@@ -55,8 +55,10 @@ type Controller interface {
 	Start() error
 	// Stop the controller, blocking until it stops or an error occurs.
 	Stop() error
-	// Healthy returns true for a healthy controller, false for unhealthy.
+	// Health returns nil for a healthy controller, an error for unhealthy.
 	Health() error
+	// Readiness returns nil for a ready controller, an error for unready.
+	Readiness() error
 }
 
 type controller struct {
@@ -449,5 +451,17 @@ func (c *controller) Health() error {
 		return fmt.Errorf("updates failed to apply: %v", err)
 	}
 
+	return nil
+}
+
+func (c *controller) Readiness() error {
+	if err := c.Health(); err != nil {
+		return err
+	}
+	for _, u := range c.updaters {
+		if err := u.Readiness(); err != nil {
+			return fmt.Errorf("%v: %v", u, err)
+		}
+	}
 	return nil
 }

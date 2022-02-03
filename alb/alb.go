@@ -124,8 +124,15 @@ func (a *alb) Health() error {
 	return fmt.Errorf("have not attached to all frontends %v yet", a.targetGroupNames)
 }
 
+func (a *alb) Readiness() error {
+	if !a.readyForHealthCheck.Get() {
+		return errors.New("ALB registration not attempted yet")
+	}
+	return a.Health()
+}
+
 func (a *alb) String() string {
-	return "ELB frontend"
+	return "ALB frontend"
 }
 
 func (a *alb) attachToFrontEnds() error {

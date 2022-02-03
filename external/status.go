@@ -44,6 +44,10 @@ func (s *status) Health() error {
 	return nil
 }
 
+func (s *status) Readiness() error {
+	return nil
+}
+
 func (s *status) Update(ingresses controller.IngressEntries) error {
 	return k8sStatus.Update(ingresses, s.loadBalancers, s.kubernetesClient)
 }

@@ -577,6 +577,10 @@ func (n *nginxUpdater) Health() error {
 	return nil
 }
 
+func (n *nginxUpdater) Readiness() error {
+	return n.Health()
+}
+
 func (n *nginxUpdater) String() string {
 	return "nginx proxy"
 }

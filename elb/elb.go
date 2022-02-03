@@ -270,6 +270,13 @@ func (e *elb) Health() error {
 	return fmt.Errorf("expected ELBs: %d actual: %d", e.expectedNumber, e.registeredFrontends.Get())
 }
 
+func (e *elb) Readiness() error {
+	if !e.readyForHealthCheck.Get() {
+		return errors.New("ELB registration not attempted yet")
+	}
+	return e.Health()
+}
+
 func (e *elb) Update(controller.IngressEntries) error {
 	e.initialised.Lock()
 	defer e.initialised.Unlock()

@@ -231,6 +231,10 @@ func (u *updater) Health() error {
 	return nil
 }
 
+func (u *updater) Readiness() error {
+	return nil
+}
+
 func (u *updater) String() string {
 	return "merlin attacher"
 }

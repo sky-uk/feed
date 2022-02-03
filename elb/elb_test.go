@@ -578,6 +578,18 @@ func TestHealthReportsHealthyBeforeFirstUpdate(t *testing.T) {
 	assert.Nil(t, e.Health())
 }
 
+func TestReadinessReportsUnreadyBeforeFirstUpdate(t *testing.T) {
+	// given
+	e, _, _ := setup()
+
+	// when
+	err := e.Start()
+
+	// then
+	assert.NoError(t, err)
+	assert.Error(t, e.Readiness())
+}
+
 func TestHealthReportsUnhealthyAfterUnsuccessfulFirstUpdate(t *testing.T) {
 	// given
 	e, mockElb, mockMetadata := setup()

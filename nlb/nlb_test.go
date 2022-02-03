@@ -824,3 +824,15 @@ func TestHealthReportsHealthyBeforeFirstUpdate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, elbUpdaterV2.Health())
 }
+
+func TestReadyReportsUnreadyBeforeFirstUpdate(t *testing.T) {
+	// given
+	elbUpdaterV2, _, _ := setup()
+
+	// when
+	err := elbUpdaterV2.Start()
+
+	// then
+	assert.NoError(t, err)
+	assert.Error(t, elbUpdaterV2.Readiness())
+}

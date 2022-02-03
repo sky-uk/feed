@@ -154,6 +154,7 @@ func TestRegisterInstance(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, updateErr)
 	assert.NoError(t, a.Health())
+	assert.NoError(t, a.Readiness())
 }
 
 func TestReportsErrorIfDidntRegisterAllTargetGroups(t *testing.T) {
@@ -322,6 +323,18 @@ func TestHealthReportsHealthyBeforeFirstUpdate(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 	assert.Nil(t, a.Health())
+}
+
+func TestReadinessReportsUnreadyBeforeFirstUpdate(t *testing.T) {
+	// given
+	a, _, _ := setup("internal", "external")
+
+	// when
+	err := a.Start()
+
+	// then
+	assert.NoError(t, err)
+	assert.Error(t, a.Readiness())
 }
 
 func TestHealthReportsUnhealthyAfterUnsuccessfulFirstUpdate(t *testing.T) {
