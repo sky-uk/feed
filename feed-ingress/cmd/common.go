@@ -65,6 +65,7 @@ func createIngressUpdaters(kubernetesClient k8s.Client, appender appendIngressUp
 	nginxConfig.TrustedFrontends = nginxTrustedFrontends
 	nginxConfig.LogHeaders = nginxLogHeaders
 	nginxConfig.VhostStatsSharedMemory = nginxVhostStatsSharedMemory
+	nginxConfig.VhostStatsRequestBuckets = nginxVhostStatsRequestBuckets
 	nginxConfig.OpenTracingPlugin = nginxOpenTracingPluginPath
 	nginxConfig.OpenTracingConfig = nginxOpenTracingConfigPath
 	nginxUpdater := nginx.New(nginxConfig)
