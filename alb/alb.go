@@ -132,7 +132,7 @@ func (a *alb) Readiness() error {
 }
 
 func (a *alb) String() string {
-	return "ELB frontend"
+	return "ALB frontend"
 }
 
 func (a *alb) attachToFrontEnds() error {

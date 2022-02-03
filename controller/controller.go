@@ -57,7 +57,7 @@ type Controller interface {
 	Stop() error
 	// Health returns nil for a healthy controller, an error for unhealthy.
 	Health() error
-	// Readiness returns nil for a ready controller, an error for unhealthy.
+	// Readiness returns nil for a ready controller, an error for unready.
 	Readiness() error
 }
 
