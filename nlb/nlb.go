@@ -399,7 +399,7 @@ func deregisterFromLoadBalancer(n *nlb, tg *elbv2.TargetGroup) error {
 		TargetGroupArn: tg.TargetGroupArn,
 	})
 	if err != nil {
-		return fmt.Errorf("could not deregister target group(s) from instance %s (%s)", n.instanceID, n.privateIPAddress)
+		return fmt.Errorf("could not deregister target group(s) from instance %s (%s): %w", n.instanceID, n.privateIPAddress, err)
 	}
 
 	return nil
