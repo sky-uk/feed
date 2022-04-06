@@ -84,6 +84,7 @@ const (
 	defaultNginxServerNamesHashBucketSize    = unset
 	defaultNginxServerNamesHashMaxSize       = unset
 	defaultNginxProxyProtocol                = false
+	defaultNginxWebsocketUpgrade             = false
 	defaultNginxUpdatePeriod                 = time.Second * 30
 	defaultNginxSSLPath                      = "/etc/ssl/default-ssl/default-ssl"
 	defaultNginxVhostStatsSharedMemory       = 1
@@ -202,6 +203,8 @@ func configureNginxFlags() {
 			"in a separate document. http://nginx.org/en/docs/hash.html")
 	rootCmd.PersistentFlags().BoolVar(&nginxConfig.ProxyProtocol, "nginx-proxy-protocol", defaultNginxProxyProtocol,
 		"Enable PROXY protocol for nginx listeners.")
+	rootCmd.PersistentFlags().BoolVar(&nginxConfig.AllowWebsocketUpgrade, "nginx-allow-websocket-upgrade", defaultNginxWebsocketUpgrade,
+		"Allow Upgrade and Connection headers to be proxied for WebSockets.")
 	rootCmd.PersistentFlags().DurationVar(&nginxConfig.UpdatePeriod, "nginx-update-period", defaultNginxUpdatePeriod,
 		"How often nginx reloads can occur. Too frequent will result in many nginx worker processes alive at the same time.")
 	rootCmd.PersistentFlags().StringVar(&nginxConfig.AccessLogDir, "access-log-dir", defaultAccessLogDir, "Access logs direcoty.")

@@ -88,9 +88,22 @@ http {
     # Disable all logging of 404s - to prevent spam when error log is enabled.
     log_not_found off;
 
+{{ if .AllowWebsocketUpgrade }}
+    # Support WebSocket upgrade, allow keepalive
+    # Upgrade logic from http://nginx.org/en/docs/http/websocket.html
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      '';
+    }
+
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+{{ else }}
     # Enable keepalive to backend.
     proxy_http_version 1.1;
     proxy_set_header Connection "";
+{{ end }}
 
     # Mitigate httpoxy vulnerability.
     proxy_set_header Proxy "";

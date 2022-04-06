@@ -313,6 +313,9 @@ func TestNginxConfig(t *testing.T) {
 	noVhostStatsRequestBucketsConf := defaultConf
 	noVhostStatsRequestBucketsConf.VhostStatsRequestBuckets = nil
 
+	websocketProxyConf := defaultConf
+	websocketProxyConf.AllowWebsocketUpgrade = true
+
 	var tests = []struct {
 		name             string
 		conf             Conf
@@ -521,6 +524,21 @@ func TestNginxConfig(t *testing.T) {
 			noVhostStatsRequestBucketsConf,
 			[]string{
 				"!vhost_traffic_status_histogram_buckets",
+			},
+		},
+		{
+			"WebSocket proxy headers present if enabled",
+			websocketProxyConf,
+			[]string{
+				"# Support WebSocket upgrade, allow keepalive",
+				"# Upgrade logic from http://nginx.org/en/docs/http/websocket.html",
+				"map $http_upgrade $connection_upgrade {",
+				"    default upgrade;",
+				"    ''      '';",
+				"}",
+				"proxy_http_version 1.1;",
+				"proxy_set_header Upgrade $http_upgrade;",
+				"proxy_set_header Connection $connection_upgrade;",
 			},
 		},
 	}

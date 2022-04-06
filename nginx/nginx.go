@@ -48,6 +48,7 @@ type Conf struct {
 	Ports                        []Port
 	LogLevel                     string
 	ProxyProtocol                bool
+	AllowWebsocketUpgrade        bool
 	AccessLog                    bool
 	AccessLogDir                 string
 	LogHeaders                   []string
