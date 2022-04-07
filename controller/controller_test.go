@@ -1293,10 +1293,6 @@ var expectGetAllIngresses = func(client *fake.FakeClient, ingresses []*v1beta1.I
 	client.On("GetAllIngresses").Return(ingresses, nil)
 }
 
-var expectGetIngresses = func(client *fake.FakeClient, ingresses []*v1beta1.Ingress) {
-	client.On("GetIngresses", &k8s.NamespaceSelector{LabelName: "team", LabelValue: "theteam"}).Return(ingresses, nil)
-}
-
 func runAndAssertUpdates(t *testing.T, clientExpectation clientExpectation, test testSpec) {
 	//given
 	asserter := assert.New(t)

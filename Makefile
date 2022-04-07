@@ -27,7 +27,7 @@ travis : checkformat check docker check-vulnerabilities
 
 format :
 	@echo "== format"
-	@go run golang.org/x/tools/cmd/goimports -w $(files)
+	@go run golang.org/x/tools/cmd/goimports@latest -w $(files)
 	@sync
 
 dist/feed-ingress : $(files)
@@ -42,7 +42,7 @@ build : dist/feed-ingress dist/feed-dns
 
 checkformat :
 	@echo "== check formatting"
-	@unformatted=`go run golang.org/x/tools/cmd/goimports -l $(files)`; if [ "$$unformatted" != "" ]; then \
+	@unformatted=`go run golang.org/x/tools/cmd/goimports@latest -l $(files)`; if [ "$$unformatted" != "" ]; then \
 	    echo "needs formatting: $$unformatted"; \
 	    exit 1; \
 	fi
@@ -53,9 +53,7 @@ vet :
 
 lint :
 	@echo "== lint"
-	@for pkg in $(pkgs); do \
-		go run golang.org/x/lint/golint -set_exit_status $$pkg || exit 1; \
-	done;
+	@go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.45 run
 
 fakenginx:
 	@echo "== build fake nginx for tests"

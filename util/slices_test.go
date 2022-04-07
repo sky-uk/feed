@@ -6,12 +6,6 @@ import (
 	"testing"
 )
 
-type blah interface {
-}
-
-type cat struct {
-}
-
 type input struct {
 	sliceLength int
 	size        int

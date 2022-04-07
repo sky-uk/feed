@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -122,8 +124,10 @@ func TestNginxStartedAfterFirstUpdate(t *testing.T) {
 	defer os.Remove(tmpDir)
 	lb := newUpdater(tmpDir)
 
-	lb.Start()
-	err := lb.Update([]controller.IngressEntry{{
+	err := lb.Start()
+	assert.NoError(t, err)
+
+	err = lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
 	}})
 	assert.NoError(t, err)
@@ -136,7 +140,8 @@ func TestNginxDoesNotStartWithZeroIngresses(t *testing.T) {
 	defer os.Remove(tmpDir)
 	lb := newUpdater(tmpDir)
 
-	lb.Start()
+	err := lb.Start()
+	assert.NoError(t, err)
 
 	assert.EqualError(t, lb.Update([]controller.IngressEntry{}), "nginx update has been called with 0 entries")
 	assert.False(t, nginxHasStarted(tmpDir))
@@ -147,8 +152,10 @@ func TestNginxDoesNotReloadWithZeroIngresses(t *testing.T) {
 	defer os.Remove(tmpDir)
 	lb := newUpdater(tmpDir)
 
-	lb.Start()
-	err := lb.Update([]controller.IngressEntry{{
+	err := lb.Start()
+	assert.NoError(t, err)
+
+	err = lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
 	}})
 	assert.NoError(t, err)
@@ -172,8 +179,10 @@ func TestReloadMetricIsIncremented(t *testing.T) {
 	conf.HealthPort = getPort(ts)
 	lb := newNginxWithConf(conf)
 
-	lb.Start()
-	err := lb.Update([]controller.IngressEntry{{
+	err := lb.Start()
+	assert.NoError(err)
+
+	err = lb.Update([]controller.IngressEntry{{
 		Host: "james.com",
 	}})
 	assert.NoError(err)
@@ -182,6 +191,7 @@ func TestReloadMetricIsIncremented(t *testing.T) {
 	err = lb.Update([]controller.IngressEntry{{
 		Host: "bob.com",
 	}})
+	assert.NoError(err)
 	time.Sleep(time.Second * 2)
 
 	assert.True(nginxHasReloaded(tmpDir))
@@ -202,7 +212,10 @@ func nginxLogEquals(nginxDir string, message string) bool {
 	defer file.Close()
 
 	buf := make([]byte, len(message))
-	file.Read(buf)
+	_, err := file.Read(buf)
+	if err != nil {
+		return false
+	}
 	return string(buf) == message
 }
 
@@ -2200,7 +2213,10 @@ func metricValue(c prometheus.Collector) float64 {
 	c.Collect(metricCh)
 	metric := <-metricCh
 	var metricVal dto.Metric
-	metric.Write(&metricVal)
+	err := metric.Write(&metricVal)
+	if err != nil {
+		log.Fatalf("Could not write metric: %v", err)
+	}
 	if metricVal.Gauge != nil {
 		return *metricVal.Gauge.Value
 	}
