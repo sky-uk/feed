@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
+	extensionsv1beta1 "k8s.io/client-go/applyconfigurations/extensions/v1beta1"
 	clientV1Beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 )
@@ -520,9 +522,9 @@ var _ = Describe("Client", func() {
 				newIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "new-host"})
 				independentlyUpdatedIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "new-host"})
 
-				ingressClient.On("Get", "test", metav1.GetOptions{}).Return(currentIngress).Once()
-				ingressClient.On("UpdateStatus", newIngress).Return(currentIngress, errors.NewApplyConflict([]metav1.StatusCause{}, "conflict"))
-				ingressClient.On("Get", "test", metav1.GetOptions{}).Return(independentlyUpdatedIngress)
+				ingressClient.On("Get", context.TODO(), "test", metav1.GetOptions{}).Return(currentIngress).Once()
+				ingressClient.On("UpdateStatus", context.TODO(), newIngress, metav1.UpdateOptions{}).Return(currentIngress, errors.NewApplyConflict([]metav1.StatusCause{}, "conflict"))
+				ingressClient.On("Get", context.TODO(), "test", metav1.GetOptions{}).Return(independentlyUpdatedIngress)
 
 				// when
 				err := unitUnderTest.UpdateIngressStatus(newIngress)
@@ -537,9 +539,9 @@ var _ = Describe("Client", func() {
 				newIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "new-host"})
 				independentlyUpdatedIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "other-host"})
 
-				ingressClient.On("Get", "test", metav1.GetOptions{}).Return(currentIngress).Once()
-				ingressClient.On("UpdateStatus", newIngress).Return(currentIngress, errors.NewApplyConflict([]metav1.StatusCause{}, "conflict"))
-				ingressClient.On("Get", "test", metav1.GetOptions{}).Return(independentlyUpdatedIngress)
+				ingressClient.On("Get", context.TODO(), "test", metav1.GetOptions{}).Return(currentIngress).Once()
+				ingressClient.On("UpdateStatus", context.TODO(), newIngress, metav1.UpdateOptions{}).Return(currentIngress, errors.NewApplyConflict([]metav1.StatusCause{}, "conflict"))
+				ingressClient.On("Get", context.TODO(), "test", metav1.GetOptions{}).Return(independentlyUpdatedIngress)
 
 				// when
 				err := unitUnderTest.UpdateIngressStatus(newIngress)
@@ -555,8 +557,9 @@ var _ = Describe("Client", func() {
 				currentIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "old-host"})
 				newIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "new-host"})
 
-				ingressClient.On("Get", "test", metav1.GetOptions{}).Return(currentIngress).Once()
-				ingressClient.On("UpdateStatus", newIngress).Return(currentIngress, errors.NewServiceUnavailable("unavailable"))
+				ingressClient.On("Get", context.TODO(), "test", metav1.GetOptions{}).Return(currentIngress).Once()
+				ingressClient.On("UpdateStatus", context.TODO(), newIngress, metav1.UpdateOptions{}).Return(
+					currentIngress, errors.NewServiceUnavailable("unavailable"))
 
 				// when
 				err := unitUnderTest.UpdateIngressStatus(newIngress)
@@ -644,48 +647,58 @@ type fakeIngressClient struct {
 	mock.Mock
 }
 
-func (f *fakeIngressClient) Create(ingress *v1beta1.Ingress) (*v1beta1.Ingress, error) {
-	r := f.Called(ingress)
+func (f *fakeIngressClient) Create(ctx context.Context, ingress *v1beta1.Ingress, options metav1.CreateOptions) (*v1beta1.Ingress, error) {
+	r := f.Called(ctx, ingress, options)
 	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
 }
 
-func (f *fakeIngressClient) Update(ingress *v1beta1.Ingress) (*v1beta1.Ingress, error) {
-	r := f.Called(ingress)
+func (f *fakeIngressClient) Update(ctx context.Context, ingress *v1beta1.Ingress, options metav1.UpdateOptions) (*v1beta1.Ingress, error) {
+	r := f.Called(ctx, ingress, options)
 	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
 }
 
-func (f *fakeIngressClient) UpdateStatus(ingress *v1beta1.Ingress) (*v1beta1.Ingress, error) {
-	r := f.Called(ingress)
+func (f *fakeIngressClient) UpdateStatus(ctx context.Context, ingress *v1beta1.Ingress, options metav1.UpdateOptions) (*v1beta1.Ingress, error) {
+	r := f.Called(ctx, ingress, options)
 	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
 }
 
-func (f *fakeIngressClient) Delete(name string, options *metav1.DeleteOptions) error {
-	r := f.Called(name, options)
+func (f *fakeIngressClient) Delete(ctx context.Context, name string, options metav1.DeleteOptions) error {
+	r := f.Called(ctx, name, options)
 	return r.Error(0)
 }
 
-func (f *fakeIngressClient) DeleteCollection(options *metav1.DeleteOptions, listOptions metav1.ListOptions) error {
-	r := f.Called(options, listOptions)
+func (f *fakeIngressClient) DeleteCollection(ctx context.Context, deleteOptions metav1.DeleteOptions, listOptions metav1.ListOptions) error {
+	r := f.Called(ctx, deleteOptions, listOptions)
 	return r.Error(0)
 }
 
-func (f *fakeIngressClient) Get(name string, options metav1.GetOptions) (*v1beta1.Ingress, error) {
-	r := f.Called(name, options)
+func (f *fakeIngressClient) Get(ctx context.Context, name string, options metav1.GetOptions) (*v1beta1.Ingress, error) {
+	r := f.Called(ctx, name, options)
 	return r.Get(0).(*v1beta1.Ingress), nil
 }
 
-func (f *fakeIngressClient) List(opts metav1.ListOptions) (*v1beta1.IngressList, error) {
-	r := f.Called(opts)
+func (f *fakeIngressClient) List(ctx context.Context, options metav1.ListOptions) (*v1beta1.IngressList, error) {
+	r := f.Called(ctx, options)
 	return r.Get(0).(*v1beta1.IngressList), r.Error(1)
 }
 
-func (f *fakeIngressClient) Watch(opts metav1.ListOptions) (watch.Interface, error) {
-	r := f.Called(opts)
+func (f *fakeIngressClient) Watch(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+	r := f.Called(ctx, options)
 	return r.Get(0).(watch.Interface), r.Error(1)
 }
 
-func (f *fakeIngressClient) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1beta1.Ingress, err error) {
-	r := f.Called(name, pt, data, subresources)
+func (f *fakeIngressClient) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, options metav1.PatchOptions, subresources ...string) (result *v1beta1.Ingress, err error) {
+	r := f.Called(ctx, name, pt, data, options, subresources)
+	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
+}
+
+func (f *fakeIngressClient) Apply(ctx context.Context, ingress *extensionsv1beta1.IngressApplyConfiguration, options metav1.ApplyOptions) (result *v1beta1.Ingress, err error) {
+	r := f.Called(ctx, ingress, options)
+	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
+}
+
+func (f *fakeIngressClient) ApplyStatus(ctx context.Context, ingress *extensionsv1beta1.IngressApplyConfiguration, options metav1.ApplyOptions) (result *v1beta1.Ingress, err error) {
+	r := f.Called(ctx, ingress, options)
 	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
 }
 

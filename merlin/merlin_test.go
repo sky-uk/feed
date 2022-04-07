@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/golang/protobuf/ptypes/wrappers"
@@ -78,21 +77,8 @@ var _ = Describe("merlin", func() {
 			Timeout:       ptypes.DurationProto(conf.HealthTimeout),
 		}
 
-		expectedServer = &types.RealServer{
-			ServiceID: conf.ServiceID,
-			Key: &types.RealServer_Key{
-				Ip:   conf.InstanceIP,
-				Port: uint32(conf.InstancePort),
-			},
-			Config: &types.RealServer_Config{
-				Weight:  &wrappers.UInt32Value{Value: 1},
-				Forward: types.ForwardMethod_ROUTE,
-			},
-			HealthCheck: healthCheck,
-		}
-		expectedHTTPSServer = proto.Clone(expectedServer).(*types.RealServer)
-		expectedHTTPSServer.ServiceID = conf.HTTPSServiceID
-		expectedHTTPSServer.Key.Port = uint32(conf.InstanceHTTPSPort)
+		expectedServer = createExpectedServer(conf.ServiceID, conf.InstanceIP, uint32(conf.InstancePort), healthCheck)
+		expectedHTTPSServer = createExpectedServer(conf.HTTPSServiceID, conf.InstanceIP, uint32(conf.InstanceHTTPSPort), healthCheck)
 	})
 
 	It("registers itself on start", func() {
@@ -124,16 +110,14 @@ var _ = Describe("merlin", func() {
 
 	It("deregisters itself on stop", func() {
 		// http
-		drainServer := expectedServer
+		drainServer := createExpectedServer(conf.ServiceID, conf.InstanceIP, uint32(conf.InstancePort), nil)
 		drainServer.Config = &types.RealServer_Config{Weight: &wrappers.UInt32Value{Value: 0}}
-		drainServer.HealthCheck = nil
-		delServer := proto.Clone(drainServer).(*types.RealServer)
+		delServer := createExpectedServer(conf.ServiceID, conf.InstanceIP, uint32(conf.InstancePort), nil)
 		delServer.Config = nil
 		// https
-		drainHTTPSServer := expectedHTTPSServer
+		drainHTTPSServer := createExpectedServer(conf.HTTPSServiceID, conf.InstanceIP, uint32(conf.InstanceHTTPSPort), nil)
 		drainHTTPSServer.Config = &types.RealServer_Config{Weight: &wrappers.UInt32Value{Value: 0}}
-		drainHTTPSServer.HealthCheck = nil
-		delHTTPSServer := proto.Clone(drainHTTPSServer).(*types.RealServer)
+		delHTTPSServer := createExpectedServer(conf.HTTPSServiceID, conf.InstanceIP, uint32(conf.InstanceHTTPSPort), nil)
 		delHTTPSServer.Config = nil
 
 		client.On("UpdateServer", mock.Anything, drainServer).Return(emptyResponse, nil)
@@ -229,6 +213,21 @@ var _ = Describe("merlin", func() {
 		})
 	})
 })
+
+func createExpectedServer(serviceID string, instanceIP string, instancePort uint32, healthCheck *types.RealServer_HealthCheck) *types.RealServer {
+	return &types.RealServer{
+		ServiceID: serviceID,
+		Key: &types.RealServer_Key{
+			Ip:   instanceIP,
+			Port: instancePort,
+		},
+		Config: &types.RealServer_Config{
+			Weight:  &wrappers.UInt32Value{Value: 1},
+			Forward: types.ForwardMethod_ROUTE,
+		},
+		HealthCheck: healthCheck,
+	}
+}
 
 type netlinkMockType struct {
 	mock.Mock
