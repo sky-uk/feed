@@ -12,9 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const smallWaitTime = time.Millisecond * 50
@@ -82,8 +81,8 @@ func createDefaultStubs() (*fakeUpdater, *fake.FakeClient) {
 	serviceWatcher, _ := createFakeWatcher()
 	namespaceWatcher, _ := createFakeWatcher()
 
-	client.On("GetAllIngresses").Return([]*v1beta1.Ingress{}, nil)
-	client.On("GetIngresses", mock.Anything, mock.AnythingOfType("bool")).Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetAllIngresses").Return([]*networkingv1.Ingress{}, nil)
+	client.On("GetIngresses", mock.Anything, mock.AnythingOfType("bool")).Return([]*networkingv1.Ingress{}, nil)
 	client.On("GetServices").Return([]*v1.Service{}, nil)
 	client.On("WatchIngresses").Return(ingressWatcher)
 	client.On("WatchServices").Return(serviceWatcher)
@@ -333,7 +332,7 @@ func defaultConfig() Config {
 
 type testSpec struct {
 	description string
-	ingresses   []*v1beta1.Ingress
+	ingresses   []*networkingv1.Ingress
 	services    []*v1.Service
 	namespaces  []*v1.Namespace
 	entries     IngressEntries
@@ -1228,7 +1227,7 @@ func TestNamespaceSelectorsIsUsedToGetIngresses(t *testing.T) {
 	updater.On("Health").Return(nil)
 
 	// The purpose of this test is to ensure that the NamespaceSelectors is passed to GetIngresses
-	client.On("GetIngresses", config.NamespaceSelectors, config.MatchAllNamespaceSelectors).Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetIngresses", config.NamespaceSelectors, config.MatchAllNamespaceSelectors).Return([]*networkingv1.Ingress{}, nil)
 
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()
@@ -1287,9 +1286,9 @@ func TestUpdaterIsUpdatedForIngressWithoutRulesDefinition(t *testing.T) {
 	})
 }
 
-type clientExpectation func(client *fake.FakeClient, ingresses []*v1beta1.Ingress)
+type clientExpectation func(client *fake.FakeClient, ingresses []*networkingv1.Ingress)
 
-var expectGetAllIngresses = func(client *fake.FakeClient, ingresses []*v1beta1.Ingress) {
+var expectGetAllIngresses = func(client *fake.FakeClient, ingresses []*networkingv1.Ingress) {
 	client.On("GetAllIngresses").Return(ingresses, nil)
 }
 
@@ -1341,7 +1340,7 @@ func runAndAssertUpdates(t *testing.T, clientExpectation clientExpectation, test
 	client.AssertExpectations(t)
 }
 
-func addIngresses(ingresses []*v1beta1.Ingress, entries IngressEntries) IngressEntries {
+func addIngresses(ingresses []*networkingv1.Ingress, entries IngressEntries) IngressEntries {
 	if len(ingresses) != len(entries) {
 		return entries
 	}
@@ -1383,7 +1382,7 @@ const (
 	defaultMaxConnections = 0
 )
 
-func createDefaultIngresses() []*v1beta1.Ingress {
+func createDefaultIngresses() []*networkingv1.Ingress {
 	return createIngressesFixture(ingressNamespace, ingressHost, ingressSvcName, ingressSvcPort, map[string]string{
 		ingressAllowAnnotation:   ingressAllow,
 		backendTimeoutSeconds:    "10",
@@ -1392,7 +1391,7 @@ func createDefaultIngresses() []*v1beta1.Ingress {
 	}, ingressPath)
 }
 
-func createIngressesFromNonELBAnnotation(legacyAnnotations bool) []*v1beta1.Ingress {
+func createIngressesFromNonELBAnnotation(legacyAnnotations bool) []*networkingv1.Ingress {
 	var timeoutAnnotation, schemeAnnotation string
 	if legacyAnnotations {
 		timeoutAnnotation = legacyBackendKeepaliveSeconds
@@ -1410,8 +1409,8 @@ func createIngressesFromNonELBAnnotation(legacyAnnotations bool) []*v1beta1.Ingr
 	}, ingressPath)
 }
 
-func createIngressWithoutRules() []*v1beta1.Ingress {
-	return []*v1beta1.Ingress{
+func createIngressWithoutRules() []*networkingv1.Ingress {
+	return []*networkingv1.Ingress{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ingressName,
@@ -1420,19 +1419,23 @@ func createIngressWithoutRules() []*v1beta1.Ingress {
 					ingressClassAnnotation: defaultIngressClass,
 				},
 			},
-			Spec: v1beta1.IngressSpec{},
+			Spec: networkingv1.IngressSpec{},
 		},
 	}
 
 }
 
-func createIngressesFixture(namespace string, host string, serviceName string, servicePort int, ingressAnnotations map[string]string, path string) []*v1beta1.Ingress {
+func createIngressesFixture(namespace string, host string, serviceName string, servicePort int32, ingressAnnotations map[string]string, path string) []*networkingv1.Ingress {
 
-	paths := []v1beta1.HTTPIngressPath{{
+	paths := []networkingv1.HTTPIngressPath{{
 		Path: path,
-		Backend: v1beta1.IngressBackend{
-			ServiceName: serviceName,
-			ServicePort: intstr.FromInt(servicePort),
+		Backend: networkingv1.IngressBackend{
+			Service: &networkingv1.IngressServiceBackend{
+				Name: serviceName,
+				Port: networkingv1.ServiceBackendPort{
+					Number: servicePort,
+				},
+			},
 		},
 	}}
 
@@ -1470,14 +1473,14 @@ func createIngressesFixture(namespace string, host string, serviceName string, s
 	}
 
 	ingressDefinition := createIngressWithoutRules()
-	var ingressRules []v1beta1.IngressRule
+	var ingressRules []networkingv1.IngressRule
 
 	if host != "" {
-		ingressRuleValue := v1beta1.IngressRuleValue{}
+		ingressRuleValue := networkingv1.IngressRuleValue{}
 		if path != "" {
-			ingressRuleValue.HTTP = &v1beta1.HTTPIngressRuleValue{Paths: paths}
+			ingressRuleValue.HTTP = &networkingv1.HTTPIngressRuleValue{Paths: paths}
 		}
-		ingressRule := v1beta1.IngressRule{
+		ingressRule := networkingv1.IngressRule{
 			Host:             host,
 			IngressRuleValue: ingressRuleValue,
 		}
@@ -1558,7 +1561,7 @@ func TestUpdateFailsWhenK8sClientReturnsNoIngresses(t *testing.T) {
 	updater.On("Health").Return(nil)
 
 	// This is the call we are testing (by returning an empty array of ingresses)
-	client.On("GetAllIngresses").Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetAllIngresses").Return([]*networkingv1.Ingress{}, nil)
 
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()
@@ -1620,7 +1623,7 @@ func TestUpdateFailsWhenK8sClientReturnsNoNamespaceIngresses(t *testing.T) {
 	updater.On("Health").Return(nil)
 
 	// This is the call we are testing (by returning an empty array of ingresses)
-	client.On("GetIngresses", namespaceSelectors, false).Return([]*v1beta1.Ingress{}, nil)
+	client.On("GetIngresses", namespaceSelectors, false).Return([]*networkingv1.Ingress{}, nil)
 
 	ingressWatcher, ingressCh := createFakeWatcher()
 	serviceWatcher, serviceCh := createFakeWatcher()

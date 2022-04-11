@@ -4,7 +4,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -29,8 +29,8 @@ func (c *cacheInformerFactory) createNamespaceInformer(resyncPeriod time.Duratio
 }
 
 func (c *cacheInformerFactory) createIngressInformer(resyncPeriod time.Duration, eventHandler cache.ResourceEventHandler) (cache.Store, cache.Controller) {
-	ingressLW := cache.NewListWatchFromClient(c.clientset.ExtensionsV1beta1().RESTClient(), "ingresses", "", fields.Everything())
-	return cache.NewInformer(ingressLW, &v1beta1.Ingress{}, resyncPeriod, eventHandler)
+	ingressLW := cache.NewListWatchFromClient(c.clientset.NetworkingV1().RESTClient(), "ingresses", "", fields.Everything())
+	return cache.NewInformer(ingressLW, &networkingv1.Ingress{}, resyncPeriod, eventHandler)
 }
 
 func (c *cacheInformerFactory) createServiceInformer(resyncPeriod time.Duration, eventHandler cache.ResourceEventHandler) (cache.Store, cache.Controller) {

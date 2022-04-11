@@ -17,7 +17,7 @@ import (
 	"github.com/sky-uk/feed/k8s"
 	"github.com/sky-uk/feed/util"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 )
 
 // Deprecated: retained to maintain backwards compatibility.
@@ -188,7 +188,7 @@ func (c *controller) updateIngresses() (err error) {
 	}()
 
 	// Get ingresses
-	var ingresses []*v1beta1.Ingress
+	var ingresses []*networkingv1.Ingress
 
 	if c.namespaceSelectors == nil {
 		ingresses, err = c.client.GetAllIngresses()
@@ -231,7 +231,7 @@ func (c *controller) updateIngresses() (err error) {
 			if rule.HTTP != nil {
 				for _, path := range rule.HTTP.Paths {
 
-					serviceName := serviceName{namespace: ingress.Namespace, name: path.Backend.ServiceName}
+					serviceName := serviceName{namespace: ingress.Namespace, name: path.Backend.Service.Name}
 
 					if address := serviceMap[serviceName]; address == "" {
 						skipped = append(skipped, fmt.Sprintf("%s/%s (service doesn't exist)", ingress.Namespace, ingress.Name))
@@ -245,7 +245,7 @@ func (c *controller) updateIngresses() (err error) {
 							Host:           rule.Host,
 							Path:           path.Path,
 							ServiceAddress: address,
-							ServicePort:    int32(path.Backend.ServicePort.IntValue()),
+							ServicePort:    path.Backend.Service.Port.Number,
 							Allow:          c.defaultAllow,
 							StripPaths:     c.defaultStripPath,
 							ExactPath:      c.defaultExactPath, BackendTimeoutSeconds: c.defaultBackendTimeout,
@@ -381,7 +381,7 @@ func (c *controller) updateIngresses() (err error) {
 	return nil
 }
 
-func (c *controller) ingressClassSupported(ingress *v1beta1.Ingress) bool {
+func (c *controller) ingressClassSupported(ingress *networkingv1.Ingress) bool {
 
 	isValid := false
 

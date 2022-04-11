@@ -9,7 +9,7 @@ import (
 	fake "github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 )
 
 const (
@@ -51,8 +51,8 @@ func createIngresses(name, lbScheme string, lbStatus v1.LoadBalancerStatus) cont
 		{
 			Name:     name,
 			LbScheme: lbScheme,
-			Ingress: &v1beta1.Ingress{
-				Status: v1beta1.IngressStatus{
+			Ingress: &networkingv1.Ingress{
+				Status: networkingv1.IngressStatus{
 					LoadBalancer: lbStatus,
 				},
 			},

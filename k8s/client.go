@@ -13,13 +13,13 @@ import (
 	"time"
 
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
-	clientV1Beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
+	clientnetworkingv1 "k8s.io/client-go/kubernetes/typed/networking/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -37,10 +37,10 @@ const bufferedWatcherDuration = time.Millisecond * 50
 // Error handling including retry mechanism is expected to be put in place around calls to getters.
 type Client interface {
 	// GetAllIngresses returns all the ingresses in the cluster.
-	GetAllIngresses() ([]*v1beta1.Ingress, error)
+	GetAllIngresses() ([]*networkingv1.Ingress, error)
 
 	// GetIngresses returns ingresses in namespaces with matching labels
-	GetIngresses([]*NamespaceSelector, bool) ([]*v1beta1.Ingress, error)
+	GetIngresses([]*NamespaceSelector, bool) ([]*networkingv1.Ingress, error)
 
 	// GetServices returns all the services in the cluster.
 	GetServices() ([]*v1.Service, error)
@@ -55,12 +55,12 @@ type Client interface {
 	WatchNamespaces() Watcher
 
 	// UpdateIngressStatus updates the ingress status with the loadbalancer hostname or ip address.
-	UpdateIngressStatus(*v1beta1.Ingress) error
+	UpdateIngressStatus(*networkingv1.Ingress) error
 }
 
 type client struct {
 	sync.Mutex
-	ingressGetter       clientV1Beta1.IngressesGetter
+	ingressGetter       clientnetworkingv1.IngressesGetter
 	stopCh              chan struct{}
 	informerFactory     informerFactory
 	eventHandlerFactory eventHandlerFactory
@@ -95,7 +95,7 @@ func New(kubeconfig string, resyncPeriod time.Duration, stopCh chan struct{}) (C
 	}
 
 	return &client{
-		ingressGetter:       clientset.ExtensionsV1beta1(),
+		ingressGetter:       clientset.NetworkingV1(),
 		resyncPeriod:        resyncPeriod,
 		stopCh:              stopCh,
 		informerFactory:     &cacheInformerFactory{clientset: clientset},
@@ -103,11 +103,11 @@ func New(kubeconfig string, resyncPeriod time.Duration, stopCh chan struct{}) (C
 	}, nil
 }
 
-func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
+func (c *client) GetAllIngresses() ([]*networkingv1.Ingress, error) {
 	return c.GetIngresses(nil, false)
 }
 
-func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllNamespaceSelectors bool) ([]*v1beta1.Ingress, error) {
+func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllNamespaceSelectors bool) ([]*networkingv1.Ingress, error) {
 	if !c.namespaceController.HasSynced() {
 		return nil, errors.New("namespaces haven't synced yet")
 	}
@@ -115,9 +115,9 @@ func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllN
 		return nil, errors.New("ingresses haven't synced yet")
 	}
 
-	var allIngresses []*v1beta1.Ingress
+	var allIngresses []*networkingv1.Ingress
 	for _, obj := range c.ingressStore.List() {
-		allIngresses = append(allIngresses, obj.(*v1beta1.Ingress))
+		allIngresses = append(allIngresses, obj.(*networkingv1.Ingress))
 	}
 
 	if namespaceSelectors == nil {
@@ -126,7 +126,7 @@ func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllN
 
 	supportedNamespaces := supportedNamespaces(toNamespaces(c.namespaceStore.List()), namespaceSelectors, matchAllNamespaceSelectors)
 
-	var filteredIngresses []*v1beta1.Ingress
+	var filteredIngresses []*networkingv1.Ingress
 	for _, ingress := range allIngresses {
 		if ingressInNamespace(ingress, supportedNamespaces) {
 			filteredIngresses = append(filteredIngresses, ingress)
@@ -192,7 +192,7 @@ func filterNamespacesMatchingAnyLabel(namespaces []*v1.Namespace, namespaceSelec
 	return filteredNamespaces
 }
 
-func ingressInNamespace(ingress *v1beta1.Ingress, namespaces []*v1.Namespace) bool {
+func ingressInNamespace(ingress *networkingv1.Ingress, namespaces []*v1.Namespace) bool {
 	for _, namespace := range namespaces {
 		if namespace.Name == ingress.Namespace {
 			return true
@@ -277,7 +277,7 @@ func (c *client) createNamespaceSource() {
 	c.namespaceController = controller
 }
 
-func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
+func (c *client) UpdateIngressStatus(ingress *networkingv1.Ingress) error {
 	ingressClient := c.ingressGetter.Ingresses(ingress.Namespace)
 
 	currentIng, err := ingressClient.Get(context.TODO(), ingress.Name, metav1.GetOptions{})
@@ -289,7 +289,7 @@ func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
 	return c.updateIngressAndHandleConflicts(ingressClient, currentIng)
 }
 
-func (c *client) updateIngressAndHandleConflicts(ingressClient clientV1Beta1.IngressInterface, ingress *v1beta1.Ingress) error {
+func (c *client) updateIngressAndHandleConflicts(ingressClient clientnetworkingv1.IngressInterface, ingress *networkingv1.Ingress) error {
 	_, err := ingressClient.UpdateStatus(context.TODO(), ingress, metav1.UpdateOptions{})
 
 	switch {

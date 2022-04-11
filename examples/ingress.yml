@@ -1,6 +1,6 @@
 # Example ingress yaml with annotations.
 #
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: test-ingress
@@ -27,7 +27,11 @@ spec:
   - host: example.bskyb.com
     http:
       paths:
-      - backend:
-          serviceName: my-service
-          servicePort: 8080
-        path: /prefix/my-service/
+      - path: /prefix/my-service/
+        # feed-ingress does not currently consider the pathType field (Kubernetes 1.18+).
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: my-service
+            port:
+              number: 8080

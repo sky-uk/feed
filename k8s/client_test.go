@@ -15,9 +15,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
-	extensionsv1beta1 "k8s.io/client-go/applyconfigurations/extensions/v1beta1"
-	clientV1Beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
+	networkingv1apply "k8s.io/client-go/applyconfigurations/networking/v1"
+	clientnetworkingv1 "k8s.io/client-go/kubernetes/typed/networking/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -297,7 +297,7 @@ var _ = Describe("Client", func() {
 		})
 
 		It("should return all ingresses in the store when stores have synced", func() {
-			ingressesInStore := []*v1beta1.Ingress{{}}
+			ingressesInStore := []*networkingv1.Ingress{{}}
 			fakesIngressStore.ListFunc = func() []interface{} {
 				theList := make([]interface{}, len(ingressesInStore))
 				for i := range ingressesInStore {
@@ -377,10 +377,10 @@ var _ = Describe("Client", func() {
 			}
 			fakesIngressStore.ListFunc = func() []interface{} {
 				ingresses := make([]interface{}, 2)
-				ingresses[0] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+				ingresses[0] = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{
 					Namespace: "matching-namespace",
 				}}
-				ingresses[1] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+				ingresses[1] = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{
 					Namespace: "non-matching-namespace",
 				}}
 				return ingresses
@@ -425,10 +425,10 @@ var _ = Describe("Client", func() {
 			}
 			fakesIngressStore.ListFunc = func() []interface{} {
 				ingresses := make([]interface{}, 2)
-				ingresses[0] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+				ingresses[0] = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{
 					Namespace: "matching-namespace-one",
 				}}
-				ingresses[1] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+				ingresses[1] = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{
 					Namespace: "matching-namespace-two",
 				}}
 				return ingresses
@@ -571,14 +571,14 @@ var _ = Describe("Client", func() {
 	})
 })
 
-func ingressWithLoadBalancerStatus(status v1.LoadBalancerIngress) *v1beta1.Ingress {
-	return &v1beta1.Ingress{
+func ingressWithLoadBalancerStatus(status v1.LoadBalancerIngress) *networkingv1.Ingress {
+	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:         "test-ns",
 			Name:              "test",
 			DeletionTimestamp: nil,
 		},
-		Status: v1beta1.IngressStatus{
+		Status: networkingv1.IngressStatus{
 			LoadBalancer: v1.LoadBalancerStatus{
 				Ingress: []v1.LoadBalancerIngress{status},
 			},
@@ -641,25 +641,25 @@ func (h *fakeEventHandlerFactory) createBufferedHandler(bufferTime time.Duration
 	return args.Get(0).(*handlerWatcher)
 }
 
-var _ clientV1Beta1.IngressInterface = &fakeIngressClient{}
+var _ clientnetworkingv1.IngressInterface = &fakeIngressClient{}
 
 type fakeIngressClient struct {
 	mock.Mock
 }
 
-func (f *fakeIngressClient) Create(ctx context.Context, ingress *v1beta1.Ingress, options metav1.CreateOptions) (*v1beta1.Ingress, error) {
+func (f *fakeIngressClient) Create(ctx context.Context, ingress *networkingv1.Ingress, options metav1.CreateOptions) (*networkingv1.Ingress, error) {
 	r := f.Called(ctx, ingress, options)
-	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
+	return r.Get(0).(*networkingv1.Ingress), r.Error(1)
 }
 
-func (f *fakeIngressClient) Update(ctx context.Context, ingress *v1beta1.Ingress, options metav1.UpdateOptions) (*v1beta1.Ingress, error) {
+func (f *fakeIngressClient) Update(ctx context.Context, ingress *networkingv1.Ingress, options metav1.UpdateOptions) (*networkingv1.Ingress, error) {
 	r := f.Called(ctx, ingress, options)
-	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
+	return r.Get(0).(*networkingv1.Ingress), r.Error(1)
 }
 
-func (f *fakeIngressClient) UpdateStatus(ctx context.Context, ingress *v1beta1.Ingress, options metav1.UpdateOptions) (*v1beta1.Ingress, error) {
+func (f *fakeIngressClient) UpdateStatus(ctx context.Context, ingress *networkingv1.Ingress, options metav1.UpdateOptions) (*networkingv1.Ingress, error) {
 	r := f.Called(ctx, ingress, options)
-	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
+	return r.Get(0).(*networkingv1.Ingress), r.Error(1)
 }
 
 func (f *fakeIngressClient) Delete(ctx context.Context, name string, options metav1.DeleteOptions) error {
@@ -672,14 +672,14 @@ func (f *fakeIngressClient) DeleteCollection(ctx context.Context, deleteOptions 
 	return r.Error(0)
 }
 
-func (f *fakeIngressClient) Get(ctx context.Context, name string, options metav1.GetOptions) (*v1beta1.Ingress, error) {
+func (f *fakeIngressClient) Get(ctx context.Context, name string, options metav1.GetOptions) (*networkingv1.Ingress, error) {
 	r := f.Called(ctx, name, options)
-	return r.Get(0).(*v1beta1.Ingress), nil
+	return r.Get(0).(*networkingv1.Ingress), nil
 }
 
-func (f *fakeIngressClient) List(ctx context.Context, options metav1.ListOptions) (*v1beta1.IngressList, error) {
+func (f *fakeIngressClient) List(ctx context.Context, options metav1.ListOptions) (*networkingv1.IngressList, error) {
 	r := f.Called(ctx, options)
-	return r.Get(0).(*v1beta1.IngressList), r.Error(1)
+	return r.Get(0).(*networkingv1.IngressList), r.Error(1)
 }
 
 func (f *fakeIngressClient) Watch(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
@@ -687,27 +687,27 @@ func (f *fakeIngressClient) Watch(ctx context.Context, options metav1.ListOption
 	return r.Get(0).(watch.Interface), r.Error(1)
 }
 
-func (f *fakeIngressClient) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, options metav1.PatchOptions, subresources ...string) (result *v1beta1.Ingress, err error) {
+func (f *fakeIngressClient) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, options metav1.PatchOptions, subresources ...string) (result *networkingv1.Ingress, err error) {
 	r := f.Called(ctx, name, pt, data, options, subresources)
-	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
+	return r.Get(0).(*networkingv1.Ingress), r.Error(1)
 }
 
-func (f *fakeIngressClient) Apply(ctx context.Context, ingress *extensionsv1beta1.IngressApplyConfiguration, options metav1.ApplyOptions) (result *v1beta1.Ingress, err error) {
+func (f *fakeIngressClient) Apply(ctx context.Context, ingress *networkingv1apply.IngressApplyConfiguration, options metav1.ApplyOptions) (result *networkingv1.Ingress, err error) {
 	r := f.Called(ctx, ingress, options)
-	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
+	return r.Get(0).(*networkingv1.Ingress), r.Error(1)
 }
 
-func (f *fakeIngressClient) ApplyStatus(ctx context.Context, ingress *extensionsv1beta1.IngressApplyConfiguration, options metav1.ApplyOptions) (result *v1beta1.Ingress, err error) {
+func (f *fakeIngressClient) ApplyStatus(ctx context.Context, ingress *networkingv1apply.IngressApplyConfiguration, options metav1.ApplyOptions) (result *networkingv1.Ingress, err error) {
 	r := f.Called(ctx, ingress, options)
-	return r.Get(0).(*v1beta1.Ingress), r.Error(1)
+	return r.Get(0).(*networkingv1.Ingress), r.Error(1)
 }
 
-var _ clientV1Beta1.IngressesGetter = &stubIngressGetter{}
+var _ clientnetworkingv1.IngressesGetter = &stubIngressGetter{}
 
 type stubIngressGetter struct {
-	ingressClient clientV1Beta1.IngressInterface
+	ingressClient clientnetworkingv1.IngressInterface
 }
 
-func (s *stubIngressGetter) Ingresses(namespace string) clientV1Beta1.IngressInterface {
+func (s *stubIngressGetter) Ingresses(namespace string) clientnetworkingv1.IngressInterface {
 	return s.ingressClient
 }
