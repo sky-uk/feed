@@ -9,7 +9,7 @@ endif
 pkgs := $(shell go list ./... | grep -v /vendor/)
 files := $(shell find . -path ./vendor -prune -o -name '*.go' -print)
 build_time := $(shell date -u)
-ldflags := -X "github.com/sky-uk/feed/feed-ingress/cmd.version=$(version)" -X "github.com/sky-uk/feed/feed-ingress/cmd.buildTime=$(build_time)"
+ldflags := -X 'github.com/sky-uk/feed/feed-ingress/cmd.version=$(version)' -X 'github.com/sky-uk/feed/feed-ingress/cmd.buildTime=$(build_time)'
 
 os := $(shell uname)
 ifeq ("$(os)", "Linux")
@@ -32,7 +32,7 @@ format :
 
 dist/feed-ingress : $(files)
 	mkdir -p dist
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o dist/feed-ingress ./feed-ingress
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags "${ldflags}" -o dist/feed-ingress ./feed-ingress
 
 dist/feed-dns : $(files)
 	mkdir -p dist
