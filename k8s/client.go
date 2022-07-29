@@ -12,15 +12,13 @@ import (
 	"sync"
 	"time"
 
-	k8errors "k8s.io/apimachinery/pkg/api/errors"
-	clientV1Beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	k8errors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	networkingv1_typed "k8s.io/client-go/kubernetes/typed/networking/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -37,13 +35,13 @@ const bufferedWatcherDuration = time.Millisecond * 50
 // Error handling including retry mechanism is expected to be put in place around calls to getters.
 type Client interface {
 	// GetAllIngresses returns all the ingresses in the cluster.
-	GetAllIngresses() ([]*v1beta1.Ingress, error)
+	GetAllIngresses() ([]*networkingv1.Ingress, error)
 
 	// GetIngresses returns ingresses in namespaces with matching labels
-	GetIngresses([]*NamespaceSelector, bool) ([]*v1beta1.Ingress, error)
+	GetIngresses([]*NamespaceSelector, bool) ([]*networkingv1.Ingress, error)
 
 	// GetServices returns all the services in the cluster.
-	GetServices() ([]*v1.Service, error)
+	GetServices() ([]*corev1.Service, error)
 
 	// WatchIngresses watches for updates to ingresses and notifies the Watcher.
 	WatchIngresses() Watcher
@@ -55,12 +53,12 @@ type Client interface {
 	WatchNamespaces() Watcher
 
 	// UpdateIngressStatus updates the ingress status with the loadbalancer hostname or ip address.
-	UpdateIngressStatus(*v1beta1.Ingress) error
+	UpdateIngressStatus(*networkingv1.Ingress) error
 }
 
 type client struct {
 	sync.Mutex
-	ingressGetter       clientV1Beta1.IngressesGetter
+	ingressGetter       networkingv1_typed.IngressesGetter
 	stopCh              chan struct{}
 	informerFactory     informerFactory
 	eventHandlerFactory eventHandlerFactory
@@ -95,7 +93,7 @@ func New(kubeconfig string, resyncPeriod time.Duration, stopCh chan struct{}) (C
 	}
 
 	return &client{
-		ingressGetter:       clientset.ExtensionsV1beta1(),
+		ingressGetter:       clientset.NetworkingV1(),
 		resyncPeriod:        resyncPeriod,
 		stopCh:              stopCh,
 		informerFactory:     &cacheInformerFactory{clientset: clientset},
@@ -103,11 +101,11 @@ func New(kubeconfig string, resyncPeriod time.Duration, stopCh chan struct{}) (C
 	}, nil
 }
 
-func (c *client) GetAllIngresses() ([]*v1beta1.Ingress, error) {
+func (c *client) GetAllIngresses() ([]*networkingv1.Ingress, error) {
 	return c.GetIngresses(nil, false)
 }
 
-func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllNamespaceSelectors bool) ([]*v1beta1.Ingress, error) {
+func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllNamespaceSelectors bool) ([]*networkingv1.Ingress, error) {
 	if !c.namespaceController.HasSynced() {
 		return nil, errors.New("namespaces haven't synced yet")
 	}
@@ -115,9 +113,9 @@ func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllN
 		return nil, errors.New("ingresses haven't synced yet")
 	}
 
-	var allIngresses []*v1beta1.Ingress
+	var allIngresses []*networkingv1.Ingress
 	for _, obj := range c.ingressStore.List() {
-		allIngresses = append(allIngresses, obj.(*v1beta1.Ingress))
+		allIngresses = append(allIngresses, obj.(*networkingv1.Ingress))
 	}
 
 	if namespaceSelectors == nil {
@@ -126,7 +124,7 @@ func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllN
 
 	supportedNamespaces := supportedNamespaces(toNamespaces(c.namespaceStore.List()), namespaceSelectors, matchAllNamespaceSelectors)
 
-	var filteredIngresses []*v1beta1.Ingress
+	var filteredIngresses []*networkingv1.Ingress
 	for _, ingress := range allIngresses {
 		if ingressInNamespace(ingress, supportedNamespaces) {
 			filteredIngresses = append(filteredIngresses, ingress)
@@ -135,20 +133,20 @@ func (c *client) GetIngresses(namespaceSelectors []*NamespaceSelector, matchAllN
 	return filteredIngresses, nil
 }
 
-func toNamespaces(interfaces []interface{}) []*v1.Namespace {
-	namespaces := make([]*v1.Namespace, len(interfaces))
+func toNamespaces(interfaces []interface{}) []*corev1.Namespace {
+	namespaces := make([]*corev1.Namespace, len(interfaces))
 	for i, obj := range interfaces {
-		namespaces[i] = obj.(*v1.Namespace)
+		namespaces[i] = obj.(*corev1.Namespace)
 	}
 	return namespaces
 }
 
-func supportedNamespaces(namespaces []*v1.Namespace, namespaceSelectors []*NamespaceSelector, matchAllNamespaceSelectors bool) []*v1.Namespace {
+func supportedNamespaces(namespaces []*corev1.Namespace, namespaceSelectors []*NamespaceSelector, matchAllNamespaceSelectors bool) []*corev1.Namespace {
 	if namespaceSelectors == nil {
 		return namespaces
 	}
 
-	var filteredNamespaces []*v1.Namespace
+	var filteredNamespaces []*corev1.Namespace
 
 	if matchAllNamespaceSelectors {
 		for _, namespace := range namespaces {
@@ -165,7 +163,7 @@ func supportedNamespaces(namespaces []*v1.Namespace, namespaceSelectors []*Names
 	return filteredNamespaces
 }
 
-func filterNamespacesMatchingAllLabels(namespace *v1.Namespace, namespaceSelectors []*NamespaceSelector) *v1.Namespace {
+func filterNamespacesMatchingAllLabels(namespace *corev1.Namespace, namespaceSelectors []*NamespaceSelector) *corev1.Namespace {
 	allMatch := true
 	for _, namespaceSelector := range namespaceSelectors {
 		_, ok := namespace.Labels[namespaceSelector.LabelName]
@@ -178,8 +176,8 @@ func filterNamespacesMatchingAllLabels(namespace *v1.Namespace, namespaceSelecto
 	return nil
 }
 
-func filterNamespacesMatchingAnyLabel(namespaces []*v1.Namespace, namespaceSelector *NamespaceSelector) []*v1.Namespace {
-	var filteredNamespaces []*v1.Namespace
+func filterNamespacesMatchingAnyLabel(namespaces []*corev1.Namespace, namespaceSelector *NamespaceSelector) []*corev1.Namespace {
+	var filteredNamespaces []*corev1.Namespace
 	for _, namespace := range namespaces {
 		if val, ok := namespace.Labels[namespaceSelector.LabelName]; ok && val == namespaceSelector.LabelValue {
 			filteredNamespaces = append(filteredNamespaces, namespace)
@@ -192,7 +190,7 @@ func filterNamespacesMatchingAnyLabel(namespaces []*v1.Namespace, namespaceSelec
 	return filteredNamespaces
 }
 
-func ingressInNamespace(ingress *v1beta1.Ingress, namespaces []*v1.Namespace) bool {
+func ingressInNamespace(ingress *networkingv1.Ingress, namespaces []*corev1.Namespace) bool {
 	for _, namespace := range namespaces {
 		if namespace.Name == ingress.Namespace {
 			return true
@@ -222,14 +220,14 @@ func (c *client) createIngressSource() {
 	c.ingressController = controller
 }
 
-func (c *client) GetServices() ([]*v1.Service, error) {
+func (c *client) GetServices() ([]*corev1.Service, error) {
 	if !c.serviceController.HasSynced() {
 		return nil, errors.New("services haven't synced yet")
 	}
 
-	var services []*v1.Service
+	var services []*corev1.Service
 	for _, obj := range c.serviceStore.List() {
-		services = append(services, obj.(*v1.Service))
+		services = append(services, obj.(*corev1.Service))
 	}
 
 	return services, nil
@@ -277,7 +275,7 @@ func (c *client) createNamespaceSource() {
 	c.namespaceController = controller
 }
 
-func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
+func (c *client) UpdateIngressStatus(ingress *networkingv1.Ingress) error {
 	ingressClient := c.ingressGetter.Ingresses(ingress.Namespace)
 
 	currentIng, err := ingressClient.Get(context.Background(), ingress.Name, metav1.GetOptions{})
@@ -289,7 +287,7 @@ func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
 	return c.updateIngressAndHandleConflicts(ingressClient, currentIng)
 }
 
-func (c *client) updateIngressAndHandleConflicts(ingressClient clientV1Beta1.IngressInterface, ingress *v1beta1.Ingress) error {
+func (c *client) updateIngressAndHandleConflicts(ingressClient networkingv1_typed.IngressInterface, ingress *networkingv1.Ingress) error {
 	_, err := ingressClient.UpdateStatus(context.Background(), ingress, metav1.UpdateOptions{
 		FieldManager:    "feed-ingress-controller",
 		FieldValidation: metav1.FieldValidationStrict,
@@ -314,7 +312,7 @@ func (c *client) updateIngressAndHandleConflicts(ingressClient clientV1Beta1.Ing
 	}
 }
 
-func ingressStatusEqual(i1 []v1.LoadBalancerIngress, i2 []v1.LoadBalancerIngress) bool {
+func ingressStatusEqual(i1 []corev1.LoadBalancerIngress, i2 []corev1.LoadBalancerIngress) bool {
 	if len(i1) != len(i2) {
 		return false
 	}
@@ -339,7 +337,7 @@ func ingressStatusEqual(i1 []v1.LoadBalancerIngress, i2 []v1.LoadBalancerIngress
 	return true
 }
 
-func safeAppend(arr []*v1.Namespace, elem ...*v1.Namespace) []*v1.Namespace {
+func safeAppend(arr []*corev1.Namespace, elem ...*corev1.Namespace) []*corev1.Namespace {
 	if elem != nil {
 		for i := 0; i < len(elem); i++ {
 			if elem[i] != nil {

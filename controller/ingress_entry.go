@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/extensions/v1beta1"
+	v1 "k8s.io/api/networking/v1"
 )
 
 // IngressEntries type
@@ -49,7 +49,7 @@ type IngressEntry struct {
 	// Ingress creation time
 	CreationTimestamp time.Time
 	// Ingress resource
-	Ingress *v1beta1.Ingress
+	Ingress *v1.Ingress
 	// Size of the buffer used for reading the first part of the response received from the proxied server.
 	ProxyBufferSize int
 	// Number of buffers used for reading a response from the proxied server, for a single connection.

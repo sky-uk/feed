@@ -9,8 +9,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -294,7 +294,7 @@ var _ = Describe("Client", func() {
 		})
 
 		It("should return all ingresses in the store when stores have synced", func() {
-			ingressesInStore := []*v1beta1.Ingress{{}}
+			ingressesInStore := []*networkingv1.Ingress{{}}
 			fakesIngressStore.ListFunc = func() []interface{} {
 				theList := make([]interface{}, len(ingressesInStore))
 				for i := range ingressesInStore {
@@ -374,10 +374,10 @@ var _ = Describe("Client", func() {
 			}
 			fakesIngressStore.ListFunc = func() []interface{} {
 				ingresses := make([]interface{}, 2)
-				ingresses[0] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+				ingresses[0] = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{
 					Namespace: "matching-namespace",
 				}}
-				ingresses[1] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+				ingresses[1] = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{
 					Namespace: "non-matching-namespace",
 				}}
 				return ingresses
@@ -385,14 +385,14 @@ var _ = Describe("Client", func() {
 
 			fakesNamespaceStore.ListFunc = func() []interface{} {
 				namespaces := make([]interface{}, 2)
-				namespaces[0] = &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
+				namespaces[0] = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 					Name: "matching-namespace",
 					Labels: map[string]string{
 						"some-label-name": "some-value",
 						"team":            "some-team-name",
 					},
 				}}
-				namespaces[1] = &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
+				namespaces[1] = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 					Name: "non-matching-namespace",
 					Labels: map[string]string{
 						"team": "some-team-name",
@@ -422,10 +422,10 @@ var _ = Describe("Client", func() {
 			}
 			fakesIngressStore.ListFunc = func() []interface{} {
 				ingresses := make([]interface{}, 2)
-				ingresses[0] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+				ingresses[0] = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{
 					Namespace: "matching-namespace-one",
 				}}
-				ingresses[1] = &v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{
+				ingresses[1] = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{
 					Namespace: "matching-namespace-two",
 				}}
 				return ingresses
@@ -433,14 +433,14 @@ var _ = Describe("Client", func() {
 
 			fakesNamespaceStore.ListFunc = func() []interface{} {
 				namespaces := make([]interface{}, 2)
-				namespaces[0] = &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
+				namespaces[0] = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 					Name: "matching-namespace-one",
 					Labels: map[string]string{
 						"some-label-name": "some-value",
 						"team":            "some-team-1",
 					},
 				}}
-				namespaces[1] = &v1.Namespace{ObjectMeta: metav1.ObjectMeta{
+				namespaces[1] = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 					Name: "matching-namespace-two",
 					Labels: map[string]string{
 						"team": "some-team-2",
@@ -475,7 +475,7 @@ var _ = Describe("Client", func() {
 		})
 
 		It("should return all services in the store when the service store has synced", func() {
-			servicesInStore := []*v1.Service{{}}
+			servicesInStore := []*corev1.Service{{}}
 			fakesServiceStore.ListFunc = func() []interface{} {
 				theList := make([]interface{}, len(servicesInStore))
 				for i := range servicesInStore {
@@ -522,9 +522,9 @@ var _ = Describe("Client", func() {
 		Context("another feed pod has made a conflicting update", func() {
 			It("should not report an error if the desired change has already been applied", func() {
 				// given
-				currentIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "old-host"})
-				newIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "new-host"})
-				independentlyUpdatedIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "new-host"})
+				currentIngress := ingressWithLoadBalancerStatus(corev1.LoadBalancerIngress{Hostname: "old-host"})
+				newIngress := ingressWithLoadBalancerStatus(corev1.LoadBalancerIngress{Hostname: "new-host"})
+				independentlyUpdatedIngress := ingressWithLoadBalancerStatus(corev1.LoadBalancerIngress{Hostname: "new-host"})
 
 				ingressClient.EXPECT().Get(gomock.Any(), "test", metav1.GetOptions{}).
 					Return(currentIngress, nil).
@@ -543,9 +543,9 @@ var _ = Describe("Client", func() {
 
 			It("should report an error if the desired change has not been applied", func() {
 				// given
-				currentIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "old-host"})
-				newIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "new-host"})
-				independentlyUpdatedIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "other-host"})
+				currentIngress := ingressWithLoadBalancerStatus(corev1.LoadBalancerIngress{Hostname: "old-host"})
+				newIngress := ingressWithLoadBalancerStatus(corev1.LoadBalancerIngress{Hostname: "new-host"})
+				independentlyUpdatedIngress := ingressWithLoadBalancerStatus(corev1.LoadBalancerIngress{Hostname: "other-host"})
 
 				ingressClient.EXPECT().Get(gomock.Any(), "test", metav1.GetOptions{}).
 					Return(currentIngress, nil).
@@ -566,8 +566,8 @@ var _ = Describe("Client", func() {
 		Context("the update fails for another reason", func() {
 			It("should report the error directly", func() {
 				// given
-				currentIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "old-host"})
-				newIngress := ingressWithLoadBalancerStatus(v1.LoadBalancerIngress{Hostname: "new-host"})
+				currentIngress := ingressWithLoadBalancerStatus(corev1.LoadBalancerIngress{Hostname: "old-host"})
+				newIngress := ingressWithLoadBalancerStatus(corev1.LoadBalancerIngress{Hostname: "new-host"})
 
 				ingressClient.EXPECT().Get(gomock.Any(), "test", metav1.GetOptions{}).
 					Return(currentIngress, nil).
@@ -585,16 +585,16 @@ var _ = Describe("Client", func() {
 	})
 })
 
-func ingressWithLoadBalancerStatus(status v1.LoadBalancerIngress) *v1beta1.Ingress {
-	return &v1beta1.Ingress{
+func ingressWithLoadBalancerStatus(status corev1.LoadBalancerIngress) *networkingv1.Ingress {
+	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:         "test-ns",
 			Name:              "test",
 			DeletionTimestamp: nil,
 		},
-		Status: v1beta1.IngressStatus{
-			LoadBalancer: v1.LoadBalancerStatus{
-				Ingress: []v1.LoadBalancerIngress{status},
+		Status: networkingv1.IngressStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{
+				Ingress: []corev1.LoadBalancerIngress{status},
 			},
 		},
 	}
