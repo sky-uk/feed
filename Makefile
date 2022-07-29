@@ -61,7 +61,14 @@ fakenginx:
 	@echo "== build fake nginx for tests"
 	@go build -o nginx/fake/fake_graceful_nginx nginx/fake/fake_graceful_nginx.go
 
-test : build fakenginx
+.PHONY: mocks
+mocks: k8s/mocks/mocks.go
+
+k8s/mocks/mocks.go:
+	go run github.com/golang/mock/mockgen@v1.6.0 -package mocks -destination $@ \
+	    k8s.io/client-go/kubernetes/typed/extensions/v1beta1 IngressInterface,IngressesGetter
+
+test : build fakenginx mocks
 	@echo "== run tests"
 	@go test -race $(pkgs)
 
