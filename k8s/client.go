@@ -7,6 +7,7 @@ The types are copied from the stable api of the Kubernetes 1.3 release.
 package k8s
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -279,7 +280,7 @@ func (c *client) createNamespaceSource() {
 func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
 	ingressClient := c.ingressGetter.Ingresses(ingress.Namespace)
 
-	currentIng, err := ingressClient.Get(ingress.Name, metav1.GetOptions{})
+	currentIng, err := ingressClient.Get(context.Background(), ingress.Name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -289,13 +290,16 @@ func (c *client) UpdateIngressStatus(ingress *v1beta1.Ingress) error {
 }
 
 func (c *client) updateIngressAndHandleConflicts(ingressClient clientV1Beta1.IngressInterface, ingress *v1beta1.Ingress) error {
-	_, err := ingressClient.UpdateStatus(ingress)
+	_, err := ingressClient.UpdateStatus(context.Background(), ingress, metav1.UpdateOptions{
+		FieldManager:    "feed-ingress-controller",
+		FieldValidation: metav1.FieldValidationStrict,
+	})
 
 	switch {
 	case k8errors.IsConflict(err):
 		// In the event of a conflict, check whether another feed instance has already made the same ingress status
 		// change for us.
-		updatedIng, getErr := ingressClient.Get(ingress.Name, metav1.GetOptions{})
+		updatedIng, getErr := ingressClient.Get(context.Background(), ingress.Name, metav1.GetOptions{})
 		if getErr == nil && ingressStatusEqual(updatedIng.Status.LoadBalancer.Ingress, ingress.Status.LoadBalancer.Ingress) {
 			// Another feed instance has already made the appropriate change, no need to report an error.
 			return nil
@@ -316,8 +320,19 @@ func ingressStatusEqual(i1 []v1.LoadBalancerIngress, i2 []v1.LoadBalancerIngress
 	}
 
 	for x := range i1 {
-		if i1[x] != i2[x] {
+		if i1[x].IP != i2[x].IP {
 			return false
+		}
+		if i1[x].Hostname != i2[x].Hostname {
+			return false
+		}
+		if len(i1[x].Ports) != len(i2[x].Ports) {
+			return false
+		}
+		for y := range i1[x].Ports {
+			if i1[x].Ports[y] != i2[x].Ports[y] {
+				return false
+			}
 		}
 	}
 
