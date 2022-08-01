@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -146,33 +146,33 @@ func (h *gorbHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.requestCounter++
 }
 
+var (
+	g                controller.Updater
+	server           *httptest.Server
+	serverURL        string
+	responsePrimers  []gorbResponsePrimer
+	recordedRequests []gorbRecordedRequest
+	gorbH            *gorbHandler
+)
+
+var _ = BeforeSuite(func() {
+	metrics.SetConstLabels(make(prometheus.Labels))
+	responsePrimers = []gorbResponsePrimer{}
+	recordedRequests = []gorbRecordedRequest{}
+	gorbH = &gorbHandler{responsePrimers: responsePrimers, recordedRequests: recordedRequests}
+	server = httptest.NewServer(gorbH)
+	serverURL = server.URL
+})
+
+var _ = AfterSuite(func() {
+	server.Close()
+})
+
 var _ = Describe("Gorb", func() {
-	var (
-		g                controller.Updater
-		server           *httptest.Server
-		serverURL        string
-		responsePrimers  []gorbResponsePrimer
-		recordedRequests []gorbRecordedRequest
-		gorbH            *gorbHandler
-	)
-
-	BeforeSuite(func() {
-		metrics.SetConstLabels(make(prometheus.Labels))
-		responsePrimers = []gorbResponsePrimer{}
-		recordedRequests = []gorbRecordedRequest{}
-		gorbH = &gorbHandler{responsePrimers: responsePrimers, recordedRequests: recordedRequests}
-		server = httptest.NewServer(gorbH)
-		serverURL = server.URL
-	})
-
 	BeforeEach(func() {
 		gorbH.responsePrimers = []gorbResponsePrimer{}
 		gorbH.recordedRequests = []gorbRecordedRequest{}
 		gorbH.requestCounter = 0
-	})
-
-	AfterSuite(func() {
-		server.Close()
 	})
 
 	Describe("Health endpoint", func() {

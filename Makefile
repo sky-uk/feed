@@ -27,7 +27,7 @@ travis : checkformat check docker check-vulnerabilities
 
 format :
 	@echo "== format"
-	@go run golang.org/x/tools/cmd/goimports -w $(files)
+	@go run golang.org/x/tools/cmd/goimports@v0.1.10 -w $(files)
 	@sync
 
 dist/feed-ingress : $(files)
@@ -42,7 +42,7 @@ build : dist/feed-ingress dist/feed-dns
 
 checkformat :
 	@echo "== check formatting"
-	@unformatted=`go run golang.org/x/tools/cmd/goimports -l $(files)`; if [ "$$unformatted" != "" ]; then \
+	@unformatted=`go run golang.org/x/tools/cmd/goimports@v0.1.10 -l $(files)`; if [ "$$unformatted" != "" ]; then \
 	    echo "needs formatting: $$unformatted"; \
 	    exit 1; \
 	fi
@@ -54,14 +54,21 @@ vet :
 lint :
 	@echo "== lint"
 	@for pkg in $(pkgs); do \
-		go run golang.org/x/lint/golint -set_exit_status $$pkg || exit 1; \
+		go run golang.org/x/lint/golint@83fdc39ff7b5 -set_exit_status $$pkg || exit 1; \
 	done;
 
 fakenginx:
 	@echo "== build fake nginx for tests"
 	@go build -o nginx/fake/fake_graceful_nginx nginx/fake/fake_graceful_nginx.go
 
-test : build fakenginx
+.PHONY: mocks
+mocks: k8s/mocks/mocks.go
+
+k8s/mocks/mocks.go:
+	go run github.com/golang/mock/mockgen@v1.6.0 -package mocks -destination $@ \
+	    k8s.io/client-go/kubernetes/typed/extensions/v1beta1 IngressInterface,IngressesGetter
+
+test : build fakenginx mocks
 	@echo "== run tests"
 	@go test -race $(pkgs)
 

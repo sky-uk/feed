@@ -9,7 +9,7 @@ language: go
 sudo: required
 
 go:
-- 1.16
+- 1.18
 
 services:
 - docker

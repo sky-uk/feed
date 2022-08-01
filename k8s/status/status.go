@@ -55,8 +55,19 @@ func statusUnchanged(existing, new []v1.LoadBalancerIngress) bool {
 	sortLoadBalancerStatus(existing)
 	sortLoadBalancerStatus(new)
 	for i, loadbalancer := range existing {
-		if loadbalancer != new[i] {
+		if loadbalancer.IP != new[i].IP {
 			return false
+		}
+		if loadbalancer.Hostname != new[i].Hostname {
+			return false
+		}
+		if len(loadbalancer.Ports) != len(new[i].Ports) {
+			return false
+		}
+		for j := range loadbalancer.Ports {
+			if loadbalancer.Ports[j] != new[i].Ports[j] {
+				return false
+			}
 		}
 	}
 
