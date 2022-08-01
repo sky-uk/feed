@@ -66,7 +66,7 @@ mocks: k8s/mocks/mocks.go
 
 k8s/mocks/mocks.go:
 	go run github.com/golang/mock/mockgen@v1.6.0 -package mocks -destination $@ \
-	    k8s.io/client-go/kubernetes/typed/extensions/v1beta1 IngressInterface,IngressesGetter
+	    k8s.io/client-go/kubernetes/typed/networking/v1 IngressInterface,IngressesGetter
 
 test : build fakenginx mocks
 	@echo "== run tests"

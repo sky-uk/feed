@@ -8,8 +8,8 @@ import (
 	"github.com/sky-uk/feed/controller"
 	fake "github.com/sky-uk/feed/util/test"
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 )
 
 const (
@@ -19,25 +19,25 @@ const (
 	defaultIngressName = "test"
 )
 
-func createDefaultLoadBalancerStatus() v1.LoadBalancerStatus {
+func createDefaultLoadBalancerStatus() corev1.LoadBalancerStatus {
 	return createLoadBalancerStatus(defaultHostname, defaultIPAddress)
 }
 
-func createLoadBalancerStatus(hostname, ip string) v1.LoadBalancerStatus {
-	return v1.LoadBalancerStatus{
-		Ingress: []v1.LoadBalancerIngress{{
+func createLoadBalancerStatus(hostname, ip string) corev1.LoadBalancerStatus {
+	return corev1.LoadBalancerStatus{
+		Ingress: []corev1.LoadBalancerIngress{{
 			Hostname: hostname,
 			IP:       ip,
 		}},
 	}
 }
 
-func createDefaultLBs() map[string]v1.LoadBalancerStatus {
+func createDefaultLBs() map[string]corev1.LoadBalancerStatus {
 	return createLBs(defaultLBLabel, createDefaultLoadBalancerStatus())
 }
 
-func createLBs(lbLabel string, lbStatus v1.LoadBalancerStatus) map[string]v1.LoadBalancerStatus {
-	return map[string]v1.LoadBalancerStatus{
+func createLBs(lbLabel string, lbStatus corev1.LoadBalancerStatus) map[string]corev1.LoadBalancerStatus {
+	return map[string]corev1.LoadBalancerStatus{
 		lbLabel: lbStatus,
 	}
 }
@@ -46,13 +46,13 @@ func createDefaultIngresses() controller.IngressEntries {
 	return createIngresses(defaultIngressName, defaultLBLabel, createDefaultLoadBalancerStatus())
 }
 
-func createIngresses(name, lbScheme string, lbStatus v1.LoadBalancerStatus) controller.IngressEntries {
+func createIngresses(name, lbScheme string, lbStatus corev1.LoadBalancerStatus) controller.IngressEntries {
 	return controller.IngressEntries{
 		{
 			Name:     name,
 			LbScheme: lbScheme,
-			Ingress: &v1beta1.Ingress{
-				Status: v1beta1.IngressStatus{
+			Ingress: &networkingv1.Ingress{
+				Status: networkingv1.IngressStatus{
 					LoadBalancer: lbStatus,
 				},
 			},
@@ -66,13 +66,13 @@ func TestGenerateLoadBalancerStatus(t *testing.T) {
 	var tests = []struct {
 		description string
 		endpoints   []string
-		expected    v1.LoadBalancerStatus
+		expected    corev1.LoadBalancerStatus
 	}{
 		{
 			description: "single hostname",
 			endpoints:   []string{defaultHostname},
-			expected: v1.LoadBalancerStatus{
-				Ingress: []v1.LoadBalancerIngress{{
+			expected: corev1.LoadBalancerStatus{
+				Ingress: []corev1.LoadBalancerIngress{{
 					Hostname: defaultHostname,
 				}},
 			},
@@ -80,8 +80,8 @@ func TestGenerateLoadBalancerStatus(t *testing.T) {
 		{
 			description: "single ip address",
 			endpoints:   []string{defaultIPAddress},
-			expected: v1.LoadBalancerStatus{
-				Ingress: []v1.LoadBalancerIngress{{
+			expected: corev1.LoadBalancerStatus{
+				Ingress: []corev1.LoadBalancerIngress{{
 					IP: defaultIPAddress,
 				}},
 			},
@@ -89,8 +89,8 @@ func TestGenerateLoadBalancerStatus(t *testing.T) {
 		{
 			description: "mixture of a hostname and ip address",
 			endpoints:   []string{defaultHostname, defaultIPAddress},
-			expected: v1.LoadBalancerStatus{
-				Ingress: []v1.LoadBalancerIngress{
+			expected: corev1.LoadBalancerStatus{
+				Ingress: []corev1.LoadBalancerIngress{
 					{Hostname: defaultHostname},
 					{IP: defaultIPAddress},
 				},
@@ -108,8 +108,8 @@ func TestStatusUnchanged(t *testing.T) {
 
 	var tests = []struct {
 		description           string
-		existingIngressStatus []v1.LoadBalancerIngress
-		newIngressStatus      []v1.LoadBalancerIngress
+		existingIngressStatus []corev1.LoadBalancerIngress
+		newIngressStatus      []corev1.LoadBalancerIngress
 		expected              bool
 	}{
 		{
@@ -132,7 +132,7 @@ func TestStatusUnchanged(t *testing.T) {
 		},
 		{
 			description:           "different number of ingress statuses",
-			existingIngressStatus: []v1.LoadBalancerIngress{},
+			existingIngressStatus: []corev1.LoadBalancerIngress{},
 			newIngressStatus:      createDefaultLoadBalancerStatus().Ingress,
 			expected:              false,
 		},
@@ -148,40 +148,40 @@ func TestSortLoadBalancerStatus(t *testing.T) {
 
 	var tests = []struct {
 		description string
-		lbi         []v1.LoadBalancerIngress
-		expected    []v1.LoadBalancerIngress
+		lbi         []corev1.LoadBalancerIngress
+		expected    []corev1.LoadBalancerIngress
 	}{
 		{
 			description: "reorder hostname",
-			lbi: []v1.LoadBalancerIngress{
+			lbi: []corev1.LoadBalancerIngress{
 				{Hostname: "b-" + defaultHostname},
 				{Hostname: "a-" + defaultHostname},
 			},
-			expected: []v1.LoadBalancerIngress{
+			expected: []corev1.LoadBalancerIngress{
 				{Hostname: "a-" + defaultHostname},
 				{Hostname: "b-" + defaultHostname},
 			},
 		},
 		{
 			description: "reorder ip addresses",
-			lbi: []v1.LoadBalancerIngress{
+			lbi: []corev1.LoadBalancerIngress{
 				{IP: "127.0.0.2"},
 				{IP: defaultIPAddress},
 			},
-			expected: []v1.LoadBalancerIngress{
+			expected: []corev1.LoadBalancerIngress{
 				{IP: defaultIPAddress},
 				{IP: "127.0.0.2"},
 			},
 		},
 		{
 			description: "reorder hostnames and ip addresses",
-			lbi: []v1.LoadBalancerIngress{
+			lbi: []corev1.LoadBalancerIngress{
 				{IP: "127.0.0.2"},
 				{Hostname: "b-" + defaultHostname},
 				{IP: defaultIPAddress},
 				{Hostname: "a-" + defaultHostname},
 			},
-			expected: []v1.LoadBalancerIngress{
+			expected: []corev1.LoadBalancerIngress{
 				{Hostname: "a-" + defaultHostname},
 				{Hostname: "b-" + defaultHostname},
 				{IP: defaultIPAddress},
@@ -200,7 +200,7 @@ func TestUpdate(t *testing.T) {
 	asserter := assert.New(t)
 
 	lbs := createDefaultLBs()
-	ingresses := createIngresses(defaultIngressName, defaultLBLabel, v1.LoadBalancerStatus{})
+	ingresses := createIngresses(defaultIngressName, defaultLBLabel, corev1.LoadBalancerStatus{})
 
 	client := new(fake.FakeClient)
 	client.On("UpdateIngressStatus").Return(nil)
@@ -214,7 +214,7 @@ func TestUpdateFails(t *testing.T) {
 	asserter := assert.New(t)
 
 	lbs := createDefaultLBs()
-	ingresses := createIngresses(defaultIngressName, defaultLBLabel, v1.LoadBalancerStatus{})
+	ingresses := createIngresses(defaultIngressName, defaultLBLabel, corev1.LoadBalancerStatus{})
 
 	client := new(fake.FakeClient)
 	client.On("UpdateIngressStatus").Return(errors.New("failed"))
