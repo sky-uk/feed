@@ -1,3 +1,16 @@
+# v6.0.0
+
+* Feed is updated to use the `networking/v1` kubernetes ingress API,
+  instead of the previously-used `extensions/v1beta1` API.  This means
+  that Feed v6 is only compatible with kubernetes >= 1.19 (when the
+  `networking/v1` API was introduced).  Feed v5 was only compatible with
+  k8s <= 1.21 (the `extensions/v1beta1` API was removed in k8s 1.22).
+  Feed v6 in contrast is compatible with the most recent kubernetes
+  versions (as of this writing, 1.24).
+* The `merlin` integration is dropped from feed.  Merlin was an
+  IPVS-based load balancer developed by Sky; it has been EOL
+  since 2019.
+
 # v5.1.0
 
 * A readiness endpoint is added to feed.  This is useful for kubernetes
