@@ -95,7 +95,10 @@ func (n *nginxUpdater) signalIfRequired() {
 	if n.updateRequired.Get() {
 		log.Info("Signalling Nginx to reload configuration")
 		incrementReloadMetric()
-		_ = n.nginx.sighup()
+		err := n.nginx.sighup()
+		if err != nil {
+			log.Fatalf("Failed to signal Nginx to reload configuration: %v", err)
+		}
 		n.updateRequired.Set(false)
 	}
 }
