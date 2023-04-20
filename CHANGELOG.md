@@ -1,7 +1,8 @@
 # v6.1.0
 
-* handle case where nginx reload fails due to master process exiting. In that case we will throw a fatal error and exit the process.
-  This will cause the pod to be restarted by kubernetes.
+* Feed has been updated to cope with an nginx reload that fails because the nginx master process has been killed.
+  If this occurs, feed will now log a fatal error and the process will exit.
+  This will cause the pod to be restarted by kubernetes (which in turn restarts the nginx master in the new replica).
 
 # v6.0.0
 
