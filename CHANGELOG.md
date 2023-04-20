@@ -1,3 +1,8 @@
+# v6.1.0
+
+* handle case where nginx reload fails due to master process exiting. In that case we will throw a fatal error and exit the process.
+  This will cause the pod to be restarted by kubernetes.
+
 # v6.0.0
 
 * Feed is updated to use the `networking/v1` kubernetes ingress API,
