@@ -1,3 +1,9 @@
+# v6.1.0
+
+* Feed has been updated to cope with an nginx reload that fails because the nginx master process has been killed.
+  If this occurs, feed will now log a fatal error and the process will exit.
+  This will cause the pod to be restarted by kubernetes (which in turn restarts the nginx master in the new replica).
+
 # v6.0.0
 
 * Feed is updated to use the `networking/v1` kubernetes ingress API,
