@@ -511,6 +511,13 @@ func createServerEntries(entries controller.IngressEntries) []*server {
 	for _, serverEntry := range hostToNginxEntry {
 		sort.Strings(serverEntry.Names)
 		serverEntry.Name = strings.Join(serverEntry.Names, " ")
+
+		// serverEntry.Name is used to populate the "# ingress:" comment before each server block.
+		// And it's build with the list of the team namespace/ingress names in the cluster.
+		// Nginx has a limit 4096 characters, so we truncate here to avoid nginx to crash when there are too many ingresses.
+		if len(serverEntry.Name) > 4080 {
+			serverEntry.Name = serverEntry.Name[:4080]
+		}
 		sort.Sort(locations(serverEntry.Locations))
 		serverEntries = append(serverEntries, serverEntry)
 	}
