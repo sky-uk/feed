@@ -160,9 +160,7 @@ http {
 {{ end }}
 
 {{- range $entry := .Servers }}
-    {{ $length := len $entry.Name }}
-    {{- if lt $length 4000 }}# ingress: {{ $entry.Name }}{{ end }}
-    {{- if gt $length 4000 }}# ingress: {{ printf "%.4000s" $entry.Name }}{{ end }}
+    # ingress: {{ printf "%.4000s" $entry.Name }}
   {{- range $portConf := $IngressPorts }}
     server {
         listen {{ $portConf.Port }}{{- if eq $portConf.Name "https" }} ssl{{ end }}{{ if $proxyprotocol }} proxy_protocol{{ end }};
