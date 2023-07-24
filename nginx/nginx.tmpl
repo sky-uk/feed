@@ -160,6 +160,9 @@ http {
 {{ end }}
 
 {{- range $entry := .Servers }}
+    {{ $strLen := len $entry.Name }} {{ if gt $strLen 4000 }}
+    # The following comment is truncated to 4000 characters due to nginx config line limits
+    {{ end }}
     # ingress: {{ printf "%.4000s" $entry.Name }}
   {{- range $portConf := $IngressPorts }}
     server {
