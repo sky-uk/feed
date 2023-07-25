@@ -160,7 +160,10 @@ http {
 {{ end }}
 
 {{- range $entry := .Servers }}
-    # ingress: {{ $entry.Name }}
+    {{ $strLen := len $entry.Name }} {{ if gt $strLen 4000 }}
+    # The following comment is truncated to 4000 characters due to nginx config line limits
+    {{ end }}
+    # ingress: {{ printf "%.4000s" $entry.Name }}
   {{- range $portConf := $IngressPorts }}
     server {
         listen {{ $portConf.Port }}{{- if eq $portConf.Name "https" }} ssl{{ end }}{{ if $proxyprotocol }} proxy_protocol{{ end }};
