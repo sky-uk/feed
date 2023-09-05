@@ -51,6 +51,9 @@ http {
     # Remove the Server header from the response which will have `nginx`
     more_clear_headers Server;
 
+    # When redirecting, such as /prefix -> /prefix/, don't use the internal listen port. Instead, preserve the client port.
+    port_in_redirect off;
+
     {{ if .ClientHeaderBufferSize }}
     # Sets buffer size for reading client request header.
     client_header_buffer_size {{ .ClientHeaderBufferSize }}k;
