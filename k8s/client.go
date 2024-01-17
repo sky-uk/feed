@@ -215,6 +215,11 @@ func (c *client) createIngressSource() {
 	store, controller := c.informerFactory.createIngressInformer(c.resyncPeriod, watcher)
 	go controller.Run(c.stopCh)
 
+	if !cache.WaitForNamedCacheSync("ingress controller", c.stopCh, controller.HasSynced) {
+		// TODO better return error here
+		return
+	}
+
 	c.ingressWatcher = watcher
 	c.ingressStore = store
 	c.ingressController = controller
@@ -249,6 +254,11 @@ func (c *client) createServiceSource() {
 	store, controller := c.informerFactory.createServiceInformer(c.resyncPeriod, watcher)
 	go controller.Run(c.stopCh)
 
+	if !cache.WaitForNamedCacheSync("service controller", c.stopCh, controller.HasSynced) {
+		// TODO better return error here
+		return
+	}
+
 	c.serviceWatcher = watcher
 	c.serviceStore = store
 	c.serviceController = controller
@@ -269,6 +279,11 @@ func (c *client) createNamespaceSource() {
 	watcher := c.eventHandlerFactory.createBufferedHandler(bufferedWatcherDuration)
 	store, controller := c.informerFactory.createNamespaceInformer(c.resyncPeriod, watcher)
 	go controller.Run(c.stopCh)
+
+	if !cache.WaitForNamedCacheSync("namespace controller", c.stopCh, controller.HasSynced) {
+		// TODO better return error here
+		return
+	}
 
 	c.namespaceWatcher = watcher
 	c.namespaceStore = store
