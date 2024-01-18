@@ -70,6 +70,7 @@ var _ = Describe("Client", func() {
 				fakesController.On("Run", mock.Anything).Run(func(args mock.Arguments) {
 					runExecutedCh <- struct{}{}
 				})
+				fakesController.On("HasSynced").Return(true)
 
 				watcher := clt.WatchIngresses()
 				<-runExecutedCh
@@ -110,6 +111,7 @@ var _ = Describe("Client", func() {
 				fakesController.On("Run", mock.Anything).Run(func(args mock.Arguments) {
 					runExecutedCh <- struct{}{}
 				})
+				fakesController.On("HasSynced").Return(true)
 
 				var waitGroup sync.WaitGroup
 				watchers := &sync.Map{}
@@ -140,6 +142,7 @@ var _ = Describe("Client", func() {
 				fakesController.On("Run", mock.Anything).Run(func(args mock.Arguments) {
 					runExecutedCh <- struct{}{}
 				})
+				fakesController.On("HasSynced").Return(true)
 
 				watcher := clt.WatchServices()
 				<-runExecutedCh
@@ -180,6 +183,7 @@ var _ = Describe("Client", func() {
 				fakesController.On("Run", mock.Anything).Run(func(args mock.Arguments) {
 					runExecutedCh <- struct{}{}
 				})
+				fakesController.On("HasSynced").Return(true)
 
 				var waitGroup sync.WaitGroup
 				watchers := &sync.Map{}
@@ -210,6 +214,7 @@ var _ = Describe("Client", func() {
 				fakesController.On("Run", mock.Anything).Run(func(args mock.Arguments) {
 					runExecutedCh <- struct{}{}
 				})
+				fakesController.On("HasSynced").Return(true)
 
 				watcher := clt.WatchNamespaces()
 				<-runExecutedCh
@@ -250,6 +255,7 @@ var _ = Describe("Client", func() {
 				fakesController.On("Run", mock.Anything).Run(func(args mock.Arguments) {
 					runExecutedCh <- struct{}{}
 				})
+				fakesController.On("HasSynced").Return(true)
 
 				var waitGroup sync.WaitGroup
 				watchers := &sync.Map{}
