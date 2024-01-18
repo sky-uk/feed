@@ -216,7 +216,6 @@ func (c *client) createIngressSource() {
 	go controller.Run(c.stopCh)
 
 	if !cache.WaitForNamedCacheSync("ingress controller", c.stopCh, controller.HasSynced) {
-		// TODO better return error here
 		return
 	}
 
@@ -255,7 +254,6 @@ func (c *client) createServiceSource() {
 	go controller.Run(c.stopCh)
 
 	if !cache.WaitForNamedCacheSync("service controller", c.stopCh, controller.HasSynced) {
-		// TODO better return error here
 		return
 	}
 
@@ -281,7 +279,6 @@ func (c *client) createNamespaceSource() {
 	go controller.Run(c.stopCh)
 
 	if !cache.WaitForNamedCacheSync("namespace controller", c.stopCh, controller.HasSynced) {
-		// TODO better return error here
 		return
 	}
 
